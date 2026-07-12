@@ -123,6 +123,17 @@ target = "stdout"
 # neither a response nor an error recorded). picoclaw-openai-proxy's
 # /healthz is intentionally unauthenticated and also proxies picoclaw's own
 # /health, so one check covers both.
+#
+# `group = "protected"` (not "public"): mycelium resolves the caller's full
+# profile from their auth token and injects it as x-mycelium-profile only
+# for "protected"/"protectedByRoles" routes (ports/api/src/router/
+# check_security_group.rs -- "authenticated" only injects an email, not the
+# full profile). picoclaw-openai-proxy decodes that header
+# (@lepistabioinformatics/mycelium-sdk) and derives the picoclaw session key
+# from the caller's verified accId -- never from a client-declared "user"
+# field -- so a caller can no longer just declare "I'm someone else" in the
+# request body. See the "public" era's session files under data/*/workspace/
+# sessions/ for what that looked like before this change.
 # ------------------------------------------------------------------------------
 
 [api.services]
@@ -137,14 +148,14 @@ name = "picoclaw-alpha-authorization-header"
 authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_ALPHA_TOKEN" } }
 
 [[picoclaw-alpha.path]]
-group = "public"
+group = "protected"
 path = "/v1/chat/completions"
 secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["ALL"]
 
 [[picoclaw-alpha.path]]
-group = "public"
+group = "protected"
 path = "/v1/models"
 secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
@@ -160,14 +171,14 @@ name = "picoclaw-beta-authorization-header"
 authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_BETA_TOKEN" } }
 
 [[picoclaw-beta.path]]
-group = "public"
+group = "protected"
 path = "/v1/chat/completions"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["ALL"]
 
 [[picoclaw-beta.path]]
-group = "public"
+group = "protected"
 path = "/v1/models"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
