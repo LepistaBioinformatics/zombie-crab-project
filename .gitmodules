@@ -1,0 +1,3 @@
+[submodule "picoclaw-openai-proxy"]
+	path = picoclaw-openai-proxy
+	url = https://github.com/sgelias/picoclaw-openai-proxy.git

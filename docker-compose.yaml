@@ -1,0 +1,146 @@
+# =============================================================================
+# zombie-crab-project -- two PicoClaw instances behind a Mycelium API gateway
+# =============================================================================
+# Topology (modeled on picoclaw-harness-in-docker-main/docker-compose.yml,
+# fixed to `gateway` mode -- the only mode that exposes the Pico Protocol WS
+# channel the OpenAI-compat proxy talks to):
+#
+#   mycelium-gateway (standalone, :8080, published)
+#     |-- /picoclaw-alpha/v1/*  --> picoclaw-alpha-proxy:8787  --> picoclaw-alpha:18790
+#     `-- /picoclaw-beta/v1/*   --> picoclaw-beta-proxy:8787   --> picoclaw-beta:18790
+#
+# mycelium routes by first path segment == the TOML service key (see
+# mycelium/config.standalone.toml), so it's /picoclaw-alpha/... and
+# /picoclaw-beta/..., not /alpha/... or /beta/....
+#
+# picoclaw-* and picoclaw-*-proxy publish no host ports -- mycelium-gateway is
+# the single entry point, reachable only through it.
+#
+# First run (per instance, before `up -d`):
+#   docker compose run --rm picoclaw-alpha   # onboard, generate config.json, then exits
+#   $EDITOR data/alpha/config.json           # set agents.defaults.provider/model_name
+#                                             # (must match a model_list entry) and
+#                                             # channel_list.pico.enabled = true
+#   cp picoclaw-harness-in-docker-main/.security.yml.example data/alpha/.security.yml
+#   $EDITOR data/alpha/.security.yml          # add model_list.<model_name>.api_keys and:
+#                                             #   channels:
+#                                             #     pico:
+#                                             #       settings:
+#                                             #         token: "<random-token>"
+#                                             # NOTE: despite picoclaw's own docs showing a
+#                                             # flat `pico: token: ...` shape, only the
+#                                             # nested `pico: settings: token: ...` form is
+#                                             # actually picked up by the running binary
+#                                             # (verified empirically -- flat form silently
+#                                             # leaves the channel disabled, no error logged).
+#   # repeat for data/beta/...
+#   cp .env.example .env && $EDITOR .env                     # set MYC_PICOCLAW_*_TOKEN to match
+#   docker compose up -d
+#   # editing data/*/config.json or .security.yml after containers are already running
+#   # requires `docker compose restart picoclaw-alpha picoclaw-beta` (and the *-proxy
+#   # services, to reconnect) -- bind-mounted file edits are NOT picked up by `up -d`
+#   # alone unless the container is actually recreated/restarted.
+# =============================================================================
+
+networks:
+  zombie_net:
+    driver: bridge
+
+x-picoclaw-image: &picoclaw-image ${PICOCLAW_IMAGE:-docker.io/sipeed/picoclaw:latest}
+
+x-picoclaw-common: &picoclaw-common
+  image: *picoclaw-image
+  restart: unless-stopped
+  init: true
+  networks:
+    - zombie_net
+  healthcheck:
+    test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:18790/health"]
+    interval: 30s
+    timeout: 5s
+    retries: 5
+    start_period: 20s
+
+services:
+  picoclaw-alpha:
+    <<: *picoclaw-common
+    environment:
+      TZ: ${PICOCLAW_TZ:-UTC}
+      PICOCLAW_GATEWAY_HOST: 0.0.0.0
+      PICOCLAW_LOG_LEVEL: ${PICOCLAW_LOG_LEVEL:-}
+    volumes:
+      - ${PICOCLAW_ALPHA_DATA_DIR:-./data/alpha}:/root/.picoclaw
+
+  picoclaw-alpha-proxy:
+    build:
+      context: ./picoclaw-openai-proxy
+    restart: unless-stopped
+    networks:
+      - zombie_net
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8787
+      PICOCLAW_WS_URL: ws://picoclaw-alpha:18790/pico/ws
+      PICOCLAW_SECURITY_YML: /root/.picoclaw/.security.yml
+      # Same value as mycelium's picoclaw-alpha-authorization-header token
+      # (see mycelium/config.standalone.toml) -- rejects any request that
+      # reaches this sidecar without mycelium's injected header.
+      PROXY_API_KEY: ${MYC_PICOCLAW_ALPHA_TOKEN}
+    volumes:
+      - ${PICOCLAW_ALPHA_DATA_DIR:-./data/alpha}:/root/.picoclaw:ro
+    depends_on:
+      picoclaw-alpha:
+        condition: service_healthy
+
+  picoclaw-beta:
+    <<: *picoclaw-common
+    environment:
+      TZ: ${PICOCLAW_TZ:-UTC}
+      PICOCLAW_GATEWAY_HOST: 0.0.0.0
+      PICOCLAW_LOG_LEVEL: ${PICOCLAW_LOG_LEVEL:-}
+    volumes:
+      - ${PICOCLAW_BETA_DATA_DIR:-./data/beta}:/root/.picoclaw
+
+  picoclaw-beta-proxy:
+    build:
+      context: ./picoclaw-openai-proxy
+    restart: unless-stopped
+    networks:
+      - zombie_net
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8787
+      PICOCLAW_WS_URL: ws://picoclaw-beta:18790/pico/ws
+      PICOCLAW_SECURITY_YML: /root/.picoclaw/.security.yml
+      PROXY_API_KEY: ${MYC_PICOCLAW_BETA_TOKEN}
+    volumes:
+      - ${PICOCLAW_BETA_DATA_DIR:-./data/beta}:/root/.picoclaw:ro
+    depends_on:
+      picoclaw-beta:
+        condition: service_healthy
+
+  mycelium-gateway:
+    build:
+      context: ./mycelium
+      dockerfile: Dockerfile.standalone
+      args:
+        MYCELIUM_GIT_REF: ${MYCELIUM_GIT_REF:-a1981ecdf16b78e9ffeb28bb2cd9bbff427a88ff}
+    restart: unless-stopped
+    networks:
+      - zombie_net
+    ports:
+      - "${MYCELIUM_PORT:-8080}:8080"
+    environment:
+      # mycelium/config.standalone.toml references these two var names
+      # directly via its field-level `token = { env = "..." }` secret
+      # resolver (SecretResolver<String>, mycelium >= 9.0.0-rc.2).
+      MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
+      MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
+    volumes:
+      - mycelium-data:/data
+    depends_on:
+      - picoclaw-alpha-proxy
+      - picoclaw-beta-proxy
+
+volumes:
+  mycelium-data:

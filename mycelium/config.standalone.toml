@@ -1,0 +1,164 @@
+# ------------------------------------------------------------------------------
+# STANDALONE MODE CONFIGURATION -- zombie-crab-project
+#
+# Adapted from mycelium-monorepo's settings/config.standalone.example.toml:
+# zero external runtime dependencies (SQLite instead of Postgres, in-process
+# moka cache instead of Redis, stub/file email transport). Routes two
+# picoclaw+picoclaw-openai-proxy sidecar pairs ("alpha"/"beta", see
+# ../docker-compose.yaml) instead of upstream's single example route.
+#
+# This is a static file, not a template: the per-instance secrets below use
+# mycelium's own field-level env-var secret resolver (`token = { env =
+# "VAR_NAME" }`, resolved by myc-api itself at request time via
+# SecretResolver<String>, NOT by any templating step in this image) -- see
+# the `[[picoclaw-*.secret]]` blocks. Requires mycelium >= 9.0.0-rc.2 (see
+# LepistaBioinformatics/mycelium#166 -- older builds only supported `env` one
+# level up, on the whole ServiceSecret).
+# ------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# CORE CONFIGURATIONS
+#
+# `tokenSecret` / `hmacSecrets[].secret` / `jwtSecret` below are placeholders:
+# standalone mode ignores them and instead resolves (or generates, on first
+# boot) real secrets via the OS keyring / an encrypted local file next to the
+# SQLite database. Keep them present only because the config format requires
+# the keys to exist.
+# ------------------------------------------------------------------------------
+
+[core.accountLifeCycle]
+domainName = "Zombie Crab (standalone)"
+domainUrl = "http://localhost:8080"
+tokenExpiration = 3600                                                # 1 hour
+noreplyName = "Mycelium"
+noreplyEmail = "noreply@localhost"
+supportName = "Mycelium"
+supportEmail = "support@localhost"
+locale = "en-us"
+tokenSecret = "replaced-at-boot-by-standalone-secret-resolution"
+
+hmacPrimaryVersion = 1
+
+[[core.accountLifeCycle.hmacSecrets]]
+version = 1
+secret = "replaced-at-boot-by-standalone-secret-resolution"
+
+[core.webhook]
+acceptInvalidCertificates = true
+consumeIntervalInSecs = 30
+consumeBatchSize = 25
+maxAttempts = 5
+
+# ------------------------------------------------------------------------------
+# SQLITE DATABASE ADAPTER SETTINGS
+# ------------------------------------------------------------------------------
+
+[sqlite]
+path = "/data/mycelium.db"
+
+# ------------------------------------------------------------------------------
+# EMAIL DISPATCHER POLLING SETTINGS
+# ------------------------------------------------------------------------------
+
+[queue]
+emailQueueName = "emails"
+consumeIntervalInSecs = 15
+
+# ------------------------------------------------------------------------------
+# AUTHENTICATION SETTINGS
+# ------------------------------------------------------------------------------
+
+[auth.internal.define]
+jwtExpiresIn = 43200                                                  # 12 hours
+tmpExpiresIn = 300                                                    # 5 minutes
+jwtSecret = "replaced-at-boot-by-standalone-secret-resolution"
+
+# ------------------------------------------------------------------------------
+# API PORT SETTINGS
+# ------------------------------------------------------------------------------
+
+[api]
+serviceIp = "0.0.0.0"
+servicePort = 8080
+serviceWorkers = 1
+gatewayTimeout = 60
+
+allowedOrigins = ["http://localhost:8080"]
+
+tls = "disabled"
+
+[api.logging]
+level = "warn,mycelium_base=info,myc_api=info,myc_config=info,myc_core=info,myc_http_tools=info,actix_web=info,myc_notifier=info,myc_diesel_sqlite=info,myc_moka_cache=info"
+format = "ansi"
+target = "stdout"
+
+# ------------------------------------------------------------------------------
+# API GATEWAY ROUTE CONFIGURATION
+#
+# Two named services -- one per picoclaw+proxy sidecar pair -- each pointing
+# at its own proxy container over the compose-internal `zombie_net` network.
+# Both proxies require the same `Authorization: Bearer <token>` mycelium
+# injects here (PROXY_API_KEY on each picoclaw-*-proxy service), so a request
+# that reaches the proxy directly (bypassing mycelium) without that header
+# is rejected too.
+#
+# mycelium's router takes the *first path segment* of the request as the
+# service name (adapters/mem_db/src/repositories/shared.rs::extract_path_parts)
+# and matches everything after it against `path` below -- so callers must hit
+# /picoclaw-alpha/... and /picoclaw-beta/... (the literal TOML service keys),
+# NOT /alpha/... or /beta/....
+#
+# `token = { env = "VAR_NAME" }` is the field-level env resolver fixed in
+# LepistaBioinformatics/mycelium#166 (SecretResolver<String>, released in
+# 9.0.0-rc.2) -- myc-api resolves just the token from that env var at
+# request time, so headerName/prefix stay inline here instead of having to
+# be duplicated inside a JSON secret blob.
+# ------------------------------------------------------------------------------
+
+[api.services]
+
+[[picoclaw-alpha]]
+host = "picoclaw-alpha-proxy:8787"
+protocol = "http"
+healthCheckPath = "/v1/models"
+
+[[picoclaw-alpha.secret]]
+name = "picoclaw-alpha-authorization-header"
+authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_ALPHA_TOKEN" } }
+
+[[picoclaw-alpha.path]]
+group = "public"
+path = "/v1/chat/completions"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["ALL"]
+
+[[picoclaw-alpha.path]]
+group = "public"
+path = "/v1/models"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["ALL"]
+
+[[picoclaw-beta]]
+host = "picoclaw-beta-proxy:8787"
+protocol = "http"
+healthCheckPath = "/v1/models"
+
+[[picoclaw-beta.secret]]
+name = "picoclaw-beta-authorization-header"
+authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_BETA_TOKEN" } }
+
+[[picoclaw-beta.path]]
+group = "public"
+path = "/v1/chat/completions"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["ALL"]
+
+[[picoclaw-beta.path]]
+group = "public"
+path = "/v1/models"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["ALL"]
