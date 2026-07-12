@@ -1,6 +1,2 @@
 .env
 data/
-
-# Reference/example only (not a runtime dependency of docker-compose.yaml) --
-# get it from https://github.com/Biotrop/picoclaw-harness-in-docker if needed.
-picoclaw-harness-in-docker-main/

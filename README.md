@@ -99,15 +99,17 @@ already has it:
   request that somehow reached the internal network directly is turned away.
 - **Security groups, built in.** Mycelium routes can be `public`,
   `authenticated`, `protected`, or `protectedByRoles` (with per-role
-  read/write permissions). This project's routes are `protected`: Mycelium
-  authenticates the caller itself and injects their verified account
-  profile as an `x-mycelium-profile` header — the proxy decodes it with
-  [`@lepistabioinformatics/mycelium-sdk`](https://www.npmjs.com/package/@lepistabioinformatics/mycelium-sdk)
-  and derives the PicoClaw session key from the caller's real account id,
-  never from a client-declared field. A caller can no longer just put
-  `"user": "someone-else"` in the request body and read someone else's
-  conversation — **without ever touching PicoClaw itself.** That's the RBAC
-  PicoClaw doesn't have, living in the layer that's supposed to have it.
+  read/write permissions). This project's routes are `authenticated`:
+  Mycelium validates the caller's token itself and injects their verified
+  email as an `x-mycelium-email` header — the proxy reads that and derives
+  the PicoClaw session key from it, never from a client-declared field. A
+  caller can no longer just put `"user": "someone-else"` in the request body
+  and read someone else's conversation — **without ever touching PicoClaw
+  itself.** That's the RBAC PicoClaw doesn't have, living in the layer
+  that's supposed to have it. (`protected`/`protectedByRoles` — full account
+  profile, per-instance role gating — are one config line away, but require
+  an account/tenant model this stack doesn't set up yet; see "Sign in from a
+  browser instead" below.)
 - **One place to look, one place to lock down.** Health checks, routing,
   authentication, and rate limiting for *every* PicoClaw instance live in
   one config file and one container, instead of being reinvented per
@@ -177,11 +179,13 @@ proxy's own `PROXY_API_KEY` check expects the exact same value.
 docker compose up -d
 ```
 
-**7. Get a Mycelium account and a bearer token.** The routes are `protected`,
-so an anonymous `curl` won't get past the gateway anymore — you need a real
-Mycelium account and its issued token. See Mycelium's own
+**7. Get a Mycelium account and a bearer token.** The routes are
+`authenticated`, so an anonymous `curl` won't get past the gateway anymore —
+you need a real Mycelium account and its issued token. Easiest path: use
+`chat-webapp` (see "Sign in from a browser instead" below) to sign up and
+grab the token from its session cookie, or follow Mycelium's own
 [authentication flows guide](https://github.com/LepistaBioinformatics/mycelium/blob/main/modules/mycelium-api-gateway/docs/book/src/11-authentication-flows.md)
-for how to register and log in against this same `mycelium-gateway`.
+to register and log in against this same `mycelium-gateway` directly.
 
 **8. Talk to it — through the gateway, on the one port that's published:**
 
@@ -201,15 +205,61 @@ token and injects it; the proxy trusts that, not anything in the body. Swap
 `picoclaw-alpha` for `picoclaw-beta` to reach the second instance — same
 gateway, same port, completely separate agent underneath.
 
+## Sign in from a browser instead
+
+Two more services exist purely so a human doesn't have to hand-craft curl
+requests and bearer tokens:
+
+- **`chat-webapp`** (`http://localhost:${CHAT_WEBAPP_PORT:-3000}`) — a small
+  Next.js test client. Sign in with just your email (Mycelium's magic-link
+  flow, no password), pick `alpha` or `beta`, and start chatting right
+  away — no further setup. It's a BFF: your browser never sees the Mycelium
+  JWT, only an httpOnly session cookie — every call to Mycelium happens
+  server-side, inside `chat-webapp`'s own container.
+- **`mycelium-webapp`** (`http://localhost:${MYCELIUM_WEBAPP_PORT:-8081}`) —
+  Mycelium's own official admin UI, built from its upstream repo the same
+  way `mycelium-gateway` is (a pinned git commit, no local source copied
+  in). Not required for the chat flow above; it's there for account/tenant
+  administration if you want to explore Mycelium's own management screens.
+
+**No real SMTP is configured**, so magic-link emails aren't actually
+delivered — Mycelium's standalone build logs them instead. After requesting
+a code:
+
+```bash
+docker compose logs mycelium-gateway | grep -o 'http://localhost:8080/_adm/beginners/users/magic-link/display[^"]*'
+```
+
+Open that URL in a browser; it shows the 6-digit code to enter back in
+`chat-webapp`.
+
+### Why every signed-up account can already chat with both instances
+
+Routes here are `authenticated`, not `protected`/`protectedByRoles` — on
+purpose. Mycelium's account model requires a caller to hold a guest
+membership in a tenant-scoped subscription account just to resolve a full
+profile at all (the mechanism `protected`/`protectedByRoles` both rely on) —
+a freshly self-registered account has none, and would get rejected outright,
+regardless of which specific role a route asks for. Building that whole
+Staff → tenant → subscription → guest-invite chain (plus migrating this
+gateway off SQLite to Postgres, since Mycelium's account-seeding CLI is
+Postgres-only) is real setup work, deliberately deferred: this stack
+prioritizes "sign in and chat immediately" over "per-instance role
+gating" for now. Restricting `picoclaw-alpha` to some accounts and
+`picoclaw-beta` to others is a real feature this same gateway supports
+(`protectedByRoles`) — just not wired up yet in this repo.
+
 ## What's what in this repo
 
 ```
-docker-compose.yaml       # the whole stack: 2x picoclaw + proxy pairs + gateway
+docker-compose.yaml       # the whole stack: 2x picoclaw + proxy pairs + gateway + webapps
 .env.example              # runtime knobs + per-instance bearer tokens
 mycelium/
   Dockerfile.standalone   # builds mycelium-api from upstream git, no local source copied in
   config.standalone.toml  # gateway routes for picoclaw-alpha / picoclaw-beta
 picoclaw-openai-proxy/    # git submodule -- the OpenAI-compat sidecar
+webapp/                   # Next.js chat test client (BFF -- signin, picker, chat)
+mycelium-webapp/          # Dockerfile for Mycelium's own admin UI, built from upstream git
 ```
 
 ## Before you take this to production
@@ -220,11 +270,10 @@ before you expose it beyond your own machine:
 
 - TLS is disabled between the gateway and its downstream services (they
   all sit on a private Docker network) — terminate TLS at the edge if
-  `mycelium-gateway`'s port ever faces the internet.
-- Routes here use `protected` (verified account identity, no role check).
-  If you need to restrict *which* accounts can reach `picoclaw-alpha` vs
-  `picoclaw-beta` specifically, that's exactly where Mycelium's
-  `protectedByRoles` group comes in.
+  `mycelium-gateway`'s port ever faces the internet. `chat-webapp`'s own
+  session cookie is intentionally not marked `Secure` for the same reason
+  (plain HTTP throughout this stack) — turn that back on once you put TLS
+  in front of it.
 - Rotate the bearer tokens in `.env` and `.security.yml` before sharing this
   stack with anyone else, and never commit real values (both are already
   gitignored).

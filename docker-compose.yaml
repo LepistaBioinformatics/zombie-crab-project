@@ -1,9 +1,8 @@
 # =============================================================================
 # zombie-crab-project -- two PicoClaw instances behind a Mycelium API gateway
 # =============================================================================
-# Topology (modeled on picoclaw-harness-in-docker-main/docker-compose.yml,
-# fixed to `gateway` mode -- the only mode that exposes the Pico Protocol WS
-# channel the OpenAI-compat proxy talks to):
+# Topology (fixed to `gateway` mode -- the only mode that exposes the Pico
+# Protocol WS channel the OpenAI-compat proxy talks to):
 #
 #   mycelium-gateway (standalone, :8080, published)
 #     |-- /picoclaw-alpha/v1/*  --> picoclaw-alpha-proxy:8787  --> picoclaw-alpha:18790
@@ -16,13 +15,18 @@
 # picoclaw-* and picoclaw-*-proxy publish no host ports -- mycelium-gateway is
 # the single entry point, reachable only through it.
 #
+# Two more services sit alongside this for human use (not required for the
+# curl walkthrough below): chat-webapp (:3000, a BFF test client -- signin +
+# instance picker + chat) and mycelium-webapp (:8081, the official Mycelium
+# admin UI, its own browser-side SPA). See
+# .specs/features/mycelium-chat-webapp/design.md.
+#
 # First run (per instance, before `up -d`):
 #   docker compose run --rm picoclaw-alpha   # onboard, generate config.json, then exits
 #   $EDITOR data/alpha/config.json           # set agents.defaults.provider/model_name
 #                                             # (must match a model_list entry) and
 #                                             # channel_list.pico.enabled = true
-#   cp picoclaw-harness-in-docker-main/.security.yml.example data/alpha/.security.yml
-#   $EDITOR data/alpha/.security.yml          # add model_list.<model_name>.api_keys and:
+#   $EDITOR data/alpha/.security.yml          # create it; add model_list.<model_name>.api_keys and:
 #                                             #   channels:
 #                                             #     pico:
 #                                             #       settings:
@@ -158,6 +162,54 @@ services:
         condition: service_healthy
       picoclaw-beta-proxy:
         condition: service_healthy
+    healthcheck:
+      # Mycelium's own unauthenticated liveness endpoint (ports/api/src/rest/
+      # index/heath_check_endpoints.rs) -- needed so chat-webapp/mycelium-webapp
+      # below can depend on this service being actually up, not just started.
+      # Plain GET, not `--spider` (HEAD): the route only handles GET and
+      # rejects HEAD with 400 "Request path does not match any service"
+      # (verified empirically -- same error text the path router uses for an
+      # actually-unmatched proxied route, easy to misread as a routing bug).
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # BFF test client (magic-link signin, instance picker, chat) -- see
+  # .specs/features/mycelium-chat-webapp/design.md. Talks to mycelium-gateway
+  # server-side only, over the internal network; the browser never holds the
+  # Mycelium JWT (see AD-001, context.md).
+  chat-webapp:
+    build:
+      context: ./webapp
+    restart: unless-stopped
+    networks:
+      - zombie_net
+    environment:
+      MYCELIUM_INTERNAL_URL: http://mycelium-gateway:8080
+    ports:
+      - "${CHAT_WEBAPP_PORT:-3000}:3000"
+    depends_on:
+      mycelium-gateway:
+        condition: service_healthy
+
+  # Official Mycelium admin UI -- account/tenant/guest-role management.
+  # Unlike chat-webapp, this is a pure client-side SPA (no server of its
+  # own), so its browser code calls mycelium-gateway directly -- that's why
+  # its API URL below is the gateway's *published host port*, not the
+  # internal Docker DNS name, and why mycelium-gateway's `allowedOrigins`
+  # (config.standalone.toml) has to include this service's own origin.
+  mycelium-webapp:
+    build:
+      context: ./mycelium-webapp
+      args:
+        VITE_MYCELIUM_API_URL: http://localhost:${MYCELIUM_PORT:-8080}
+    restart: unless-stopped
+    networks:
+      - zombie_net
+    ports:
+      - "${MYCELIUM_WEBAPP_PORT:-8081}:80"
 
 volumes:
   mycelium-data:

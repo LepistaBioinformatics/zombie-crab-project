@@ -83,7 +83,13 @@ servicePort = 8080
 serviceWorkers = 1
 gatewayTimeout = 60
 
-allowedOrigins = ["http://localhost:8080"]
+# http://localhost:8080 -- mycelium-webapp's own dev-mode default, harmless
+# to leave in. http://localhost:8081 -- this stack's mycelium-webapp service
+# (browser-side SPA, calls the gateway directly -- see docker-compose.yaml).
+# This file is baked into the image at build time (not templated), so if you
+# change MYCELIUM_WEBAPP_PORT in .env you must also update this value and
+# rebuild mycelium-gateway.
+allowedOrigins = ["http://localhost:8080", "http://localhost:8081"]
 
 tls = "disabled"
 
@@ -124,16 +130,27 @@ target = "stdout"
 # /healthz is intentionally unauthenticated and also proxies picoclaw's own
 # /health, so one check covers both.
 #
-# `group = "protected"` (not "public"): mycelium resolves the caller's full
-# profile from their auth token and injects it as x-mycelium-profile only
-# for "protected"/"protectedByRoles" routes (ports/api/src/router/
-# check_security_group.rs -- "authenticated" only injects an email, not the
-# full profile). picoclaw-openai-proxy decodes that header
-# (@lepistabioinformatics/mycelium-sdk) and derives the picoclaw session key
-# from the caller's verified accId -- never from a client-declared "user"
-# field -- so a caller can no longer just declare "I'm someone else" in the
-# request body. See the "public" era's session files under data/*/workspace/
-# sessions/ for what that looked like before this change.
+# `group = "authenticated"` (not "public"/"protected"/"protectedByRoles"):
+# mycelium injects the caller's verified email as x-mycelium-email for this
+# group (check_credentials_with_multi_identity_provider -- just validates
+# the token and extracts its email, no further lookup). picoclaw-openai-proxy
+# reads that header and derives the picoclaw session key from it, never from
+# a client-declared "user" field, so a caller can't just declare "I'm
+# someone else" in the request body.
+#
+# Deliberately NOT "protected"/"protectedByRoles": both of those additionally
+# call recovery_profile_from_storage_engines to resolve a full account
+# profile -- and a freshly signed-up account (via chat-webapp's magic-link
+# flow) has no guest membership anywhere yet, so that lookup always 403s
+# ("User was authenticated but has not an account", verified empirically --
+# not role-specific, "protected" alone hits the exact same wall). Getting a
+# working chat reply under "protected"/"protectedByRoles" requires an entire
+# Staff account -> tenant -> subscription -> guest-invite chain to exist
+# first (see .specs/project/STATE.md AD-003/L-006), which itself requires
+# migrating this gateway off SQLite to Postgres (myc-cli's seed-account
+# command is Postgres-only). That's deferred to a later feature -- "sign in
+# and chat now" wins over "role-gated per instance" for the moment (see
+# .specs/features/mycelium-chat-webapp/context.md).
 # ------------------------------------------------------------------------------
 
 [api.services]
@@ -148,14 +165,14 @@ name = "picoclaw-alpha-authorization-header"
 authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_ALPHA_TOKEN" } }
 
 [[picoclaw-alpha.path]]
-group = "protected"
+group = "authenticated"
 path = "/v1/chat/completions"
 secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["ALL"]
 
 [[picoclaw-alpha.path]]
-group = "protected"
+group = "authenticated"
 path = "/v1/models"
 secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
@@ -171,14 +188,14 @@ name = "picoclaw-beta-authorization-header"
 authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_BETA_TOKEN" } }
 
 [[picoclaw-beta.path]]
-group = "protected"
+group = "authenticated"
 path = "/v1/chat/completions"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["ALL"]
 
 [[picoclaw-beta.path]]
-group = "protected"
+group = "authenticated"
 path = "/v1/models"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
