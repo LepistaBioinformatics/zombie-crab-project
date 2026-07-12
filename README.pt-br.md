@@ -104,11 +104,15 @@ tem:
   perdida que de alguma forma chegasse direto na rede interna seria barrada.
 - **Grupos de segurança, nativos.** Rotas no Mycelium podem ser `public`,
   `authenticated`, `protected` ou `protectedByRoles` (com permissões de
-  leitura/escrita por papel). As rotas deste projeto são `public` hoje (o
-  caso mais simples), mas o mesmo formato de configuração do gateway é
-  exatamente como você camadaria controle de acesso real por usuário/papel
-  depois — **sem nunca precisar tocar no PicoClaw.** É o RBAC que o
-  PicoClaw não tem, vivendo na camada que deveria ter.
+  leitura/escrita por papel). As rotas deste projeto são `protected`: o
+  Mycelium autentica o chamador e injeta o profile verificado da conta num
+  header `x-mycelium-profile` — o proxy decodifica isso com o
+  [`@lepistabioinformatics/mycelium-sdk`](https://www.npmjs.com/package/@lepistabioinformatics/mycelium-sdk)
+  e deriva a chave de sessão do PicoClaw a partir do id de conta real do
+  chamador, nunca de um campo declarado pelo cliente. Ninguém mais consegue
+  simplesmente colocar `"user": "outra-pessoa"` no corpo da requisição e ler
+  a conversa de outra pessoa — **sem nunca precisar tocar no PicoClaw.** É o
+  RBAC que o PicoClaw não tem, vivendo na camada que deveria ter.
 - **Um lugar só pra olhar, um lugar só pra travar.** Health checks,
   roteamento, autenticação e rate limiting de *todas* as instâncias do
   PicoClaw vivem em um arquivo de config e um container só, em vez de
@@ -179,19 +183,28 @@ própria checagem `PROXY_API_KEY` do proxy espera exatamente o mesmo valor.
 docker compose up -d
 ```
 
-**7. Converse com ele — através do gateway, na única porta publicada:**
+**7. Consiga uma conta no Mycelium e um bearer token.** As rotas são
+`protected`, então um `curl` anônimo não passa mais pelo gateway — você
+precisa de uma conta real no Mycelium e do token emitido por ela. Veja o
+[guia de fluxos de autenticação](https://github.com/LepistaBioinformatics/mycelium/blob/main/modules/mycelium-api-gateway/docs/book/src/11-authentication-flows.md)
+do próprio Mycelium pra saber como se registrar e logar contra esse mesmo
+`mycelium-gateway`.
+
+**8. Converse com ele — através do gateway, na única porta publicada:**
 
 ```bash
 curl http://localhost:8080/picoclaw-alpha/v1/chat/completions \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <seu-token-mycelium>" \
   -d '{
     "model": "picoclaw",
-    "user": "alice",
     "session_id": "conversa-1",
     "messages": [{"role": "user", "content": "oi"}]
   }'
 ```
 
+Não tem mais campo `"user"` — o Mycelium resolve quem você é a partir do
+token e injeta isso; o proxy confia nesse dado, não em nada do corpo.
 Troque `picoclaw-alpha` por `picoclaw-beta` pra alcançar a segunda
 instância — mesmo gateway, mesma porta, agente completamente separado por
 baixo.
@@ -217,10 +230,10 @@ máquina:
 - TLS está desabilitado entre o gateway e os serviços downstream (todos
   vivem numa rede Docker privada) — termine TLS na borda se a porta do
   `mycelium-gateway` algum dia encarar a internet.
-- Toda rota aqui usa o grupo de segurança `public`, pela simplicidade. Se
-  você precisa de controle de acesso real por usuário, é exatamente aí que
-  entram os grupos `authenticated` / `protected` / `protectedByRoles` do
-  Mycelium.
+- As rotas aqui usam `protected` (identidade de conta verificada, sem
+  checagem de papel). Se você precisa restringir *quais* contas alcançam
+  `picoclaw-alpha` vs `picoclaw-beta` especificamente, é exatamente aí que
+  entra o grupo `protectedByRoles` do Mycelium.
 - Rotacione os bearer tokens em `.env` e `.security.yml` antes de
   compartilhar essa stack com alguém, e nunca commite valores reais (os
   dois já estão no gitignore).
