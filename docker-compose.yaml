@@ -91,6 +91,15 @@ services:
     depends_on:
       picoclaw-alpha:
         condition: service_healthy
+    healthcheck:
+      # /healthz is unauthenticated on purpose and also proxies picoclaw's
+      # own /health -- this is the same path mycelium-gateway polls (see
+      # mycelium/config.standalone.toml's healthCheckPath).
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8787/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   picoclaw-beta:
     <<: *picoclaw-common
@@ -118,6 +127,12 @@ services:
     depends_on:
       picoclaw-beta:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8787/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   mycelium-gateway:
     build:
@@ -139,8 +154,10 @@ services:
     volumes:
       - mycelium-data:/data
     depends_on:
-      - picoclaw-alpha-proxy
-      - picoclaw-beta-proxy
+      picoclaw-alpha-proxy:
+        condition: service_healthy
+      picoclaw-beta-proxy:
+        condition: service_healthy
 
 volumes:
   mycelium-data:

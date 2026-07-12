@@ -113,6 +113,16 @@ target = "stdout"
 # 9.0.0-rc.2) -- myc-api resolves just the token from that env var at
 # request time, so headerName/prefix stay inline here instead of having to
 # be duplicated inside a JSON secret blob.
+#
+# `healthCheckPath = "/healthz"` (not "/v1/models"): mycelium's health-check
+# dispatcher issues a plain unauthenticated GET
+# (services_health_dispatcher/check_single_host_health.rs), so pointing it
+# at an auth-gated route like /v1/models always fails with "Unable to
+# perform the health check" (every attempt gets a 401, which the dispatcher
+# doesn't treat as a real error, so it falls through all retries with
+# neither a response nor an error recorded). picoclaw-openai-proxy's
+# /healthz is intentionally unauthenticated and also proxies picoclaw's own
+# /health, so one check covers both.
 # ------------------------------------------------------------------------------
 
 [api.services]
@@ -120,7 +130,7 @@ target = "stdout"
 [[picoclaw-alpha]]
 host = "picoclaw-alpha-proxy:8787"
 protocol = "http"
-healthCheckPath = "/v1/models"
+healthCheckPath = "/healthz"
 
 [[picoclaw-alpha.secret]]
 name = "picoclaw-alpha-authorization-header"
@@ -143,7 +153,7 @@ methods = ["ALL"]
 [[picoclaw-beta]]
 host = "picoclaw-beta-proxy:8787"
 protocol = "http"
-healthCheckPath = "/v1/models"
+healthCheckPath = "/healthz"
 
 [[picoclaw-beta.secret]]
 name = "picoclaw-beta-authorization-header"
