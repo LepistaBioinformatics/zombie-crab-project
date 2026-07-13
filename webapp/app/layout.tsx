@@ -1,17 +1,29 @@
 import type { Metadata } from "next";
-import { Roboto } from "next/font/google";
+import { Bricolage_Grotesque, Hanken_Grotesk, Space_Mono } from "next/font/google";
 import Providers from "./providers";
 
-// Roboto is Material Design's own typeface -- without it, MUI's Material
-// Design theme falls back to a generic system sans-serif and reads as
-// "some component library," not distinctly Google's Material UI, even
-// though the underlying MUI components/classes are correct. Self-hosted via
-// next/font (no external Google Fonts request at runtime).
-const roboto = Roboto({
-  weight: ["300", "400", "500", "700"],
+// Lepista Bioinformatics Lab design system typography
+// (https://lepista.com.br/design-system.md): display / body / mono, each
+// self-hosted via next/font (no external Google Fonts request at runtime).
+const display = Bricolage_Grotesque({
+  weight: ["500", "600", "700"],
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-roboto",
+  variable: "--font-display",
+});
+
+const sans = Hanken_Grotesk({
+  weight: ["400", "500", "600"],
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans",
+});
+
+const mono = Space_Mono({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-mono",
 });
 
 export const metadata: Metadata = {
@@ -25,7 +37,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={roboto.variable}>
+    <html lang="en" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>

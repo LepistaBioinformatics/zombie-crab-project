@@ -138,10 +138,55 @@ services:
       retries: 5
       start_period: 10s
 
+  # Backs mycelium-gateway in base mode -- separate from chat-webapp-postgres
+  # (that one is chat-webapp's own conversation-metadata table; this one is
+  # Mycelium's actual account/tenant/guest-role database). See
+  # .specs/project/STATE.md AD-003/AD-006 for why base mode exists at all:
+  # `myc-cli accounts create-seed-account` (the only way to create the first
+  # Staff account) is hardcoded to Postgres, no SQLite path.
+  mycelium-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    networks:
+      - zombie_net
+    environment:
+      POSTGRES_USER: ${MYC_POSTGRES_SUPERUSER:-mycelium}
+      POSTGRES_PASSWORD: ${MYC_POSTGRES_SUPERUSER_PASSWORD:-mycelium}
+      POSTGRES_DB: ${MYC_POSTGRES_DB:-mycelium}
+    volumes:
+      - mycelium-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MYC_POSTGRES_SUPERUSER:-mycelium}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Local SMTP catcher -- base mode has no stub/file transport (that's a
+  # `standalone`-only Cargo feature), real SMTP is mandatory for magic-link
+  # email once mycelium-gateway leaves standalone mode. Web UI on :8025 to
+  # read what was "sent" instead of asking for real SMTP credentials.
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    networks:
+      - zombie_net
+    ports:
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    environment:
+      # Required -- verified empirically: mycelium's SmtpTransport::relay()
+      # (lettre) negotiates TLS immediately on connect, so Mailpit's default
+      # plaintext :1025 listener fails with "wrong version number" (SSL
+      # routines). A self-signed cert (mailpit/tls.{crt,key}, gitignored) is
+      # enough since myc-api's SMTP client doesn't verify the chain.
+      MP_SMTP_TLS_CERT: /mailpit-tls/tls.crt
+      MP_SMTP_TLS_KEY: /mailpit-tls/tls.key
+    volumes:
+      - ./mailpit:/mailpit-tls:ro
+
   mycelium-gateway:
     build:
       context: ./mycelium
-      dockerfile: Dockerfile.standalone
+      dockerfile: Dockerfile.base
       args:
         MYCELIUM_GIT_REF: ${MYCELIUM_GIT_REF:-a1981ecdf16b78e9ffeb28bb2cd9bbff427a88ff}
     restart: unless-stopped
@@ -150,18 +195,24 @@ services:
     ports:
       - "${MYCELIUM_PORT:-8080}:8080"
     environment:
-      # mycelium/config.standalone.toml references these two var names
-      # directly via its field-level `token = { env = "..." }` secret
-      # resolver (SecretResolver<String>, mycelium >= 9.0.0-rc.2).
+      # mycelium/config.base.toml references all of these directly via its
+      # field-level `{ env = "..." }` secret resolver -- real values live
+      # only in .env (gitignored), never in the committed TOML.
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
       MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
-    volumes:
-      - mycelium-data:/data
+      MYC_BASE_TOKEN_SECRET: ${MYC_BASE_TOKEN_SECRET}
+      MYC_BASE_HMAC_SECRET: ${MYC_BASE_HMAC_SECRET}
+      MYC_BASE_JWT_SECRET: ${MYC_BASE_JWT_SECRET}
+      MYC_BASE_DATABASE_URL: ${MYC_BASE_DATABASE_URL}
     depends_on:
       picoclaw-alpha-proxy:
         condition: service_healthy
       picoclaw-beta-proxy:
         condition: service_healthy
+      mycelium-postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
     healthcheck:
       # Mycelium's own unauthenticated liveness endpoint (ports/api/src/rest/
       # index/heath_check_endpoints.rs) -- needed so chat-webapp/mycelium-webapp
@@ -176,6 +227,29 @@ services:
       retries: 10
       start_period: 10s
 
+  # Conversation metadata for chat-webapp (session_id, agent, title,
+  # timestamps) -- owned by the signed-in account's email, not the browser.
+  # Deliberately separate from Mycelium's own account model/database: this
+  # is just chat-webapp's own small table, not a step towards migrating
+  # mycelium-gateway off standalone/SQLite (see STATE.md AD-003/AD-006 for
+  # why that migration was deferred).
+  chat-webapp-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    networks:
+      - zombie_net
+    environment:
+      POSTGRES_USER: ${CHAT_WEBAPP_DB_USER:-chatwebapp}
+      POSTGRES_PASSWORD: ${CHAT_WEBAPP_DB_PASSWORD:-chatwebapp}
+      POSTGRES_DB: ${CHAT_WEBAPP_DB_NAME:-chatwebapp}
+    volumes:
+      - chat-webapp-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CHAT_WEBAPP_DB_USER:-chatwebapp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   # BFF test client (magic-link signin, instance picker, chat) -- see
   # .specs/features/mycelium-chat-webapp/design.md. Talks to mycelium-gateway
   # server-side only, over the internal network; the browser never holds the
@@ -188,10 +262,13 @@ services:
       - zombie_net
     environment:
       MYCELIUM_INTERNAL_URL: http://mycelium-gateway:8080
+      DATABASE_URL: postgresql://${CHAT_WEBAPP_DB_USER:-chatwebapp}:${CHAT_WEBAPP_DB_PASSWORD:-chatwebapp}@chat-webapp-postgres:5432/${CHAT_WEBAPP_DB_NAME:-chatwebapp}
     ports:
       - "${CHAT_WEBAPP_PORT:-3000}:3000"
     depends_on:
       mycelium-gateway:
+        condition: service_healthy
+      chat-webapp-postgres:
         condition: service_healthy
 
   # Official Mycelium admin UI -- account/tenant/guest-role management.
@@ -212,4 +289,5 @@ services:
       - "${MYCELIUM_WEBAPP_PORT:-8081}:80"
 
 volumes:
-  mycelium-data:
+  mycelium-postgres-data:
+  chat-webapp-postgres-data:

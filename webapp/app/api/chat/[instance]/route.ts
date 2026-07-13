@@ -2,10 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { fetchMycelium, isInstance, MyceliumConnectivityError } from "@/lib/mycelium";
 import { clearSession, getSession } from "@/lib/session";
 
-interface ChatCompletionResponse {
-  choices: { message: { role: string; content: string } }[];
-}
-
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ instance: string }> },
@@ -38,6 +34,7 @@ export async function POST(
       body: JSON.stringify({
         model: "picoclaw",
         session_id: sessionId,
+        stream: true,
         messages: [{ role: "user", content: message }],
       }),
     });
@@ -48,6 +45,10 @@ export async function POST(
     throw err;
   }
 
+  // Auth/role errors are still checked on the initial response, before any
+  // streaming starts -- the proxy sends these as a plain (non-SSE) JSON body
+  // even for a stream:true request, since it never gets past the auth check
+  // to open the event stream.
   if (res.status === 401) {
     await clearSession();
     return NextResponse.json({ error: "session_expired" }, { status: 401 });
@@ -55,12 +56,19 @@ export async function POST(
   if (res.status === 403) {
     return NextResponse.json({ error: "role_required" }, { status: 403 });
   }
-  if (!res.ok) {
+  if (!res.ok || !res.body) {
     return NextResponse.json({ error: "connectivity" }, { status: 502 });
   }
 
-  const data = (await res.json()) as ChatCompletionResponse;
-  const content = data.choices?.[0]?.message?.content ?? "";
-
-  return NextResponse.json({ content });
+  // From here on, pipe the proxy's own SSE bytes straight through -- the
+  // client parses `data: {...}` frames itself, same OpenAI chat-completion-
+  // chunk shape the proxy already emits (see server.js's `stream` branch).
+  return new Response(res.body, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }

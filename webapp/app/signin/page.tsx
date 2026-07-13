@@ -2,6 +2,7 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Logo from "@/app/logo";
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import TextField from "@mui/material/TextField";
@@ -9,6 +10,7 @@ import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
 import Stack from "@mui/material/Stack";
+import { signatureShadow, signatureShadowSx } from "@/lib/theme";
 
 type Step = "email" | "code";
 
@@ -72,16 +74,19 @@ export default function SignInPage() {
       justifyContent="center"
       bgcolor="background.default"
     >
-      <Paper elevation={3} sx={{ p: 4, width: 380 }}>
+      <Paper variant="outlined" sx={{ p: 4, width: 380, boxShadow: signatureShadow }}>
         <Stack spacing={3}>
-          <Box>
-            <Typography variant="h5" fontWeight={600}>
-              zombie-crab chat
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Sign in with your email -- no password needed.
-            </Typography>
-          </Box>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Logo size={44} />
+            <Box>
+              <Typography variant="h5" fontWeight={600}>
+                zombie-crab chat
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Sign in with your email -- no password needed.
+              </Typography>
+            </Box>
+          </Stack>
 
           {error && <Alert severity="error">{error}</Alert>}
 
@@ -97,7 +102,7 @@ export default function SignInPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
-                <Button type="submit" variant="contained" disabled={submitting}>
+                <Button type="submit" variant="contained" disabled={submitting} sx={signatureShadowSx}>
                   {submitting ? "Sending..." : "Send magic link"}
                 </Button>
               </Stack>
@@ -121,7 +126,7 @@ export default function SignInPage() {
                   onChange={(e) => setCode(e.target.value)}
                   slotProps={{ htmlInput: { maxLength: 6, pattern: "[0-9]{6}" } }}
                 />
-                <Button type="submit" variant="contained" disabled={submitting}>
+                <Button type="submit" variant="contained" disabled={submitting} sx={signatureShadowSx}>
                   {submitting ? "Verifying..." : "Verify"}
                 </Button>
                 <Button

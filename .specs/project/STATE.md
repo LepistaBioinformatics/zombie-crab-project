@@ -1,11 +1,103 @@
 # State
 
-**Last Updated:** 2026-07-12T00:00:00-03:00
-**Current Work:** mycelium-chat-webapp - Specify phase
+**Last Updated:** 2026-07-13T07:45:00-03:00
+**Current Work:** M3 (role-scoped access) -- Staff account exists, protectedByRoles cutover not yet done
 
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-007: Migrated mycelium-gateway to base mode (Postgres) to create the first Staff account (2026-07-13)
+
+**Decision:** Replaced `standalone` (SQLite) with `base` mode (Postgres, default `postgres-backend`
+feature) -- new `mycelium/Dockerfile.base` + `config.base.toml`, new `mycelium-postgres` and
+`mailpit` compose services. `mycelium/Dockerfile.standalone`/`config.standalone.toml` are no
+longer used by any compose service (kept in the repo as reference, not wired in). This directly
+reverses AD-006's earlier choice to stay on standalone -- done because the user (project owner)
+explicitly asked to create a Staff account, and that's Postgres-only regardless of which routes
+end up gated.
+**Reason:** `myc-cli accounts create-seed-account` -- the only way to create the first `Staff`
+account, itself required before any tenant/subscription/guest-role screen in `mycelium-webapp`
+is reachable -- is hardcoded to Postgres (confirmed earlier, AD-003). No way around this short
+of patching mycelium itself.
+**Trade-off:** Lost standalone's zero-dependency posture and its stub email transport (see
+L-011 below -- this broke chat-webapp's magic-link signin, not yet fixed, user's call to defer).
+Routes are still `authenticated` (not `protectedByRoles`) -- this migration only unblocks role
+assignment, doesn't itself flip route security groups.
+**Impact:** A Staff account exists (`staff@localhost`, see L-010 for how it was created) and can
+log into `mycelium-webapp`. The remaining M3 work (create tenant -> subscription -> guest role ->
+invite an account -> flip routes to `protectedByRoles`) is still not done.
+
+---
+
+## Lessons Learned (continued -- base-mode migration)
+
+### L-009: `diesel_postgres` has no embedded/auto-run migrations -- unlike SQLite, which self-provisions
+
+**Context:** After switching to base mode, the gateway booted fine but every DB-touching call
+failed with `relation "token" does not exist`.
+**Problem:** `adapters/diesel_sqlite` embeds its migrations (`embed_migrations!` +
+`run_pending_migrations` called automatically at boot) -- that's why standalone mode "just
+worked" with no setup step. `adapters/diesel_postgres` has no such mechanism at all; its schema
+lives in a single `sql/up.sql` script (parameterized via `-v db_name=... -v db_user=... -v
+db_role=... -v db_password=...`) plus loose one-off files under `sql/migrations/` (NOT in
+diesel_cli's expected `<version>_<name>/{up,down}.sql` folder format, so `diesel migration run`
+finds zero migrations and silently does nothing).
+**Solution:** Applied `up.sql` directly via `psql`, then the one migration file
+(`20260421_01_envelope_encryption.sql`, a two-column `ALTER TABLE tenant`) by hand.
+**Prevents:** Assuming `diesel migration run` (the diesel_cli tool) does anything useful against
+this codebase's Postgres schema -- it doesn't, for either the base schema or the one existing
+incremental migration. Docs for this are in `docs/book/src/02-installation.md`'s "Database
+setup" section (`psql ... -f postgres/sql/up.sql -v db_password=...`).
+
+### L-010: Watch the `up.sql` param quoting -- `-v var="'value'"` bakes literal quote characters into the identifier
+
+**Context:** First `up.sql` run appeared to succeed (no errors, `CREATE TABLE`/`GRANT` printed)
+but the target `mycelium` database stayed empty.
+**Problem:** Passed `-v db_name="'mycelium'"` (shell-escaped single quotes included) -- psql's
+`:'db_name'` substitution wraps the value in ITS OWN quoting, so the effective value became the
+literal string `'mycelium'`, quote characters included. The script's `NOT EXISTS` check found no
+database with that (mangled) name, so it happily `CREATE DATABASE`'d a new one actually named
+`'mycelium'` (quotes as part of the name) and built the whole schema there instead.
+**Solution:** Pass bare values with `-v db_name=mycelium` (no extra quoting) -- psql adds the
+right quoting itself when the SQL uses `:'var'`.
+**Prevents:** A silent-success footgun -- the script prints normal `CREATE TABLE` output either
+way, so this only surfaces when you go looking for the tables and don't find them where expected.
+
+### L-011: `myc-cli`'s password prompt needs a real TTY -- `docker run -i`/`-it` alone don't provide one for piped input
+
+**Context:** `myc-cli accounts create-seed-account` panicked (`No such device or address`, errno
+ENXIO) when run via `printf 'pw\n' | docker run --rm -i ...`, and `docker run -it` outright
+refused piped stdin ("cannot attach stdin to a TTY-enabled container because stdin is not a
+terminal").
+**Problem:** `rpassword::prompt_password` opens `/dev/tty` directly (not plain stdin) to disable
+echo -- that device doesn't exist/isn't the controlling terminal for a container process
+whose stdin is just a pipe, `-t` or not.
+**Solution:** Spawn `docker run -it ...` under a real pseudo-terminal on the host side (a small
+Python `pty.openpty()` wrapper reading output and writing the password once the prompt text
+appears), rather than a plain pipe.
+**Prevents:** Assuming `-i`/`-it` alone is enough to script an interactive password prompt in a
+container -- it isn't; something has to actually allocate and hold open a PTY device.
+
+### L-012 (known issue, not fixed -- user's call): chat-webapp's magic-link signin is broken after the base-mode migration
+
+**Context:** Base mode has no stub/file email transport (`standalone`-only Cargo feature) --
+real SMTP became mandatory, so Mailpit was added as a local catcher (see AD-004's original plan).
+**Problem:** Mycelium's `SmtpConfig::build_transport()` calls lettre's `SmtpTransport::relay()`,
+which negotiates **implicit** TLS from the first byte of the connection (confirmed empirically:
+`Could not send email: ... SSL routines:ssl3_get_record:wrong version number`). Mailpit's SMTP
+server only supports **STARTTLS** (confirmed via `mailpit --help`: `--smtp-tls-cert` is
+explicitly labeled "(STARTTLS)" with no implicit-TLS/SMTPS mode at all) -- the two are
+fundamentally incompatible, not a config-tuning issue.
+**Status:** Deferred at the user's explicit request ("deixar pra depois, só documentar"). Real
+options if picked up later: (a) a small TLS-terminating sidecar (stunnel/socat) in front of
+Mailpit translating implicit-TLS -> STARTTLS, self-contained to this project; (b) patch
+mycelium's own `smtp_config.rs` to use `starttls_relay()` instead of `.relay()` (the user is
+the mycelium maintainer, could fix upstream); (c) point `[smtp]` at a real mail provider instead
+of Mailpit.
+**Impact:** chat-webapp's `/signin` magic-link flow cannot deliver email right now against the
+base-mode gateway -- it did work before this migration (standalone's stub transport, logged to
+stdout). The Staff account (password-based, no email involved) is unaffected.
 
 ### AD-001: Next.js test client uses a BFF pattern, not client-side tokens (2026-07-12)
 
@@ -128,6 +220,43 @@ mycelium-gateway`" to "open Mailpit's web UI (its own published port) and read t
 email there" -- arguably a better dev UX than grepping logs.
 
 ---
+
+## Lessons Learned (continued -- chat-ui-redesign feature)
+
+### L-008: `next/image` needs `images.unoptimized = true` in this Docker image (no `sharp`)
+
+**Context:** Added the project logo via `next/image` for the sidebar and signin page.
+**Problem:** `next/image`'s optimization pipeline requires the `sharp` package in production;
+`webapp/Dockerfile`'s runtime stage doesn't install it (deliberately minimal, `output:
+standalone` traces only what's actually imported, and nothing else needed it before).
+**Solution:** Set `images: { unoptimized: true }` in `next.config.ts` -- serves the asset as-is,
+no dependency needed. Fine for a small local logo with no responsive-variant requirement; would
+need revisiting (install `sharp`, or drop `unoptimized`) if the app ever serves user-uploaded or
+large images.
+**Prevents:** A production-only image-optimization error that wouldn't reproduce in local `yarn
+dev` (which doesn't hit the same optimization code path the same way).
+
+## Lessons Learned (continued -- chat-history feature)
+
+### L-007: Manual `docker build` (bypassing `docker compose build`) drops compose's build args -- reintroduced the SecretResolver TOML parse failure (2026-07-12)
+
+**Context:** While rebuilding `mycelium-gateway` for the chat-history feature's new route, used
+`docker build --network=host -t zombie-crab-project-mycelium-gateway:latest ./mycelium -f
+mycelium/Dockerfile.standalone` directly (compose's own `build` command doesn't accept
+`--network`, needed for the git-clone/cargo-install steps in this sandbox). This silently
+dropped `MYCELIUM_GIT_REF`, which `docker-compose.yaml` normally supplies from `.env`
+(`a1981ecdf16b78e9ffeb28bb2cd9bbff427a88ff` -- the commit with the field-level
+`SecretResolver<String>` fix, LepistaBioinformatics/mycelium#166). The Dockerfile's own default
+ARG value (`a22ac20860f551e2a6fc196bc9d3dec0f1f7ef55`) is an *older*, pre-fix commit -- so the
+resulting image failed to boot with the exact same `data did not match any variant of untagged
+enum SecretResolver` TOML parse error documented earlier this session, on a config file that
+hadn't changed at all in the relevant section.
+**Solution:** Always pass `--build-arg MYCELIUM_GIT_REF=$(grep MYCELIUM_GIT_REF .env | cut -d=
+-f2)` (or just read `.env` first) when building `mycelium-gateway` directly instead of via
+`docker compose build`.
+**Prevents:** Re-diagnosing this as a config/code regression -- it's purely a build-arg mismatch
+between the Dockerfile's stale embedded default and `.env`'s actual pinned commit, triggered
+only by bypassing compose's own build-arg wiring.
 
 ## Lessons Learned (continued during Phase A execution)
 

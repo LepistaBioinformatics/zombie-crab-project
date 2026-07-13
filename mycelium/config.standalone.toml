@@ -178,6 +178,13 @@ secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["ALL"]
 
+[[picoclaw-alpha.path]]
+group = "authenticated"
+path = "/v1/sessions/history"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
 [[picoclaw-beta]]
 host = "picoclaw-beta-proxy:8787"
 protocol = "http"
@@ -200,3 +207,10 @@ path = "/v1/models"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["ALL"]
+
+[[picoclaw-beta.path]]
+group = "authenticated"
+path = "/v1/sessions/history"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]

@@ -1,0 +1,193 @@
+# ------------------------------------------------------------------------------
+# BASE MODE CONFIGURATION -- zombie-crab-project
+#
+# Postgres-backed (default `postgres-backend` feature, see Dockerfile.base),
+# vault disabled with secrets resolved from env vars at request time
+# (SecretResolver<String>, same field-level resolver as config.standalone.toml
+# -- see LepistaBioinformatics/mycelium#166) -- NOT inline plaintext, unlike
+# upstream's own settings/config.dev.for-docker.toml example. This repo is
+# public; real secret values live only in `.env` (gitignored), never in this
+# committed file. Exists specifically so `myc-cli accounts create-seed-account`
+# has a backend it can talk to: that command is hardcoded to Postgres
+# (mycelium-diesel -> adapters/diesel_postgres, workspace Cargo.toml) with no
+# SQLite path, and creating the first `Staff` account is the only way to
+# reach mycelium-webapp's tenant/guest-role screens. See
+# .specs/project/STATE.md AD-003/AD-006/AD-007.
+# ------------------------------------------------------------------------------
+
+vault = "disabled"
+
+[core.accountLifeCycle]
+domainName = "Zombie Crab"
+domainUrl = "http://localhost:8080"
+tokenExpiration = 3600                                                # 1 hour
+noreplyName = "Mycelium"
+noreplyEmail = "noreply@localhost"
+supportName = "Mycelium"
+supportEmail = "support@localhost"
+locale = "en-us"
+tokenSecret = { env = "MYC_BASE_TOKEN_SECRET" }
+
+hmacPrimaryVersion = 1
+
+[[core.accountLifeCycle.hmacSecrets]]
+version = 1
+secret = { env = "MYC_BASE_HMAC_SECRET" }
+
+[core.webhook]
+acceptInvalidCertificates = true
+consumeIntervalInSecs = 30
+consumeBatchSize = 25
+maxAttempts = 5
+
+# ------------------------------------------------------------------------------
+# POSTGRES DATABASE ADAPTER SETTINGS
+# ------------------------------------------------------------------------------
+
+[diesel]
+databaseUrl = { env = "MYC_BASE_DATABASE_URL" }
+
+# ------------------------------------------------------------------------------
+# SMTP -- base/full mode has no stub/file transport (that's a `standalone`-
+# only Cargo feature, see adapters/notifier's `local-transport` feature gate)
+# -- real SMTP is mandatory here, not opt-in. Pointed at Mailpit (no auth
+# validation, no real delivery) instead of asking for real credentials, to
+# keep this stack's "nothing external required" posture.
+#
+# KNOWN ISSUE (see .specs/project/STATE.md L-012, deferred at user's
+# request): SmtpConfig::build_transport() calls lettre's
+# SmtpTransport::relay(), which negotiates *implicit* TLS -- Mailpit only
+# supports STARTTLS (confirmed via `mailpit --help`), so email delivery
+# through this path currently fails. Not fixed yet; chat-webapp's magic-link
+# signin does not work against this config until it is (options recorded in
+# STATE.md L-012). The Staff account below doesn't need this at all --
+# myc-cli's seed-account command is password-based, no email involved.
+# ------------------------------------------------------------------------------
+
+[smtp]
+host = "mailpit"
+username = "mailpit"
+password = "mailpit"
+port = 1025
+
+[queue]
+emailQueueName = "emails"
+consumeIntervalInSecs = 15
+
+# ------------------------------------------------------------------------------
+# REDIS -- base mode's shared-cache/notifier client wiring requires this
+# section to exist even though this stack runs no Redis container.
+# `redis::Client::open()` is connection-lazy (dials on first real use, not at
+# construction) -- verified empirically: the gateway boots and serves
+# requests fine with no Redis container present (see STATE.md AD-005/L-009's
+# spike). Real value is unused; placeholder only, no secret to leak.
+# ------------------------------------------------------------------------------
+
+[redis]
+protocol = "redis"
+hostname = "mycelium-redis"
+password = "unused-no-redis-container-in-this-stack"
+
+# ------------------------------------------------------------------------------
+# AUTHENTICATION SETTINGS
+# ------------------------------------------------------------------------------
+
+[auth.internal.define]
+jwtExpiresIn = 43200                                                  # 12 hours
+tmpExpiresIn = 300                                                    # 5 minutes
+jwtSecret = { env = "MYC_BASE_JWT_SECRET" }
+
+# ------------------------------------------------------------------------------
+# API PORT SETTINGS
+# ------------------------------------------------------------------------------
+
+[api]
+serviceIp = "0.0.0.0"
+servicePort = 8080
+serviceWorkers = 1
+gatewayTimeout = 60
+
+allowedOrigins = ["http://localhost:8080", "http://localhost:8081"]
+
+tls = "disabled"
+
+[api.cache]
+jwksTtl = 3600
+emailTtl = 120
+profileTtl = 120
+
+[api.logging]
+level = "warn,mycelium_base=info,myc_api=info,myc_config=info,myc_core=info,myc_http_tools=info,actix_web=info,myc_notifier=info,myc_diesel=info,myc_kv=info"
+format = "ansi"
+target = "stdout"
+
+# ------------------------------------------------------------------------------
+# API GATEWAY ROUTE CONFIGURATION -- unchanged from config.standalone.toml
+# (see that file's own comment block for the full routing/group rationale).
+# Still "authenticated", not "protectedByRoles" -- this migration's purpose
+# is to unblock the Staff-seed/mycelium-webapp path, not to flip route
+# security groups; that's a separate, later step once a Staff account can
+# actually create the alpha/beta guest roles.
+# ------------------------------------------------------------------------------
+
+[api.services]
+
+[[picoclaw-alpha]]
+host = "picoclaw-alpha-proxy:8787"
+protocol = "http"
+healthCheckPath = "/healthz"
+
+[[picoclaw-alpha.secret]]
+name = "picoclaw-alpha-authorization-header"
+authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_ALPHA_TOKEN" } }
+
+[[picoclaw-alpha.path]]
+group = "authenticated"
+path = "/v1/chat/completions"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["ALL"]
+
+[[picoclaw-alpha.path]]
+group = "authenticated"
+path = "/v1/models"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["ALL"]
+
+[[picoclaw-alpha.path]]
+group = "authenticated"
+path = "/v1/sessions/history"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[picoclaw-beta]]
+host = "picoclaw-beta-proxy:8787"
+protocol = "http"
+healthCheckPath = "/healthz"
+
+[[picoclaw-beta.secret]]
+name = "picoclaw-beta-authorization-header"
+authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_BETA_TOKEN" } }
+
+[[picoclaw-beta.path]]
+group = "authenticated"
+path = "/v1/chat/completions"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["ALL"]
+
+[[picoclaw-beta.path]]
+group = "authenticated"
+path = "/v1/models"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["ALL"]
+
+[[picoclaw-beta.path]]
+group = "authenticated"
+path = "/v1/sessions/history"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
