@@ -99,6 +99,11 @@ services:
       CRAB_NETWORK: zombie_net
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
       MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
+      # Per-instance LLM API keys (referenced by config.yaml's per-agent
+      # model.apiKeyEnv). Real values live only in .env (gitignored) or your
+      # secrets manager -- never in config.yaml or the image.
+      PICOCLAW_ALPHA_API_KEY: ${PICOCLAW_ALPHA_API_KEY}
+      PICOCLAW_BETA_API_KEY: ${PICOCLAW_BETA_API_KEY}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${CRAB_HOST_DATA_ROOT:-${PWD}/data/agents}:/data/agents

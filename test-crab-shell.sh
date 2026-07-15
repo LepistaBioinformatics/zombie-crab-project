@@ -24,7 +24,12 @@ AGENT="${1:-alpha}"
 EMAIL="${2:-tester@exemplo.com}"
 MESSAGE="${3:-Ola, quem e voce?}"
 SESSION="conv-$(date +%s)"
+# Chaves por-instancia (config.yaml usa PICOCLAW_<AGENT>_API_KEY). Para o teste,
+# cada uma cai para DEEPSEEK_API_KEY se nao definida -- assim um `export
+# DEEPSEEK_API_KEY=...` cobre os dois agentes, ou defina uma por agente.
 DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-dummy-sem-key}"
+ALPHA_KEY="${PICOCLAW_ALPHA_API_KEY:-$DEEPSEEK_API_KEY}"
+BETA_KEY="${PICOCLAW_BETA_API_KEY:-$DEEPSEEK_API_KEY}"
 
 IMG="docker.io/sipeed/picoclaw:latest"
 NET="crab-test-net"
@@ -65,7 +70,8 @@ docker run -d --name "$PROXY_CTR" --network "$NET" --network-alias crab-shell-pr
   -e CRAB_HOST_DATA_ROOT="$ROOT" \
   -e MYC_PICOCLAW_ALPHA_TOKEN=tok-alpha \
   -e MYC_PICOCLAW_BETA_TOKEN=tok-beta \
-  -e DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY" \
+  -e PICOCLAW_ALPHA_API_KEY="$ALPHA_KEY" \
+  -e PICOCLAW_BETA_API_KEY="$BETA_KEY" \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$ROOT":/data/agents \
   crab-shell-proxy:dev >/dev/null
@@ -76,8 +82,13 @@ for _ in $(seq 1 30); do
   echo -n "."; sleep 1
 done
 
-echo ">> 4/6 chat direto (agent=$AGENT, email=$EMAIL, session=$SESSION, key=$([ "$DEEPSEEK_API_KEY" = dummy-sem-key ] && echo DUMMY || echo real))"
-PROFILE=$(printf '{"owners":[{"email":"%s","isPrincipal":true}]}' "$EMAIL" | zstd -q -c | base64 -w0)
+AGENT_KEY_VAR="$AGENT"; [ "$AGENT" = alpha ] && SEL="$ALPHA_KEY" || SEL="$BETA_KEY"
+echo ">> 4/6 chat direto (agent=$AGENT, email=$EMAIL, session=$SESSION, key=$([ "$SEL" = dummy-sem-key ] && echo DUMMY || echo real))"
+# Isolamento agora e por accId (nao email). Forja um accId estavel derivado do
+# email so para o teste (na producao vem do mycelium). Emails distintos ->
+# accIds distintos -> containers distintos.
+ACCID="${ACCID:-acc-$(printf '%s' "$EMAIL" | tr -cs 'a-zA-Z0-9' '-' | sed 's/^-*//;s/-*$//')}"
+PROFILE=$(printf '{"accId":"%s","owners":[{"email":"%s","isPrincipal":true}]}' "$ACCID" "$EMAIL" | zstd -q -c | base64 -w0)
 echo "   --- resposta (stream, max 90s) ---"
 docker run --rm --network "$NET" curlimages/curl:latest -sN --max-time 90 \
   -X POST "http://crab-shell-proxy:8080/v1/chat/completions" \
