@@ -1,137 +1,119 @@
 # =============================================================================
-# zombie-crab-project -- two PicoClaw instances behind a Mycelium API gateway
+# zombie-crab-project -- per-user PicoClaw agents behind a Mycelium API gateway
 # =============================================================================
-# Topology (modeled on picoclaw-harness-in-docker-main/docker-compose.yml,
-# fixed to `gateway` mode -- the only mode that exposes the Pico Protocol WS
-# channel the OpenAI-compat proxy talks to):
+# Topology (picoclaw runs in `gateway` mode -- the only mode exposing the Pico
+# Protocol WS channel; crab-shell-proxy speaks that protocol directly in Go):
 #
 #   mycelium-gateway (standalone, :8080, published)
-#     |-- /picoclaw-alpha/v1/*  --> picoclaw-alpha-proxy:8787  --> picoclaw-alpha:18790
-#     `-- /picoclaw-beta/v1/*   --> picoclaw-beta-proxy:8787   --> picoclaw-beta:18790
+#     |-- /picoclaw-alpha/v1/*  --\
+#     `-- /picoclaw-beta/v1/*   ----> crab-shell-proxy:8080
+#                                       |  (agent from x-mycelium-service-name,
+#                                       |   user from x-mycelium-profile email)
+#                                       `--> picoclaw-<agent>-<userhash>:18790
+#                                            (spawned on demand, one per user)
 #
 # mycelium routes by first path segment == the TOML service key (see
 # mycelium/config.standalone.toml), so it's /picoclaw-alpha/... and
-# /picoclaw-beta/..., not /alpha/... or /beta/....
+# /picoclaw-beta/..., NOT /alpha/... . It strips that segment before
+# forwarding, but injects x-mycelium-service-name so crab-shell-proxy still
+# knows which agent was addressed. The spawned picoclaw containers and
+# crab-shell-proxy publish no host ports -- mycelium-gateway is the single
+# entry point.
 #
-# picoclaw-* and picoclaw-*-proxy publish no host ports -- mycelium-gateway is
-# the single entry point, reachable only through it.
+# Two more services sit alongside this for human use: chat-webapp (:3000, a BFF
+# test client -- signin + instance picker + chat) and mycelium-webapp (:8081,
+# the official Mycelium admin UI). See .specs/features/mycelium-chat-webapp/.
 #
-# First run (per instance, before `up -d`):
-#   docker compose run --rm picoclaw-alpha   # onboard, generate config.json, then exits
-#   $EDITOR data/alpha/config.json           # set agents.defaults.provider/model_name
-#                                             # (must match a model_list entry) and
-#                                             # channel_list.pico.enabled = true
-#   cp picoclaw-harness-in-docker-main/.security.yml.example data/alpha/.security.yml
-#   $EDITOR data/alpha/.security.yml          # add model_list.<model_name>.api_keys and:
-#                                             #   channels:
-#                                             #     pico:
-#                                             #       settings:
-#                                             #         token: "<random-token>"
-#                                             # NOTE: despite picoclaw's own docs showing a
-#                                             # flat `pico: token: ...` shape, only the
-#                                             # nested `pico: settings: token: ...` form is
-#                                             # actually picked up by the running binary
-#                                             # (verified empirically -- flat form silently
-#                                             # leaves the channel disabled, no error logged).
-#   # repeat for data/beta/...
-#   cp .env.example .env && $EDITOR .env                     # set MYC_PICOCLAW_*_TOKEN to match
-#   docker compose up -d
-#   # editing data/*/config.json or .security.yml after containers are already running
-#   # requires `docker compose restart picoclaw-alpha picoclaw-beta` (and the *-proxy
-#   # services, to reconnect) -- bind-mounted file edits are NOT picked up by `up -d`
-#   # alone unless the container is actually recreated/restarted.
+# First run (before `up -d`):
+#   1. Seed the per-agent config-only templates crab-shell-proxy clones per
+#      user -- see the crab-shell-proxy service's own comment below for the
+#      exact sudo cp commands (config.json + .security.yml only, never
+#      workspace/). The .security.yml holds model_list.<model>.api_keys and the
+#      nested pico channel token:
+#          channels:
+#            pico:
+#              settings:
+#                token: "<random-token>"
+#      (Only the nested `pico: settings: token:` form is honored by picoclaw --
+#      the flat form silently leaves the channel disabled, verified empirically.)
+#   2. cp .env.example .env && $EDITOR .env   # set MYC_PICOCLAW_*_TOKEN and
+#                                             # MYC_STANDALONE_BOOTSTRAP_SECRET
+#   3. docker compose up -d
+#   4. First Staff account (once): open
+#      http://localhost:${MYCELIUM_PORT}/_adm/instance/bootstrap, submit the
+#      bootstrap secret + your email, read the 6-digit code from
+#      `docker compose logs mycelium-gateway` (standalone's stub email transport
+#      logs instead of sending), then complete the claim -- see
+#      .specs/project/STATE.md for the full flow.
+#
+# Per-user picoclaw containers are created/started/stopped by crab-shell-proxy,
+# not by compose. Editing a template's config.json/.security.yml only affects
+# NEW per-user dirs; existing per-user containers keep their already-cloned copy.
 # =============================================================================
 
 networks:
   zombie_net:
     driver: bridge
-
-x-picoclaw-image: &picoclaw-image ${PICOCLAW_IMAGE:-docker.io/sipeed/picoclaw:latest}
-
-x-picoclaw-common: &picoclaw-common
-  image: *picoclaw-image
-  restart: unless-stopped
-  init: true
-  networks:
-    - zombie_net
-  healthcheck:
-    test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:18790/health"]
-    interval: 30s
-    timeout: 5s
-    retries: 5
-    start_period: 20s
+    # Pinned real name (not compose-project-prefixed) so crab-shell-proxy can
+    # attach the per-user picoclaw containers it spawns to the SAME network by a
+    # stable name regardless of the compose project name (CRAB_NETWORK below).
+    name: zombie_net
 
 services:
-  picoclaw-alpha:
-    <<: *picoclaw-common
-    environment:
-      TZ: ${PICOCLAW_TZ:-UTC}
-      PICOCLAW_GATEWAY_HOST: 0.0.0.0
-      PICOCLAW_LOG_LEVEL: ${PICOCLAW_LOG_LEVEL:-}
-    volumes:
-      - ${PICOCLAW_ALPHA_DATA_DIR:-./data/alpha}:/root/.picoclaw
-
-  picoclaw-alpha-proxy:
+  # Per-user picoclaw orchestrator (Go). Replaces the old static
+  # picoclaw-alpha/beta + picoclaw-*-proxy sidecar pairs: it spawns one bare
+  # picoclaw container per (agent, user) on demand, speaks the Pico Protocol to
+  # it directly, and manages scale-to-zero / continuous lifecycle. Agent is
+  # resolved from mycelium's injected x-mycelium-service-name; user from the
+  # x-mycelium-profile principal email. See crab-shell-proxy/ and
+  # .specs/features/crab-shell-proxy/.
+  #
+  # ONBOARDING (once, before first `up -d`): seed the config-only templates the
+  # proxy copies into each new user's data dir. These hold the picoclaw
+  # config.json + .security.yml (model api_keys + the pico channel token) but
+  # MUST NOT include workspace/ (that would leak conversation history across
+  # users). The files are root-owned, so use sudo:
+  #   sudo mkdir -p data/agents/templates/alpha data/agents/templates/beta
+  #   sudo cp data/alpha/config.json data/alpha/.security.yml data/agents/templates/alpha/
+  #   sudo cp data/beta/config.json  data/beta/.security.yml  data/agents/templates/beta/
+  # (data/ is gitignored; this is a local runtime step, not committed.)
+  #
+  # SECURITY: mounts the Docker socket -> the most privileged service in the
+  # stack (it can control the host daemon). Runs as root by necessity
+  # (docker.sock + root-owned picoclaw data). Acceptable for this self-host dev
+  # stack; revisit for production (see design R2).
+  crab-shell-proxy:
     build:
-      context: ./picoclaw-openai-proxy
+      context: ./crab-shell-proxy
     restart: unless-stopped
     networks:
       - zombie_net
     environment:
-      HOST: 0.0.0.0
-      PORT: 8787
-      PICOCLAW_WS_URL: ws://picoclaw-alpha:18790/pico/ws
-      PICOCLAW_SECURITY_YML: /root/.picoclaw/.security.yml
-      # Same value as mycelium's picoclaw-alpha-authorization-header token
-      # (see mycelium/config.standalone.toml) -- rejects any request that
-      # reaches this sidecar without mycelium's injected header.
-      PROXY_API_KEY: ${MYC_PICOCLAW_ALPHA_TOKEN}
+      # Absolute HOST path of the per-agent data root -- the bind-mount SOURCE
+      # for spawned containers (resolved by the host Docker daemon, so it must
+      # be a host path, not a path inside this container). ${PWD} is the project
+      # dir when you run compose from here; override CRAB_HOST_DATA_ROOT in .env
+      # if you run from elsewhere.
+      CRAB_HOST_DATA_ROOT: ${CRAB_HOST_DATA_ROOT:-${PWD}/data/agents}
+      CRAB_CONTAINER_DATA_ROOT: /data/agents
+      CRAB_NETWORK: zombie_net
+      MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
+      MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
+      # Per-instance LLM API keys (referenced by config.yaml's per-agent
+      # model.apiKeyEnv). Real values live only in .env (gitignored) or your
+      # secrets manager -- never in config.yaml or the image.
+      PICOCLAW_ALPHA_API_KEY: ${PICOCLAW_ALPHA_API_KEY}
+      PICOCLAW_BETA_API_KEY: ${PICOCLAW_BETA_API_KEY}
     volumes:
-      - ${PICOCLAW_ALPHA_DATA_DIR:-./data/alpha}:/root/.picoclaw:ro
-    depends_on:
-      picoclaw-alpha:
-        condition: service_healthy
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${CRAB_HOST_DATA_ROOT:-${PWD}/data/agents}:/data/agents
     healthcheck:
-      # /healthz is unauthenticated on purpose and also proxies picoclaw's
-      # own /health -- this is the same path mycelium-gateway polls (see
-      # mycelium/config.standalone.toml's healthCheckPath).
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8787/healthz"]
-      interval: 30s
+      # Unauthenticated liveness (mycelium's health dispatcher hits this too --
+      # see config.standalone.toml healthCheckPath). Plain GET, not --spider.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  picoclaw-beta:
-    <<: *picoclaw-common
-    environment:
-      TZ: ${PICOCLAW_TZ:-UTC}
-      PICOCLAW_GATEWAY_HOST: 0.0.0.0
-      PICOCLAW_LOG_LEVEL: ${PICOCLAW_LOG_LEVEL:-}
-    volumes:
-      - ${PICOCLAW_BETA_DATA_DIR:-./data/beta}:/root/.picoclaw
-
-  picoclaw-beta-proxy:
-    build:
-      context: ./picoclaw-openai-proxy
-    restart: unless-stopped
-    networks:
-      - zombie_net
-    environment:
-      HOST: 0.0.0.0
-      PORT: 8787
-      PICOCLAW_WS_URL: ws://picoclaw-beta:18790/pico/ws
-      PICOCLAW_SECURITY_YML: /root/.picoclaw/.security.yml
-      PROXY_API_KEY: ${MYC_PICOCLAW_BETA_TOKEN}
-    volumes:
-      - ${PICOCLAW_BETA_DATA_DIR:-./data/beta}:/root/.picoclaw:ro
-    depends_on:
-      picoclaw-beta:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8787/healthz"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
+      retries: 10
       start_period: 10s
 
   mycelium-gateway:
@@ -139,25 +121,110 @@ services:
       context: ./mycelium
       dockerfile: Dockerfile.standalone
       args:
-        MYCELIUM_GIT_REF: ${MYCELIUM_GIT_REF:-a1981ecdf16b78e9ffeb28bb2cd9bbff427a88ff}
+        MYCELIUM_GIT_REF: ${MYCELIUM_GIT_REF:-36b86bd9fc9bd24706e5305078d42c7a30285861}
     restart: unless-stopped
+    # Fixes L-002 (STATE.md): standalone mode wraps its auto-generated
+    # secrets file (/data/.secrets/token_secret.secret) with a key derived
+    # from /etc/machine-id, falling back to $HOSTNAME
+    # (lib/config/src/use_cases/resolve_or_generate_standalone_secret/derive_local_wrapping_key.rs).
+    # debian:bookworm-slim (the runtime image) has no /etc/machine-id at all,
+    # and Docker assigns a random $HOSTNAME (= short container ID) on every
+    # container recreation -- so without a fixed hostname, any recreation
+    # (not just an image rebuild) makes the previous secrets file
+    # permanently undecryptable. A stable hostname makes the wrapping key
+    # stable too (verified empirically).
+    hostname: mycelium-gateway
     networks:
       - zombie_net
     ports:
       - "${MYCELIUM_PORT:-8080}:8080"
     environment:
-      # mycelium/config.standalone.toml references these two var names
-      # directly via its field-level `token = { env = "..." }` secret
-      # resolver (SecretResolver<String>, mycelium >= 9.0.0-rc.2).
+      # mycelium/config.standalone.toml references all of these directly via
+      # its field-level `{ env = "..." }` secret resolver -- real values live
+      # only in .env (gitignored), never in the committed TOML.
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
       MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
+      MYC_STANDALONE_BOOTSTRAP_SECRET: ${MYC_STANDALONE_BOOTSTRAP_SECRET}
     volumes:
       - mycelium-data:/data
     depends_on:
-      picoclaw-alpha-proxy:
+      crab-shell-proxy:
         condition: service_healthy
-      picoclaw-beta-proxy:
+    healthcheck:
+      # Mycelium's own unauthenticated liveness endpoint (ports/api/src/rest/
+      # index/heath_check_endpoints.rs) -- needed so chat-webapp/mycelium-webapp
+      # below can depend on this service being actually up, not just started.
+      # Plain GET, not `--spider` (HEAD): the route only handles GET and
+      # rejects HEAD with 400 "Request path does not match any service"
+      # (verified empirically -- same error text the path router uses for an
+      # actually-unmatched proxied route, easy to misread as a routing bug).
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Conversation metadata for chat-webapp (session_id, agent, title,
+  # timestamps) -- owned by the signed-in account's email, not the browser.
+  # Deliberately separate from Mycelium's own account model/database: this
+  # is just chat-webapp's own small table, not a step towards migrating
+  # mycelium-gateway off standalone/SQLite (see STATE.md AD-003/AD-006 for
+  # why that migration was deferred).
+  chat-webapp-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    networks:
+      - zombie_net
+    environment:
+      POSTGRES_USER: ${CHAT_WEBAPP_DB_USER:-chatwebapp}
+      POSTGRES_PASSWORD: ${CHAT_WEBAPP_DB_PASSWORD:-chatwebapp}
+      POSTGRES_DB: ${CHAT_WEBAPP_DB_NAME:-chatwebapp}
+    volumes:
+      - chat-webapp-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CHAT_WEBAPP_DB_USER:-chatwebapp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # BFF test client (magic-link signin, instance picker, chat) -- see
+  # .specs/features/mycelium-chat-webapp/design.md. Talks to mycelium-gateway
+  # server-side only, over the internal network; the browser never holds the
+  # Mycelium JWT (see AD-001, context.md).
+  chat-webapp:
+    build:
+      context: ./webapp
+    restart: unless-stopped
+    networks:
+      - zombie_net
+    environment:
+      MYCELIUM_INTERNAL_URL: http://mycelium-gateway:8080
+      DATABASE_URL: postgresql://${CHAT_WEBAPP_DB_USER:-chatwebapp}:${CHAT_WEBAPP_DB_PASSWORD:-chatwebapp}@chat-webapp-postgres:5432/${CHAT_WEBAPP_DB_NAME:-chatwebapp}
+    ports:
+      - "${CHAT_WEBAPP_PORT:-3000}:3000"
+    depends_on:
+      mycelium-gateway:
         condition: service_healthy
+      chat-webapp-postgres:
+        condition: service_healthy
+
+  # Official Mycelium admin UI -- account/tenant/guest-role management.
+  # Unlike chat-webapp, this is a pure client-side SPA (no server of its
+  # own), so its browser code calls mycelium-gateway directly -- that's why
+  # its API URL below is the gateway's *published host port*, not the
+  # internal Docker DNS name, and why mycelium-gateway's `allowedOrigins`
+  # (config.standalone.toml) has to include this service's own origin.
+  mycelium-webapp:
+    build:
+      context: ./mycelium-webapp
+      args:
+        VITE_MYCELIUM_API_URL: http://localhost:${MYCELIUM_PORT:-8080}
+    restart: unless-stopped
+    networks:
+      - zombie_net
+    ports:
+      - "${MYCELIUM_WEBAPP_PORT:-8081}:80"
 
 volumes:
   mycelium-data:
+  chat-webapp-postgres-data:

@@ -1,0 +1,35 @@
+{
+  "name": "chat-webapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Next.js test client for the zombie-crab-project stack -- signs in via Mycelium magic-link and exercises the picoclaw chat APIs through the gateway.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@mui/material": "^6.3.0",
+    "@mui/icons-material": "^6.3.0",
+    "@mui/material-nextjs": "^6.3.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "react-markdown": "^9.0.1",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.7.0"
+  },
+  "license": "MIT"
+}

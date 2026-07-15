@@ -1,3 +1,3 @@
-[submodule "picoclaw-openai-proxy"]
-	path = picoclaw-openai-proxy
-	url = https://github.com/sgelias/picoclaw-openai-proxy.git
+[submodule "crab-shell-proxy"]
+	path = crab-shell-proxy
+	url = https://github.com/sgelias/crab-shell-proxy.git

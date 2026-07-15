@@ -1,6 +1,6 @@
 # zombie-crab-project
 
-**Run more than one personal AI agent, safely, behind a single front door.**
+**Give every user their own real, isolated AI agent — behind a single, authenticated front door.**
 
 *[Leia isso em português](./README.pt-br.md)*
 
@@ -10,221 +10,204 @@
 personal AI assistant — a single Go binary, easy to self-host, with a native
 real-time chat protocol ("Pico Protocol") over WebSocket. But it was designed
 around one idea: **one agent, one owner**. There's no concept of roles,
-permissions, or access control between different consumers of the same
-deployment. If you spin up a PicoClaw gateway, *anyone who can reach it can
-talk to it* — there's no built-in way to say "this API key can call the
-sales-team agent" or "that team can only read, not write."
+permissions, or isolation between different consumers of the same deployment.
+If you spin up a PicoClaw gateway, *anyone who can reach it can talk to it*, and
+everyone who does **shares the same process, the same filesystem, and the same
+memory**.
 
-That's fine if you're running PicoClaw for yourself, on your own machine. It
-stops being fine the moment you want to:
+That's fine on your own laptop. It stops being fine the moment more than one
+person is involved, because an AI agent reads and writes files, runs tools,
+executes code, and keeps long-lived memory — all steered by untrusted natural
+language. In a shared process, one prompt-injection, one path-traversal bug, or
+one leaky tool is enough for **one user to read another user's conversations,
+files, and secrets**.
 
-- Run **more than one** PicoClaw instance (one per team, client, or project)
-  from the same host, and
-- Expose them over a normal HTTP API (so any OpenAI-compatible client —
-  Open WebUI, LangChain, the official OpenAI SDK — can talk to them), while
-- Making sure each instance is only reachable through **one controlled,
-  authenticated entry point**, not five different ports scattered across
-  your firewall rules.
+So there are really two problems to solve at once:
 
-PicoClaw itself has no answer for that last part. This project is the
-missing piece.
+1. **Access** — expose PicoClaw over a normal, authenticated HTTP API (so any
+   OpenAI-compatible client can use it) through **one controlled entry point**,
+   not a handful of ports scattered across your firewall.
+2. **Isolation** — make each user's agent a *real* boundary, so a compromise of
+   one never becomes a compromise of everyone.
 
-## The idea
+PicoClaw answers neither on its own. This project is the missing structure
+around it.
 
-Instead of teaching PicoClaw to do something it was never designed for, we
-put a real **API gateway** in front of it — one that already knows how to do
-RBAC, secrets, and routing — and let PicoClaw keep doing what it's good at.
+## The structure (and why it's shaped this way)
+
+Rather than bolt multi-tenancy onto PicoClaw, the stack is **three layers, each
+doing exactly one job** — a deliberate separation that is the whole point of the
+project:
 
 ```mermaid
-flowchart LR
-    client(["Client<br/>curl · Open WebUI · SDK"])
+flowchart TB
+    client(["Client<br/>curl · Open WebUI · SDK · chat-webapp"])
 
-    myc["mycelium-gateway<br/>:8080 — the only published port<br/>routing · auth · secret injection"]
-
-    subgraph alpha [Tenant: alpha]
-        direction TB
-        proxyA["picoclaw-alpha-proxy<br/>:8787 · OpenAI-compatible"]
-        pcA["picoclaw-alpha<br/>gateway mode"]
-        proxyA -->|WebSocket, Pico Protocol| pcA
+    subgraph edge [1 — Edge: identity & access]
+        myc["mycelium-gateway<br/>:8080 · the only published port<br/>auth · RBAC · injects verified profile"]
     end
 
-    subgraph beta [Tenant: beta]
-        direction TB
-        proxyB["picoclaw-beta-proxy<br/>:8787 · OpenAI-compatible"]
-        pcB["picoclaw-beta<br/>gateway mode"]
-        proxyB -->|WebSocket, Pico Protocol| pcB
+    subgraph orch [2 — Orchestration: real isolation]
+        crab["crab-shell-proxy (Go)<br/>agent ← service-name · user ← profile accId<br/>spawns / reuses one container per user<br/>OpenAI HTTP ⇄ Pico Protocol"]
     end
 
-    client -->|POST /picoclaw-alpha/...| myc
-    client -->|POST /picoclaw-beta/...| myc
-    myc -->|Bearer token injected| proxyA
-    myc -->|Bearer token injected| proxyB
+    subgraph agents [3 — Agents: sandboxed, one per user]
+        direction LR
+        u1["picoclaw-alpha-&lt;accId-A&gt;<br/>own volume · non-root"]
+        u2["picoclaw-alpha-&lt;accId-B&gt;<br/>own volume · non-root"]
+        u3["picoclaw-beta-&lt;accId-A&gt;<br/>own volume · non-root"]
+    end
 
-    classDef gateway fill:#2b6cb0,color:#ffffff,stroke:#1a365d,stroke-width:2px;
+    client -->|HTTPS + JWT| myc
+    myc -->|profile injected<br/>+ bearer token| crab
+    crab -->|Docker API| u1
+    crab -->|Docker API| u2
+    crab -->|Docker API| u3
+
+    classDef gateway fill:#2b6cb0,color:#fff,stroke:#1a365d,stroke-width:2px;
+    classDef orchStyle fill:#805ad5,color:#fff,stroke:#44337a,stroke-width:2px;
     classDef clientStyle fill:#f6ad55,color:#1a202c,stroke:#c05621,stroke-width:2px;
-    classDef tenant fill:#edf2f7,stroke:#a0aec0,color:#1a202c;
+    classDef agentStyle fill:#edf2f7,stroke:#a0aec0,color:#1a202c;
     class myc gateway;
+    class crab orchStyle;
     class client clientStyle;
-    class proxyA,pcA,proxyB,pcB tenant;
+    class u1,u2,u3 agentStyle;
 ```
 
-Every arrow into a tenant subgraph passes through `mycelium-gateway` first —
-there is no other way in.
+| Layer | Component | Its one job |
+|---|---|---|
+| **1 · Edge** | [**Mycelium**](https://github.com/LepistaBioinformatics/mycelium) (standalone) | The only thing exposed. Authenticates the caller, enforces RBAC, and injects a **verified, unforgeable** account profile into the request. Nothing downstream is reachable except through it. |
+| **2 · Orchestration** | [**crab-shell-proxy**](https://github.com/sgelias/crab-shell-proxy) (Go) | Reads the agent from the injected service name and the user from the profile's `accId`, then ensures that user's own PicoClaw container is running — spinning it up on demand, tearing it down when idle. Speaks OpenAI HTTP outward and Pico Protocol inward. |
+| **3 · Agent** | [**PicoClaw**](https://github.com/sipeed/picoclaw) | The actual assistant, one **isolated, non-root container per `(agent, user)`**, with its own volume for workspace, memory, and sessions. |
 
-Three pieces, each doing one job:
+**Why this separation matters — it's defense in depth, and the isolation is real:**
 
-| Piece | Job |
-|---|---|
-| [**PicoClaw**](https://github.com/sipeed/picoclaw) (`picoclaw-alpha`, `picoclaw-beta`, ...) | The actual agent. One instance per tenant/team/use case. Talks only its native Pico Protocol over WebSocket. |
-| [**picoclaw-openai-proxy**](https://github.com/sgelias/picoclaw-openai-proxy) | A tiny sidecar that translates a standard OpenAI `/v1/chat/completions` HTTP call into a Pico Protocol WebSocket turn, so any OpenAI-compatible tool can talk to PicoClaw. |
-| [**Mycelium**](https://github.com/LepistaBioinformatics/mycelium) (standalone mode) | The API gateway. The *only* thing exposed to the outside world. Everything downstream of it is unreachable except through it. |
+- **The edge never trusts the client's word about *who* they are.** Mycelium
+  verifies the token and injects the account profile server-side; the caller
+  cannot claim to be someone else. Identity flows *down* from a trusted source,
+  never *up* from the request body.
+- **Isolation is enforced by the kernel, not by application code.** Each user
+  gets a separate container (process, network, and mount namespaces) and a
+  separate volume — not a filtered view of a shared store. If user A's agent is
+  fully compromised (prompt-injected into running hostile code, say), it still
+  **cannot read user B's files, memory, or conversations**: different container,
+  different volume, non-root, no shared surface. That is the difference between
+  *"isolated"* and isolated.
+- **The identity is the account, not the email.** Users are keyed on the
+  profile's `accId` (a stable, unique account id) — emails are mutable and are
+  kept only as a human-readable marker for operators. Change your email; your
+  agent and its history stay yours.
+- **Each layer is replaceable and auditable on its own.** Auth/RBAC lives in one
+  gateway config; isolation and lifecycle live in one small Go service;
+  the agent stays the stock PicoClaw binary, unmodified. One place to reason
+  about each concern.
 
-None of the PicoClaw instances or their proxy sidecars publish a port to the
-host — they only exist inside a private Docker network. If you're not
-talking through Mycelium, you're not talking to anything.
+### Lifecycle: scale-to-zero and continuous
 
-## Why Mycelium specifically
+Per-user containers don't run forever. Each agent is configured for one of two
+modes:
 
-This is the part that actually solves the "PicoClaw has no RBAC" problem —
-not by adding RBAC to PicoClaw, but by putting something in front of it that
-already has it:
-
-- **Zero-dependency to get started.** Mycelium's `standalone` mode runs on
-  SQLite and an in-process cache — no Postgres, no Redis, no Vault to stand
-  up first. You get a real API gateway with a single `docker compose up`.
-- **Secrets never touch the client.** Each downstream route can require a
-  secret (a bearer token, in our case) that Mycelium injects on the way to
-  the proxy. The caller talking to the gateway never sees it, and the
-  proxy sidecar rejects anything that doesn't carry it — so even a stray
-  request that somehow reached the internal network directly is turned away.
-- **Security groups, built in.** Mycelium routes can be `public`,
-  `authenticated`, `protected`, or `protectedByRoles` (with per-role
-  read/write permissions). This project's routes are `protected`: Mycelium
-  authenticates the caller itself and injects their verified account
-  profile as an `x-mycelium-profile` header — the proxy decodes it with
-  [`@lepistabioinformatics/mycelium-sdk`](https://www.npmjs.com/package/@lepistabioinformatics/mycelium-sdk)
-  and derives the PicoClaw session key from the caller's real account id,
-  never from a client-declared field. A caller can no longer just put
-  `"user": "someone-else"` in the request body and read someone else's
-  conversation — **without ever touching PicoClaw itself.** That's the RBAC
-  PicoClaw doesn't have, living in the layer that's supposed to have it.
-- **One place to look, one place to lock down.** Health checks, routing,
-  authentication, and rate limiting for *every* PicoClaw instance live in
-  one config file and one container, instead of being reinvented per
-  instance.
-- **It scales sideways for free.** Adding a third, fourth, or tenth PicoClaw
-  instance is copy-paste: a new service pair in `docker-compose.yaml` and a
-  new route block in Mycelium's config. The gateway doesn't care how many
-  agents are behind it.
+- **scale-to-zero** — the container cold-starts on the user's first request and
+  is stopped after a configurable idle window (data preserved), freeing RAM.
+  Ideal for API-only usage.
+- **continuous** — never auto-stopped. Required when the agent is also reached
+  through PicoClaw's **native connectors** (Telegram, MS Teams, …), which dial
+  *out* from inside the container and don't pass through the proxy, so the
+  proxy can't see that activity to keep it alive.
 
 ## A first-time walkthrough
 
-If you've never touched PicoClaw or Mycelium before, here's the path from
-zero to a working request:
+From zero to a working, isolated agent:
 
-**1. Clone, with the submodule:**
+**1. Clone, with submodules:**
 
 ```bash
 git clone --recurse-submodules https://github.com/sgelias/zombie-crab-project.git
 cd zombie-crab-project
 ```
 
-**2. Onboard each PicoClaw instance once.** The very first boot needs to
-generate a `config.json` — do this before the long-running `gateway` service
-starts, or it'll crash-loop on an empty config:
+**2. Seed one config-only template per agent (non-interactive).** PicoClaw
+scaffolds a default `config.json` on first run in an empty dir and exits — no
+prompts:
 
 ```bash
-docker compose run --rm picoclaw-alpha
-docker compose run --rm picoclaw-beta
+for a in alpha beta; do
+  mkdir -p "data/agents/templates/$a"
+  docker run --rm -v "$PWD/data/agents/templates/$a":/root/.picoclaw \
+    docker.io/sipeed/picoclaw:latest >/dev/null 2>&1 || true
+done
 ```
 
-**3. Pick a model and drop in your API key.** Edit
-`data/alpha/config.json` and set `agents.defaults.provider` /
-`agents.defaults.model_name` to one of the entries already listed in that
-file's `model_list` (DeepSeek, Anthropic, OpenAI, and a couple dozen others
-are pre-populated). Then create `data/alpha/.security.yml` with the real
-key:
+crab-shell-proxy clones this template into each new user's dir and injects the
+provider/model, a fresh pico-channel token, and the API key at provisioning
+time — so the template stays a bare, secret-free scaffold.
 
-```yaml
-model_list:
-  deepseek-chat:
-    api_keys:
-      - "your-real-api-key"
-```
+**3. Configure `.env`.** Copy `.env.example` to `.env` and set:
 
-**4. Turn on the channel the proxy talks to.** Still in
-`data/alpha/config.json`, set `channel_list.pico.enabled` to `true`. Then
-give it a token in `.security.yml` — note it has to be **nested** under
-`settings`, not flat:
+- `MYC_PICOCLAW_ALPHA_TOKEN` / `MYC_PICOCLAW_BETA_TOKEN` — bearer tokens Mycelium
+  injects and crab-shell-proxy validates per agent.
+- `PICOCLAW_ALPHA_API_KEY` / `PICOCLAW_BETA_API_KEY` — each agent's **own** LLM
+  key, read from the environment (never stored in config or images).
+- `MYC_STANDALONE_BOOTSTRAP_SECRET` — gates the one-time Staff bootstrap.
 
-```yaml
-channels:
-  pico:
-    settings:
-      token: "some-random-token"
-```
+Which provider/model each agent uses is declared in
+[`crab-shell-proxy/config.yaml`](./crab-shell-proxy/config.yaml) (e.g.
+`deepseek` / `deepseek-chat`), pointing at the env var above.
 
-Repeat steps 3–4 for `data/beta/`.
-
-**5. Tell Mycelium about those same tokens.** Copy `.env.example` to `.env`
-and set `MYC_PICOCLAW_ALPHA_TOKEN` / `MYC_PICOCLAW_BETA_TOKEN` — these are
-the bearer tokens Mycelium will inject when calling each proxy, and the
-proxy's own `PROXY_API_KEY` check expects the exact same value.
-
-**6. Bring it all up:**
+**4. Bring it up:**
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-**7. Get a Mycelium account and a bearer token.** The routes are `protected`,
-so an anonymous `curl` won't get past the gateway anymore — you need a real
-Mycelium account and its issued token. See Mycelium's own
-[authentication flows guide](https://github.com/LepistaBioinformatics/mycelium/blob/main/modules/mycelium-api-gateway/docs/book/src/11-authentication-flows.md)
-for how to register and log in against this same `mycelium-gateway`.
-
-**8. Talk to it — through the gateway, on the one port that's published:**
+**5. Claim the Staff account (once).** Open
+`http://localhost:${MYCELIUM_PORT:-8080}/_adm/instance/bootstrap`, submit the
+bootstrap secret + your email, and read the 6-digit code from the gateway log
+(standalone logs magic-link emails instead of sending them):
 
 ```bash
-curl http://localhost:8080/picoclaw-alpha/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <your-mycelium-token>" \
-  -d '{
-    "model": "picoclaw",
-    "session_id": "conversa-1",
-    "messages": [{"role": "user", "content": "hi"}]
-  }'
+docker compose logs mycelium-gateway | grep -i bootstrap
 ```
 
-There's no `"user"` field anymore — Mycelium resolves who you are from the
-token and injects it; the proxy trusts that, not anything in the body. Swap
-`picoclaw-alpha` for `picoclaw-beta` to reach the second instance — same
-gateway, same port, completely separate agent underneath.
+**6. Sign in and chat.** Open **`chat-webapp`**
+(`http://localhost:${CHAT_WEBAPP_PORT:-3000}`), sign in with your email
+(magic-link, no password), pick an agent, and chat. Your first message
+cold-starts *your own* container; `docker ps` will show
+`picoclaw-alpha-<your-accId>` running as a non-root user.
 
-## What's what in this repo
+> The gateway routes are `protectedByRoles` (roles `alpha` / `beta`), so an
+> account must hold the matching guest-role to reach an instance. Assigning
+> roles is done from **`mycelium-webapp`**
+> (`http://localhost:${MYCELIUM_WEBAPP_PORT:-8081}`) — Mycelium's own admin UI —
+> via the Staff → tenant → subscription → guest-invite flow.
+
+## What's in this repo
 
 ```
-docker-compose.yaml       # the whole stack: 2x picoclaw + proxy pairs + gateway
-.env.example              # runtime knobs + per-instance bearer tokens
+docker-compose.yaml        # the whole stack (gateway + crab-shell-proxy + webapps + db)
+.env.example               # runtime knobs, per-instance bearer tokens & LLM keys
+crab-shell-proxy/          # git submodule — the Go per-user isolation orchestrator
 mycelium/
-  Dockerfile.standalone   # builds mycelium-api from upstream git, no local source copied in
-  config.standalone.toml  # gateway routes for picoclaw-alpha / picoclaw-beta
-picoclaw-openai-proxy/    # git submodule -- the OpenAI-compat sidecar
+  Dockerfile.standalone    # builds mycelium-api from upstream git (no local source)
+  config.standalone.toml   # gateway routes for picoclaw-alpha / picoclaw-beta
+webapp/                    # Next.js chat test client (BFF — signin, picker, chat)
+mycelium-webapp/           # Dockerfile for Mycelium's own admin UI (from upstream git)
+data/agents/               # per-agent templates + per-user volumes (gitignored)
 ```
+
+`crab-shell-proxy` is a submodule with its own
+[README](./crab-shell-proxy/README.md) going deeper on the isolation model.
 
 ## Before you take this to production
 
-This repo is tuned to be easy to read and easy to run locally, not to be a
-hardened production deployment out of the box. A few things worth knowing
-before you expose it beyond your own machine:
+Tuned to be easy to read and run locally, not hardened out of the box:
 
-- TLS is disabled between the gateway and its downstream services (they
-  all sit on a private Docker network) — terminate TLS at the edge if
-  `mycelium-gateway`'s port ever faces the internet.
-- Routes here use `protected` (verified account identity, no role check).
-  If you need to restrict *which* accounts can reach `picoclaw-alpha` vs
-  `picoclaw-beta` specifically, that's exactly where Mycelium's
-  `protectedByRoles` group comes in.
-- Rotate the bearer tokens in `.env` and `.security.yml` before sharing this
-  stack with anyone else, and never commit real values (both are already
-  gitignored).
+- **crab-shell-proxy holds the Docker socket** and runs as root — it is the most
+  privileged component (it can control the host daemon) and is the trusted
+  control plane; the agents it spawns are the non-root, sandboxed part. Isolate
+  the socket (a restricted socket-proxy, a dedicated host) before exposing this.
+- **TLS is disabled** between the gateway and its private-network downstreams —
+  terminate TLS at the edge if `mycelium-gateway`'s port ever faces the
+  internet, and re-enable `chat-webapp`'s `Secure` session cookie.
+- **Rotate secrets** in `.env` (bearer tokens, LLM keys, bootstrap secret)
+  before sharing this stack; real values are gitignored — keep them that way.
