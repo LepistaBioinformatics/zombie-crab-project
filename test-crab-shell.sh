@@ -32,6 +32,14 @@ PROXY_CTR="crab-shell-proxy-test"
 ROOT=/tmp/crab-agents
 TMPL="$ROOT/templates/$AGENT"
 
+echo ">> 0/6 resetando estado de teste anterior"
+# A chave/provider/model sao injetados APENAS no primeiro provisionamento de
+# cada usuario; sem resetar, um run antigo (com chave diferente) seria
+# reaproveitado -> "api key ****XXXX invalid" com uma chave que nao e a atual.
+# Dados ficam com dono uid 1000, entao remove via container (root).
+docker rm -f "$PROXY_CTR" $(docker ps -aq --filter label=crab-shell.managed=true) >/dev/null 2>&1 || true
+docker run --rm -v /tmp:/t alpine rm -rf "/t/$(basename "$ROOT")" >/dev/null 2>&1 || true
+
 echo ">> 1/6 gerando template CRU (scaffold nao-interativo) em $TMPL"
 if [ ! -f "$TMPL/config.json" ]; then
   mkdir -p "$TMPL"
