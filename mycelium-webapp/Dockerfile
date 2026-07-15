@@ -10,12 +10,13 @@
 # DNS name -- see docker-compose.yaml's build args for this service.
 #
 # Pin with --build-arg MYCELIUM_WEBAPP_GIT_REF=<commit-sha> to move to a
-# newer revision; the default below is the commit this stack was validated
-# against.
+# newer revision; the default below is the v1.1.2 tag (latest release as of
+# this pin), which includes a fix for the bug reported against the version
+# this stack was previously pinned to.
 # ==============================================================================
 
 ARG MYCELIUM_WEBAPP_GIT_URL=https://github.com/LepistaBioinformatics/mycelium-webapp.git
-ARG MYCELIUM_WEBAPP_GIT_REF=776336db80a62f0ae0430a89db5d06f7a19f0156
+ARG MYCELIUM_WEBAPP_GIT_REF=4a01dbff13d5ef00cd2354d856337abc2a7c0405
 
 # ? ----------------------------------------------------------------------------
 # ? Build stage

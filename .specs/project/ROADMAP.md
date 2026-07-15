@@ -65,30 +65,25 @@ session) -- see STATE.md for why `protected` didn't work out for a self-service 
 
 **Goal:** Restrict which accounts can reach `picoclaw-alpha` vs `picoclaw-beta`.
 
-**Why it stalled, then restarted:** Traced during M2 (STATE.md L-006): `protected`/
+**Why it stalled, then restarted, then simplified:** Traced during M2 (STATE.md L-006): `protected`/
 `protectedByRoles` both require an existing guest membership just to resolve a profile at all,
-which requires a Staff -> tenant -> subscription -> guest-invite chain, which requires
-Postgres (`myc-cli`'s seed-account command is Postgres-only). Originally deferred entirely
-(AD-006); resumed 2026-07-13 at the user's explicit request to create the Staff account (see
-AD-007).
+which requires a Staff -> tenant -> subscription -> guest-invite chain. Originally deferred
+entirely (AD-006); resumed 2026-07-13 to create the Staff account via a `base`-mode/Postgres
+migration, since `myc-cli`'s seed-account command was the only path available at the time
+(AD-007) -- then reverted the same day (AD-008) once upstream shipped a web-based bootstrap flow
+that works against `standalone`/SQLite directly, making the Postgres detour unnecessary.
 
 ### Features
 
 **DONE**:
-- Migrated `mycelium-gateway` to `base` mode (Postgres) -- `Dockerfile.base`/`config.base.toml`,
-  new `mycelium-postgres` + `mailpit` compose services (AD-007).
-- Applied the Postgres schema by hand (`up.sql` + the envelope-encryption migration -- no
-  auto-migration for this backend, see STATE.md L-009).
-- Built `myc-cli`, seeded the first Staff account (`staff@localhost`, see L-010/L-011 for how).
-  Verified: logs in via `/_adm/beginners/users/login`, gets a JWT back.
-
-**KNOWN ISSUE (deferred at user's request, see STATE.md L-012)**:
-- chat-webapp's magic-link signin is currently broken against the base-mode gateway --
-  `SmtpTransport::relay()` (implicit TLS) vs. Mailpit (STARTTLS only) are incompatible. The
-  Staff account itself is unaffected (password-based, no email).
+- Reverted to `mycelium-gateway` `standalone` mode (SQLite); Staff account (`staff@localhost`)
+  created via the new upstream web bootstrap flow (`GET/POST /_adm/instance/bootstrap*`,
+  `staffBootstrapSecret` config) instead of `myc-cli`/Postgres (AD-008). Verified: claim flow
+  returns a Staff JWT, and a subsequent ordinary magic-link login for the same account also
+  succeeds -- chat-webapp's own signin works again as a result (this also resolves the
+  previously-deferred SMTP/TLS issue, since standalone's stub transport doesn't touch Mailpit).
 
 **PLANNED (not started)**:
-- Fix the SMTP/TLS mismatch (options recorded in STATE.md L-012)
 - Log into `mycelium-webapp` as Staff, create a tenant -> subscription -> guest role for
   `alpha`/`beta`, invite a test account
 - Flip routes to `protectedByRoles` (roles: `alpha`, `beta`)
@@ -97,6 +92,34 @@ AD-007).
 
 ---
 
+## M4 (in progress): Per-user agent orchestration (crab-shell-proxy)
+
+**Goal:** Adapt the `zero-scale-stateless-hermes-agent.md` scale-to-zero architecture to picoclaw:
+one isolated picoclaw container per `(agent, user)`, spun up on demand and torn down when idle,
+with an always-on ("continuous") mode for users who also reach their agent via picoclaw's native
+Telegram / MS Teams channels.
+
+### Features
+
+**crab-shell-proxy (Go orchestrator)** - IMPLEMENTED, live-container E2E operator-gated
+
+- New Go service (`crab-shell-proxy/`, future private submodule) behind mycelium; replaces the
+  four static `picoclaw-alpha/beta` + `picoclaw-*-proxy` compose services. Resolves agent from
+  `x-mycelium-service-name`, user from the `x-mycelium-profile` principal email; spawns/reuses
+  `picoclaw-<agent>-<userhash>`, speaks Pico Protocol directly (server.js ported to Go).
+- Two lifecycle modes per agent: `scale-to-zero` (idle-timeout stop) and `continuous` (never
+  auto-stop). Single-flight cold start, health-wait, reconcile-on-boot, per-user config-only
+  provisioning, Docker-socket lifecycle over raw HTTP. See AD-009 + `.specs/features/crab-shell-proxy/`.
+- **Verified:** `docker build` (vet + full test suite), `docker compose config`, and a runtime
+  smoke test of the built image (boot, /healthz, auth/identity/session paths, clean 502 when
+  templates unseeded).
+- **Operator-gated (T13):** seed `data/agents/templates/{alpha,beta}`, `docker compose up`, then
+  exercise real chat + scale-to-zero/continuous over live containers. Create the private
+  `crab-shell-proxy` repo + wire the submodule.
+
+---
+
 ## Future Considerations
 
-- Production hardening (TLS termination, secret rotation)
+- Production hardening (TLS termination, secret rotation, Docker-socket privilege — see AD-009 R2)
+- Per-user (not just per-agent) lifecycle mode overrides

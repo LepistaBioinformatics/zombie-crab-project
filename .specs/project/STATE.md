@@ -1,13 +1,104 @@
 # State
 
-**Last Updated:** 2026-07-13T07:45:00-03:00
-**Current Work:** M3 (role-scoped access) -- Staff account exists, protectedByRoles cutover not yet done
+**Last Updated:** 2026-07-14T21:00:00-03:00
+**Current Work:** M4 (crab-shell-proxy) -- Go per-user picoclaw orchestrator implemented + unit/
+smoke verified; live-container E2E is operator-gated (needs seeded templates + LLM keys). M3
+(protectedByRoles cutover) still pending.
 
 ---
 
 ## Recent Decisions (Last 60 days)
 
-### AD-007: Migrated mycelium-gateway to base mode (Postgres) to create the first Staff account (2026-07-13)
+### AD-009: New `crab-shell-proxy` (Go) replaces the static picoclaw + Node-sidecar pairs with per-(agent,user) on-demand containers (2026-07-14)
+
+**Decision:** Implemented the `zero-scale-stateless-hermes-agent.md` architecture for picoclaw as
+a new Go service, `crab-shell-proxy` (local dir `crab-shell-proxy/`, destined for a private
+submodule of the same name -- NOT yet created as a repo/submodule; see below). It sits behind
+mycelium as the single downstream for BOTH `picoclaw-alpha` and `picoclaw-beta` services, and per
+request spawns/reuses one bare picoclaw container per `(agent, user)` named
+`picoclaw-<agent>-<userhash>`, speaking the Pico Protocol WebSocket to it directly (the
+`server.js` translation was **ported into Go**, not kept as a sidecar). This **replaces** the four
+`picoclaw-alpha`, `picoclaw-alpha-proxy`, `picoclaw-beta`, `picoclaw-beta-proxy` compose services.
+`picoclaw-openai-proxy/` submodule stays in the repo as the behavior reference only.
+**Three gray-area forks (resolved with the user, captured in
+`.specs/features/crab-shell-proxy/context.md`):** (1) Telegram/MS Teams connectors are picoclaw's
+own native outbound channels -> "continuous mode" is just "don't arm the idle timer", not a
+routing subsystem; (2) isolation is per `(agent, user)`, keeping alpha/beta as agent configs;
+(3) the OpenAI<->Pico-WS translation was ported into Go (single binary over bare picoclaw).
+**Key trace that unblocked the design:** mycelium strips the first path segment before forwarding
+(`adapters/mem_db/.../shared.rs::extract_path_parts`) but injects `x-mycelium-service-name`
+(`ports/api/.../initialize_downstream_request.rs:213`) -- that header is how the proxy learns which
+agent (alpha/beta) was addressed. Identity = principal email from `x-mycelium-profile`
+(base64->zstd->json), same as `server.js`, behind an `identity.Resolver` interface so the parallel
+Go mycelium SDK can drop in later (fallback decoder ships now so this isn't blocked on the SDK).
+**Lifecycle:** two per-agent modes -- `scale-to-zero` (idle-timeout `docker stop`, disarm-on-entry/
+re-arm-on-completion so a timer can't fire mid-turn) and `continuous` (never armed). Single-flight
+cold start, health-wait bounded by `startupDeadline` (35s, under mycelium's `gatewayTimeout=60`),
+reconcile-on-boot (adopt running, re-arm timers, ensure continuous). For streaming, SSE headers +
+initial role chunk are flushed BEFORE the cold start so the connection survives it.
+**Docker access:** talks to the daemon over the unix socket via raw HTTP (no heavy SDK; 3 small Go
+deps total). Mounts `/var/run/docker.sock` and runs as **root** (needs the socket + to read
+root-owned 0600 picoclaw templates + write dirs root-running picoclaw reads) -- documented as the
+most privileged service in the stack (design R2), acceptable for this self-host dev stack.
+**Provisioning:** per-user data dir is seeded config-only (allowlist: `config.json` +
+`.security.yml`, NEVER `workspace/` -- copying the shared alpha/beta `workspace/sessions/` would
+leak history across users). Pico token is READ from the copied `.security.yml` (deviation from an
+earlier draft that generated + rewrote it -- lower risk; token is channel auth, not identity).
+**Verification:** `docker build --network=host ./crab-shell-proxy` passes `go vet` + full test
+suite (config/identity/pico/history/docker/httpapi -- the fiddly `server.js` turn-completion
+state machine has dedicated parity tests). `docker compose config -q` valid. Runtime smoke (built
+image, real socket): boot, `/healthz` 200, 404/401/400 paths, and a real zstd+base64 profile
+decoded -> email -> session -> provisioning (clean 502 "seed config.json" since templates unseeded).
+**Operator-gated remainder (T13):** live picoclaw spawn + real LLM reply + lifecycle over live
+containers -- needs `data/agents/templates/{alpha,beta}` seeded (root-owned config + real API keys,
+see docker-compose.yaml's crab-shell-proxy comment) and the stack up. **Also operator-gated:**
+creating the private `crab-shell-proxy` GitHub repo + wiring it as a submodule (outward-facing;
+the code currently lives as a plain untracked dir, no `git init`, to avoid a broken embedded
+gitlink). Full spec/design/tasks in `.specs/features/crab-shell-proxy/`.
+
+### AD-008: Reverted AD-007 -- back to `standalone` mode, Staff account created via the new upstream web bootstrap flow instead of `myc-cli`/Postgres (2026-07-13)
+
+**Decision:** Reversed AD-007. `mycelium-gateway` is back on `Dockerfile.standalone`/
+`config.standalone.toml` (SQLite, in-process moka cache, stub/file email transport). `mycelium/
+Dockerfile.base`, `config.base.toml`, `Dockerfile.cli`, the `mycelium-postgres` and `mailpit`
+compose services, and the `mailpit/` TLS-cert dir are all deleted (not archived -- their sole
+reason to exist, working around `myc-cli accounts create-seed-account` being Postgres-only, no
+longer applies). `MYCELIUM_GIT_REF` bumped to the `9.0.0-rc.4` tag (full SHA
+`36b86bd9fc9bd24706e5305078d42c7a30285861`).
+**Reason:** Upstream (LepistaBioinformatics/mycelium commit `8d8933b3`, "feat(staff-bootstrap):
+autonomous web onboarding for the initial staff account", released in `9.0.0-rc.4`) added a
+self-service, one-time, web-based Staff bootstrap flow (`GET/POST /_adm/instance/bootstrap*`,
+gated by a new opt-in `staffBootstrapSecret` config field) that reuses the existing magic-link
+mechanism unmodified and persists its claim state in a new `instance_settings` key/value table --
+implemented in **both** the Postgres and SQLite adapters (SQLite's migration is embedded/
+auto-applied, same as every other standalone table). This makes the entire premise of AD-007 (
+"the only way to create a Staff account is Postgres-only `myc-cli`") obsolete: the web flow works
+identically against `standalone`/SQLite, with no manual migration step.
+**Verified empirically (this session):** boot log emits the documented `staff bootstrap pending --
+... claim_url: http://localhost:8080/_adm/instance/bootstrap` line (confirms the feature is
+actually compiled into the `standalone` build and the table exists); `GET /_adm/instance/
+bootstrap` returned 200 (unclaimed) then 404 after claim; full claim flow (`request-code` ->
+read 6-digit code from `docker compose logs mycelium-gateway`, standalone's stub transport --
+same mechanism L-011/L-012 documented as broken under base mode -- -> `complete`) returned a
+valid Staff JWT; a subsequent ordinary `magic-link/request` + `verify` for the same email (the
+exact flow chat-webapp's `/signin` uses) succeeded and returned an `account` object, confirming
+the claimed account is real and durable, not just the bootstrap response.
+**Trade-off:** None identified -- this reverts every trade-off AD-007 introduced (Postgres
+container, manual migration application, `myc-cli` TTY workaround, broken magic-link signin) with
+no new cost. The `mycelium-postgres` docker volume (`zombie-crab-project_mycelium-postgres-data`)
+was left in place rather than deleted (orphaned, not wired to any service -- prune manually if
+its data is no longer needed).
+**Supersedes:** AD-007. **Resolves:** L-011 (`myc-cli` TTY panic -- route no longer used), L-012
+(base-mode magic-link broken -- standalone's stub transport doesn't have this issue, verified
+above).
+**Impact:** `staff@localhost` is a real Staff account again (freshly re-claimed under the new
+flow; the old Postgres-backed one is simply abandoned along with its volume). chat-webapp's own
+magic-link signin works again. The remaining M3 work (tenant -> subscription -> guest role ->
+invite -> `protectedByRoles` cutover) is unchanged, still not done.
+
+---
+
+### AD-007 (superseded by AD-008): Migrated mycelium-gateway to base mode (Postgres) to create the first Staff account (2026-07-13)
 
 **Decision:** Replaced `standalone` (SQLite) with `base` mode (Postgres, default `postgres-backend`
 feature) -- new `mycelium/Dockerfile.base` + `config.base.toml`, new `mycelium-postgres` and

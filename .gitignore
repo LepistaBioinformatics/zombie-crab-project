@@ -1,4 +1,2 @@
 .env
 data/
-mailpit/tls.crt
-mailpit/tls.key
