@@ -82,12 +82,17 @@ the chat, to set/list/clear secrets for the current workspace's agent.
 
 | ID | Story | Component | Status |
 | --- | --- | --- | --- |
-| SM-01 | Secrets drawer, scoped to the current workspace agent | webapp chat view + drawer component | Pending |
-| SM-02 | Guided inject form (format selector; native dropdowns; no channel_list) | webapp drawer form | Pending |
-| SM-03 | List names grouped by format (no values) + per-secret delete | webapp drawer list | Pending |
-| SM-04 | `POST/GET/DELETE /api/secrets` BFF proxy + honest errors | webapp `app/api/secrets` | Pending |
-| SM-05 | Surface write-only + restart + per-(user,agent) scope | webapp drawer copy/UX | Pending |
-| SM-06 | `className` via cva variants (project convention) | all new components | Pending |
+| SM-01 | Secrets drawer, scoped to the current workspace agent | `app/chat/secrets-drawer.tsx` + toggle in `chat-view.tsx` | Verified (UI/build) |
+| SM-02 | Guided inject form (format selector; native dropdowns; no channel_list) | `secrets-drawer.tsx` | Verified (UI/build) |
+| SM-03 | List names grouped by format (no values) + per-secret delete | `secrets-drawer.tsx` | Verified (UI/build) |
+| SM-04 | `POST/GET/DELETE /api/secrets` BFF proxy + honest errors | `app/api/secrets/route.ts` + `lib/secrets.ts` | Verified (UI/build) |
+| SM-05 | Surface write-only + restart + per-(user,agent) scope | `secrets-drawer.tsx` copy | Verified (UI/build) |
+| SM-06 | `className` via cva variants (project convention) | all new components | Verified (UI/build) |
+
+**Note:** UI + `next build` + headless render verified (drawer opens scoped to the agent,
+`dotenv/json/file/native` forms, native provider dropdown, `channel_list` absent from the DOM, list
+grouped by format with names-only + delete, restart/scope copy). The live inject→restart path is
+operator-gated (needs the gateway rebuilt to route `/v1/secrets` + a licensed workspace).
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 

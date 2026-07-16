@@ -6,8 +6,11 @@ import { createConversation, touchConversation } from "@/lib/chatSession";
 import MessageContent from "@/app/chat/message-content";
 import Composer from "@/app/chat/composer";
 import { cva } from "class-variance-authority";
+import { KeyRound } from "lucide-react";
 import { setFragmentSid, historyQuery, type Workspace } from "@/app/chat/fragment";
+import SecretsDrawer from "@/app/chat/secrets-drawer";
 import { Alert } from "@/components/ui/alert";
+import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
 
 const messageBubble = cva("max-w-[85%] rounded-2xl px-4 py-2.5", {
@@ -38,6 +41,7 @@ export default function ChatView({
   const [sending, setSending] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [secretsOpen, setSecretsOpen] = useState(false);
 
   // Chat-style scroll: a brand new message pins its *top* into view (so a long
   // reply can be read from the start while it's still streaming), while the
@@ -171,6 +175,21 @@ export default function ChatView({
 
   return (
     <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between gap-2 border-b border-brand/30 px-4 py-2">
+        <span className="min-w-0 truncate font-display text-sm font-semibold text-fg">
+          agent {workspace.r}
+        </span>
+        <IconButton
+          variant="ghost"
+          size="sm"
+          aria-label="Agent secrets"
+          title="Agent secrets"
+          onClick={() => setSecretsOpen(true)}
+        >
+          <KeyRound size={18} aria-hidden />
+        </IconButton>
+      </div>
+
       {error && (
         <div className="px-4 pt-4">
           <Alert severity="error">{error}</Alert>
@@ -215,6 +234,12 @@ export default function ChatView({
           sessionId={sessionId ?? ""}
         />
       </div>
+
+      <SecretsDrawer
+        workspace={workspace}
+        open={secretsOpen}
+        onClose={() => setSecretsOpen(false)}
+      />
     </div>
   );
 }
