@@ -17,7 +17,7 @@ import { cva } from "class-variance-authority";
 import { useFragment, setFragmentSid, historyQuery, type Workspace } from "./fragment";
 
 const conversationItem = cva(
-  "flex w-full flex-col items-start gap-1 rounded-lg px-3 py-2 text-left transition-colors",
+  "flex w-full items-center rounded-lg px-3 py-2 text-left transition-colors",
   {
     variants: {
       active: { true: "bg-accent/12", false: "hover:bg-elevated/60" },
@@ -151,6 +151,9 @@ export default function HistorySidebar({
         <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
           CONVERSATIONS
         </span>
+        <span className="ml-auto truncate text-[11px] lowercase text-fg-muted" title={`agent ${workspace.r}`}>
+          {workspace.r}
+        </span>
       </div>
 
       <div className="flex-1 overflow-auto px-2 pb-2">
@@ -174,9 +177,6 @@ export default function HistorySidebar({
                 className={conversationItem({ active })}
               >
                 <span className="w-full truncate text-sm text-fg">{conversation.title}</span>
-                <Badge tone="accent" className="capitalize">
-                  {conversation.role}
-                </Badge>
               </button>
             );
           })}

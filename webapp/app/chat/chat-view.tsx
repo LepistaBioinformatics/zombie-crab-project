@@ -173,6 +173,17 @@ export default function ChatView({
     }
   }
 
+  const composer = (
+    <Composer
+      value={input}
+      onChange={setInput}
+      onSend={sendMessage}
+      sending={sending}
+      loadingHistory={loadingHistory}
+      sessionId={sessionId ?? ""}
+    />
+  );
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-2 border-b border-brand/30 px-4 py-2">
@@ -196,44 +207,48 @@ export default function ChatView({
         </div>
       )}
 
-      <div className="flex-1 overflow-auto px-4 py-6">
-        {loadingHistory ? (
-          <div className="flex justify-center pt-8">
-            <Spinner size={28} />
+      {loadingHistory ? (
+        <div className="flex flex-1 items-center justify-center">
+          <Spinner size={28} />
+        </div>
+      ) : messages.length === 0 ? (
+        // Empty conversation: center the composer with a prompt to begin, so a
+        // fresh chat invites a first message instead of showing a blank column.
+        <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
+          <div className="text-center">
+            <h2 className="font-display text-2xl font-bold text-fg">Start a new chat</h2>
+            <p className="mt-2 text-sm text-fg-muted">
+              Ask agent {workspace.r} anything to get going.
+            </p>
           </div>
-        ) : (
-          <div className="mx-auto flex max-w-[720px] flex-col gap-3">
-            {messages.map((m, i) => {
-              const streaming = sending && i === messages.length - 1 && m.role === "assistant";
-              return (
-                <div
-                  key={i}
-                  ref={(el) => {
-                    messageRefs.current[i] = el;
-                  }}
-                  className={messageBubble({ role: m.role })}
-                >
-                  <MessageContent content={m.content} />
-                  {streaming && (
-                    <span className="ml-0.5 inline-block h-4 w-[0.45em] animate-blink bg-current align-text-bottom" />
-                  )}
-                </div>
-              );
-            })}
+          {composer}
+        </div>
+      ) : (
+        <>
+          <div className="flex-1 overflow-auto px-4 py-6">
+            <div className="mx-auto flex max-w-[720px] flex-col gap-3">
+              {messages.map((m, i) => {
+                const streaming = sending && i === messages.length - 1 && m.role === "assistant";
+                return (
+                  <div
+                    key={i}
+                    ref={(el) => {
+                      messageRefs.current[i] = el;
+                    }}
+                    className={messageBubble({ role: m.role })}
+                  >
+                    <MessageContent content={m.content} />
+                    {streaming && (
+                      <span className="ml-0.5 inline-block h-4 w-[0.45em] animate-blink bg-current align-text-bottom" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        )}
-      </div>
-
-      <div className="px-4 pb-4">
-        <Composer
-          value={input}
-          onChange={setInput}
-          onSend={sendMessage}
-          sending={sending}
-          loadingHistory={loadingHistory}
-          sessionId={sessionId ?? ""}
-        />
-      </div>
+          <div className="px-4 pb-4">{composer}</div>
+        </>
+      )}
 
       <SecretsDrawer
         workspace={workspace}
