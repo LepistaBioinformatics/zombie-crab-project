@@ -89,14 +89,20 @@ services:
     networks:
       - zombie_net
     environment:
-      # Absolute HOST path of the per-agent data root -- the bind-mount SOURCE
-      # for spawned containers (resolved by the host Docker daemon, so it must
-      # be a host path, not a path inside this container). ${PWD} is the project
-      # dir when you run compose from here; override CRAB_HOST_DATA_ROOT in .env
-      # if you run from elsewhere.
-      CRAB_HOST_DATA_ROOT: ${CRAB_HOST_DATA_ROOT:-${PWD}/data/agents}
-      CRAB_CONTAINER_DATA_ROOT: /data/agents
+      # Absolute HOST path of the data root -- the bind-mount SOURCE for spawned
+      # containers (resolved by the host Docker daemon, so it must be a host
+      # path, not a path inside this container). ${PWD} is the project dir when
+      # you run compose from here; override CRAB_HOST_DATA_ROOT in .env if you
+      # run from elsewhere. Layout under it (tenant-scoped-workspaces feature):
+      #   templates/<agent>/           (config-only seed, operator-provided)
+      #   tenants/<t>/subscriptions/<s>/agents/<role>/users/<accId>/  (per user)
+      CRAB_HOST_DATA_ROOT: ${CRAB_HOST_DATA_ROOT:-${PWD}/data}
+      CRAB_CONTAINER_DATA_ROOT: /data
       CRAB_NETWORK: zombie_net
+      # Shared secret authenticating POST /v1/accounts (the mycelium
+      # subscriptionAccount.created webhook). Register the webhook in mycelium
+      # with an Authorization: Bearer <this> header -- see README/STATE.
+      CRAB_WEBHOOK_SECRET: ${CRAB_WEBHOOK_SECRET}
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
       MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
       # Per-instance LLM API keys (referenced by config.yaml's per-agent
@@ -104,9 +110,15 @@ services:
       # secrets manager -- never in config.yaml or the image.
       PICOCLAW_ALPHA_API_KEY: ${PICOCLAW_ALPHA_API_KEY}
       PICOCLAW_BETA_API_KEY: ${PICOCLAW_BETA_API_KEY}
+    # TEMPORARY (direct-to-proxy testing of tenant-scoped-workspaces): the proxy
+    # normally publishes no host port (mycelium-gateway is the only entry). This
+    # exposes it on :18080 so first calls can be driven directly with a
+    # hand-crafted x-mycelium-profile. Remove once exercised through the gateway.
+    ports:
+      - "127.0.0.1:18080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${CRAB_HOST_DATA_ROOT:-${PWD}/data/agents}:/data/agents
+      - ${CRAB_HOST_DATA_ROOT:-${PWD}/data}:/data
     healthcheck:
       # Unauthenticated liveness (mycelium's health dispatcher hits this too --
       # see config.standalone.toml healthCheckPath). Plain GET, not --spider.
@@ -121,7 +133,7 @@ services:
       context: ./mycelium
       dockerfile: Dockerfile.standalone
       args:
-        MYCELIUM_GIT_REF: ${MYCELIUM_GIT_REF:-36b86bd9fc9bd24706e5305078d42c7a30285861}
+        MYCELIUM_GIT_REF: ${MYCELIUM_GIT_REF:-d471dc7ab3330cf49a0050da8d157d80fc55252f}
     restart: unless-stopped
     # Fixes L-002 (STATE.md): standalone mode wraps its auto-generated
     # secrets file (/data/.secrets/token_secret.secret) with a key derived

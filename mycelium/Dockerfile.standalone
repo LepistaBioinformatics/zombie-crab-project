@@ -10,14 +10,14 @@
 # pinned commit -- so the whole image is reproducible from the git ref alone.
 #
 # Pin with --build-arg MYCELIUM_GIT_REF=<commit-sha> to move to a newer
-# revision; the default below is the commit tagged 9.0.0-rc.4 (resolved via
-# `git rev-parse 9.0.0-rc.4^{commit}`), which includes the staff-bootstrap
+# revision; the default below is the commit tagged 9.0.0-rc.5 (resolved via
+# `git rev-parse 9.0.0-rc.5^{commit}`), which includes the staff-bootstrap
 # web onboarding flow (commit 8d8933b3) this stack's config.standalone.toml
 # now opts into via `staffBootstrapSecret`.
 # ==============================================================================
 
 ARG MYCELIUM_GIT_URL=https://github.com/LepistaBioinformatics/mycelium.git
-ARG MYCELIUM_GIT_REF=36b86bd9fc9bd24706e5305078d42c7a30285861
+ARG MYCELIUM_GIT_REF=d471dc7ab3330cf49a0050da8d157d80fc55252f
 
 # ? ----------------------------------------------------------------------------
 # ? Build stage
