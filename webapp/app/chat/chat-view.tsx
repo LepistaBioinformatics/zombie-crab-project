@@ -50,6 +50,14 @@ export default function ChatView({
   const [scrollToIndex, setScrollToIndex] = useState<number | null>(null);
   const creatingSid = useRef(false);
 
+  // Always mirrors the currently-viewed session, so an in-flight stream can
+  // tell whether the user is still looking at the conversation the reply
+  // belongs to before it touches the (single, shared) messages state.
+  const activeSidRef = useRef<string | undefined>(sessionId);
+  useEffect(() => {
+    activeSidRef.current = sessionId;
+  }, [sessionId]);
+
   // A valid workspace with no `sid` (direct nav) gets a fresh conversation (id
   // minted server-side, so it also lands in the sidebar) instead of losing the
   // chosen workspace.
@@ -67,6 +75,9 @@ export default function ChatView({
   useEffect(() => {
     if (!sessionId) return;
     setError(null);
+    // The newly-viewed conversation isn't the one mid-send (if any) -- reset so
+    // its composer isn't stuck disabled by another conversation's in-flight send.
+    setSending(false);
     setLoadingHistory(true);
 
     let cancelled = false;
@@ -110,9 +121,24 @@ export default function ChatView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollToIndex]);
 
+  // Reloads a conversation's transcript from picoclaw -- used to reconcile a
+  // reply that finished after the user had navigated away and back.
+  async function reloadHistory(sid: string) {
+    try {
+      const res = await fetch(`/api/chat/${workspace.r}/history?${historyQuery(workspace, sid)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const loaded = Array.isArray(data.messages) ? data.messages : [];
+      if (activeSidRef.current === sid) setMessages(loaded);
+    } catch {
+      // leave whatever is on screen
+    }
+  }
+
   async function sendMessage() {
     const text = input.trim();
     if (!text || !sessionId || sending) return;
+    const sid = sessionId; // the conversation this reply belongs to
 
     // The new user message's index -- scroll its *top* into view once it (and
     // the assistant placeholder after it) render.
@@ -122,13 +148,20 @@ export default function ChatView({
     setSending(true);
     setError(null);
 
+    // If the user switches to another conversation mid-stream, we STOP painting
+    // this reply (it would otherwise land in the wrong conversation) but keep
+    // DRAINING the response so the turn finishes server-side and picoclaw
+    // persists it -- the reply is never cut. Once detached we never repaint,
+    // even if the user comes back, to avoid racing the history reload.
+    let detached = false;
+
     try {
       const res = await fetch(`/api/chat/${workspace.r}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          session_id: sessionId,
+          session_id: sid,
           tenant_id: workspace.t,
           subs_acc_id: workspace.s,
         }),
@@ -143,8 +176,10 @@ export default function ChatView({
         // scaffolded, 400 bad request); only genuine transport failure reads
         // "connectivity".
         const data = await res.json().catch(() => null);
-        setError(errorMessage(data?.error));
-        setMessages((prev) => prev.slice(0, -1)); // drop the empty assistant placeholder
+        if (activeSidRef.current === sid) {
+          setError(errorMessage(data?.error));
+          setMessages((prev) => prev.slice(0, -1)); // drop the empty assistant placeholder
+        }
         return;
       }
 
@@ -152,24 +187,34 @@ export default function ChatView({
       // the session. ONLY now create/bump the postgres row (deferred +
       // success-gated), so clicking a chat or a failed/rejected send never
       // leaves a conversation row with no picoclaw transcript behind it.
-      touchConversation(workspace, sessionId, text).catch(() => {});
+      touchConversation(workspace, sid, text).catch(() => {});
 
       await consumeStream(res.body, (delta) => {
+        if (detached) return;
+        if (activeSidRef.current !== sid) {
+          detached = true; // user navigated away -- keep draining, stop painting
+          return;
+        }
         setMessages((prev) => {
           const next = [...prev];
-          next[next.length - 1] = {
-            role: "assistant",
-            content: next[next.length - 1].content + delta,
-          };
+          const last = next[next.length - 1];
+          if (!last || last.role !== "assistant") return prev;
+          next[next.length - 1] = { role: "assistant", content: last.content + delta };
           return next;
         });
       });
+
+      // Left mid-stream but came back before it finished -> pull the now-complete
+      // transcript so the finished reply replaces whatever partial was shown.
+      if (detached && activeSidRef.current === sid) {
+        await reloadHistory(sid);
+      }
     } catch {
       // Keep whatever partial content already streamed in -- only surface the
-      // error banner, don't discard the in-progress reply.
-      setError("Can't reach the gateway right now.");
+      // error banner if the user is still viewing this conversation.
+      if (activeSidRef.current === sid) setError("Can't reach the gateway right now.");
     } finally {
-      setSending(false);
+      if (activeSidRef.current === sid) setSending(false);
     }
   }
 
