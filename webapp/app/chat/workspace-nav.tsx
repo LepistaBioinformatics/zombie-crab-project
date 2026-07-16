@@ -97,9 +97,6 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (cancelled || !data) return;
-          // TODO: confirm the response shape from this log, then map the real
-          // name field in tenantDisplayName below.
-          console.log("[tenant]", tenant.tenantId, data);
           const name = tenantDisplayName(data.tenant);
           if (name) setTenantNames((prev) => ({ ...prev, [tenant.tenantId]: name }));
         })
@@ -245,14 +242,12 @@ function GroupHeader({
   );
 }
 
-// The tenant response shape isn't finalized yet (see the console.log above) --
-// probe the fields most likely to hold a human name, else null (keep the uuid).
+// mycelium's public tenant object: { id, name, description, owners, ... }.
+// Use `name`; fall back to null (keep the uuid) if it's missing/blank.
 function tenantDisplayName(tenant: unknown): string | null {
-  if (!tenant || typeof tenant !== "object") return null;
-  const t = tenant as Record<string, unknown>;
-  for (const key of ["name", "tenantName", "title", "displayName"]) {
-    const value = t[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
+  if (tenant && typeof tenant === "object") {
+    const name = (tenant as { name?: unknown }).name;
+    if (typeof name === "string" && name.trim()) return name.trim();
   }
   return null;
 }

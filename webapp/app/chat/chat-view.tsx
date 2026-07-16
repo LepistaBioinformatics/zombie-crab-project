@@ -117,8 +117,6 @@ export default function ChatView({
     setInput("");
     setSending(true);
     setError(null);
-    // Fire-and-forget -- bumping recency/title shouldn't block sending.
-    touchConversation(sessionId, text).catch(() => {});
 
     try {
       const res = await fetch(`/api/chat/${workspace.r}`, {
@@ -145,6 +143,12 @@ export default function ChatView({
         setMessages((prev) => prev.slice(0, -1)); // drop the empty assistant placeholder
         return;
       }
+
+      // The turn was accepted -- picoclaw is now running it and will persist
+      // the session. ONLY now create/bump the postgres row (deferred +
+      // success-gated), so clicking a chat or a failed/rejected send never
+      // leaves a conversation row with no picoclaw transcript behind it.
+      touchConversation(workspace, sessionId, text).catch(() => {});
 
       await consumeStream(res.body, (delta) => {
         setMessages((prev) => {

@@ -65,25 +65,39 @@ export async function listConversations(workspace: Workspace): Promise<Conversat
   return rows.map(fromApiRow);
 }
 
+// Mints a conversation id client-side WITHOUT persisting anything. The
+// postgres row is created lazily on the first sent message (touchConversation),
+// so opening/selecting a conversation that never receives a message leaves no
+// ghost row without a picoclaw transcript behind it.
 export async function createConversation(workspace: Workspace): Promise<ConversationSummary> {
-  const res = await fetch("/api/conversations", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tenant_id: workspace.t, subs_acc_id: workspace.s, role: workspace.r }),
-  });
-  const data = await res.json();
-  notifyUpdated();
-  return fromApiRow(data.conversation);
+  return {
+    id: crypto.randomUUID(),
+    role: workspace.r,
+    tenantId: workspace.t,
+    subsAccId: workspace.s,
+    title: "New chat",
+    updatedAt: Date.now(),
+  };
 }
 
-// Called after a message is sent -- bumps the conversation to the top
-// (most-recently-active ordering) and, the first time, derives a title from
-// the message actually sent.
-export async function touchConversation(id: string, firstUserMessageIfNew: string): Promise<void> {
+// Called after a message is sent -- creates the row on the first message
+// (deferred creation) and bumps recency on later ones, so the sidebar list
+// only ever shows conversations that were actually used. Carries the workspace
+// so the row can be created if it doesn't exist yet.
+export async function touchConversation(
+  workspace: Workspace,
+  id: string,
+  firstUserMessage: string,
+): Promise<void> {
   await fetch(`/api/conversations/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: firstUserMessageIfNew }),
+    body: JSON.stringify({
+      message: firstUserMessage,
+      tenant_id: workspace.t,
+      subs_acc_id: workspace.s,
+      role: workspace.r,
+    }),
   });
   notifyUpdated();
 }

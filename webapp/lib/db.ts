@@ -75,50 +75,46 @@ export async function listConversationsForWorkspace(
   role: string,
 ): Promise<ConversationRow[]> {
   await ensureSchema();
+  // A row exists only once a first message has actually been sent (see
+  // upsertConversationRow) -- so a listed conversation always has a real
+  // title and a matching picoclaw session. `title <> 'New chat'` additionally
+  // hides legacy placeholder rows created by the old create-on-open flow,
+  // which had no picoclaw transcript behind them (the postgres/picoclaw
+  // divergence, chat-ui-material-refactor).
   const { rows } = await getPool().query(
     `SELECT id, email, instance, tenant_id, subs_acc_id, title, updated_at
      FROM conversations
      WHERE email = $1 AND tenant_id = $2 AND subs_acc_id = $3 AND instance = $4
+       AND title <> 'New chat'
      ORDER BY updated_at DESC`,
     [email, tenantId, subsAccId, role],
   );
   return rows.map(rowFromDb);
 }
 
-export async function createConversationRow(
+// Creates the conversation row on the FIRST sent message (deferred creation) --
+// the id is client-minted and only lands in postgres once the user actually
+// sends something, so opened-but-never-used conversations never create a
+// ghost row without a picoclaw transcript. On later messages this just bumps
+// updated_at (recency); the title, set from the first message, is kept. The
+// DO UPDATE is scoped to `email` so one account can't touch another's row by
+// guessing an id.
+export async function upsertConversationRow(
   id: string,
   email: string,
   tenantId: string,
   subsAccId: string,
   role: string,
-  title: string,
-): Promise<ConversationRow> {
-  await ensureSchema();
-  const { rows } = await getPool().query(
-    `INSERT INTO conversations (id, email, instance, tenant_id, subs_acc_id, title)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, email, instance, tenant_id, subs_acc_id, title, updated_at`,
-    [id, email, role, tenantId, subsAccId, title],
-  );
-  return rowFromDb(rows[0]);
-}
-
-// Bumps updated_at (recency ordering) and, only the first time a message is
-// sent in a conversation (title still the "New chat" placeholder), sets the
-// title from that message. Scoped to `email` so one account can't touch
-// another's conversation by guessing an id.
-export async function touchConversationRow(
-  id: string,
-  email: string,
-  firstUserMessageIfNew: string,
+  firstUserMessage: string,
 ): Promise<void> {
   await ensureSchema();
   await getPool().query(
-    `UPDATE conversations
-     SET updated_at = now(),
-         title = CASE WHEN title = 'New chat' THEN $3 ELSE title END
-     WHERE id = $1 AND email = $2`,
-    [id, email, deriveTitle(firstUserMessageIfNew)],
+    `INSERT INTO conversations (id, email, instance, tenant_id, subs_acc_id, title, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, now())
+     ON CONFLICT (id) DO UPDATE
+       SET updated_at = now()
+       WHERE conversations.email = $2`,
+    [id, email, role, tenantId, subsAccId, deriveTitle(firstUserMessage)],
   );
 }
 
