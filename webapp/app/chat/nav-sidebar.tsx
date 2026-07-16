@@ -1,4 +1,6 @@
+import { PanelLeftClose } from "lucide-react";
 import Logo from "@/app/logo";
+import { IconButton } from "@/components/ui/icon-button";
 import LogoutButton from "./logout-button";
 import WorkspaceNav from "./workspace-nav";
 
@@ -6,12 +8,34 @@ import WorkspaceNav from "./workspace-nav";
 // -- branding, the sectioned navigator (Workspaces now, room for more), and
 // the account footer. Sections are uniform (SectionHeader + body) so adding a
 // future one is additive, not a restructure.
-export default function NavSidebar({ email, onSelect }: { email: string; onSelect?: () => void }) {
+export default function NavSidebar({
+  email,
+  onSelect,
+  onCollapse,
+}: {
+  email: string;
+  onSelect?: () => void;
+  onCollapse?: () => void;
+}) {
   return (
     <div className="flex h-full flex-col bg-surface">
       <div className="flex items-center gap-2 px-4 py-4">
         <Logo size={32} />
-        <span className="font-display text-base font-semibold text-fg">zombie-crab</span>
+        <span className="min-w-0 flex-1 truncate font-display text-base font-semibold text-fg">
+          zombie-crab
+        </span>
+        {onCollapse && (
+          <IconButton
+            variant="ghost"
+            size="sm"
+            aria-label="Collapse Workspaces"
+            title="Collapse"
+            onClick={onCollapse}
+            className="hidden md:inline-flex"
+          >
+            <PanelLeftClose size={18} aria-hidden />
+          </IconButton>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto px-2 pb-2">

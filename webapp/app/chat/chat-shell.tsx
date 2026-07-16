@@ -1,47 +1,65 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Menu, MessageSquare } from "lucide-react";
 import { useFragment, toWorkspace } from "./fragment";
 import NavSidebar from "./nav-sidebar";
 import HistorySidebar from "./history-sidebar";
 import ChatView from "./chat-view";
 import EmptyState from "./empty-state";
-import { cva } from "class-variance-authority";
+import ResizablePane from "./resizable-pane";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
 
-// Sidebar column: static on desktop; an off-canvas left drawer on mobile that
-// slides in when open.
-const drawer = cva(
-  "z-40 shrink-0 border-r border-brand/30 bg-surface max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:shadow-xl max-md:transition-transform md:static md:translate-x-0",
-  {
-    variants: {
-      pane: { nav: "w-[280px]", history: "w-[300px]" },
-      open: { true: "max-md:translate-x-0", false: "max-md:-translate-x-full" },
-    },
-    defaultVariants: { open: false },
-  },
-);
+const NAV_MIN = 220;
+const NAV_DEFAULT = 280;
+const HISTORY_MIN = 240;
+const HISTORY_DEFAULT = 300;
+const LAYOUT_KEY = "chat-sidebars";
 
 // The whole /chat experience on one route: the nav drawer is always present;
 // the history drawer + chat view mount only when the fragment carries a valid
-// workspace. All selection state lives in the URL fragment (never sent to the
-// server -- workspace ids stay out of request logs).
-//
-// Desktop: three static columns. Mobile (< md): the two sidebars become
-// left-slide overlay drawers toggled from a top bar, and auto-close once a
-// workspace/conversation is picked so the chat is immediately in view.
+// workspace. On desktop each sidebar collapses/resizes independently (persisted
+// in localStorage); on mobile they are hamburger-toggled overlay drawers.
 export default function ChatShell({ email }: { email: string }) {
   const fragment = useFragment();
-  // `null` = fragment not read yet (first client paint). Distinct from "read
-  // and empty" so we don't flash the empty state over a valid bookmarked URL.
   const resolved = fragment !== null;
   const workspace = fragment ? toWorkspace(fragment) : null;
   const sessionId = fragment?.sid;
 
   const [navOpen, setNavOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [navWidth, setNavWidth] = useState(NAV_DEFAULT);
+  const [historyCollapsed, setHistoryCollapsed] = useState(false);
+  const [historyWidth, setHistoryWidth] = useState(HISTORY_DEFAULT);
+
+  // Restore persisted desktop layout once on mount.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LAYOUT_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (typeof s.navWidth === "number") setNavWidth(s.navWidth);
+      if (typeof s.historyWidth === "number") setHistoryWidth(s.historyWidth);
+      if (typeof s.navCollapsed === "boolean") setNavCollapsed(s.navCollapsed);
+      if (typeof s.historyCollapsed === "boolean") setHistoryCollapsed(s.historyCollapsed);
+    } catch {
+      // ignore malformed layout
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        LAYOUT_KEY,
+        JSON.stringify({ navWidth, historyWidth, navCollapsed, historyCollapsed }),
+      );
+    } catch {
+      // storage unavailable -- layout just won't persist
+    }
+  }, [navWidth, historyWidth, navCollapsed, historyCollapsed]);
+
   const closeDrawers = () => {
     setNavOpen(false);
     setHistoryOpen(false);
@@ -67,21 +85,41 @@ export default function ChatShell({ email }: { email: string }) {
       <div className="relative flex min-h-0 flex-1">
         {/* Backdrop for mobile drawers */}
         {(navOpen || historyOpen) && (
-          <div
-            className="absolute inset-0 z-30 bg-black/40 md:hidden"
-            onClick={closeDrawers}
-            aria-hidden
-          />
+          <div className="absolute inset-0 z-30 bg-black/40 md:hidden" onClick={closeDrawers} aria-hidden />
         )}
 
-        <aside className={drawer({ pane: "nav", open: navOpen })}>
-          <NavSidebar email={email} onSelect={closeDrawers} />
-        </aside>
+        <ResizablePane
+          ariaLabel="Workspaces"
+          open={navOpen}
+          collapsed={navCollapsed}
+          width={navWidth}
+          minWidth={NAV_MIN}
+          onExpand={() => setNavCollapsed(false)}
+          onResize={setNavWidth}
+        >
+          <NavSidebar
+            email={email}
+            onSelect={closeDrawers}
+            onCollapse={() => setNavCollapsed(true)}
+          />
+        </ResizablePane>
 
         {workspace && (
-          <aside className={drawer({ pane: "history", open: historyOpen })}>
-            <HistorySidebar workspace={workspace} onSelect={() => setHistoryOpen(false)} />
-          </aside>
+          <ResizablePane
+            ariaLabel="Conversations"
+            open={historyOpen}
+            collapsed={historyCollapsed}
+            width={historyWidth}
+            minWidth={HISTORY_MIN}
+            onExpand={() => setHistoryCollapsed(false)}
+            onResize={setHistoryWidth}
+          >
+            <HistorySidebar
+              workspace={workspace}
+              onSelect={() => setHistoryOpen(false)}
+              onCollapse={() => setHistoryCollapsed(true)}
+            />
+          </ResizablePane>
         )}
 
         <main className="min-w-0 flex-1">

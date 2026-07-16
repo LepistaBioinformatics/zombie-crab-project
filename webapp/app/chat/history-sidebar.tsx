@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MessageSquarePlus, Search } from "lucide-react";
+import { MessageSquarePlus, PanelLeftClose, Search } from "lucide-react";
 import {
   createConversation,
   listConversations,
@@ -9,6 +9,7 @@ import {
   type ConversationSummary,
 } from "@/lib/chatSession";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
@@ -28,9 +29,11 @@ const conversationItem = cva(
 export default function HistorySidebar({
   workspace,
   onSelect,
+  onCollapse,
 }: {
   workspace: Workspace;
   onSelect?: () => void;
+  onCollapse?: () => void;
 }) {
   const fragment = useFragment();
   const activeSessionId = fragment?.sid;
@@ -108,11 +111,23 @@ export default function HistorySidebar({
 
   return (
     <div className="flex h-full flex-col bg-surface">
-      <div className="p-2">
-        <Button variant="filled" size="md" className="w-full" onClick={onNewChat}>
+      <div className="flex items-center gap-2 p-2">
+        <Button variant="filled" size="md" className="flex-1" onClick={onNewChat}>
           <MessageSquarePlus size={18} />
           New chat
         </Button>
+        {onCollapse && (
+          <IconButton
+            variant="ghost"
+            size="md"
+            aria-label="Collapse Conversations"
+            title="Collapse"
+            onClick={onCollapse}
+            className="hidden md:inline-flex"
+          >
+            <PanelLeftClose size={18} aria-hidden />
+          </IconButton>
+        )}
       </div>
 
       <div className="px-2 pb-2">
