@@ -196,7 +196,7 @@ name = "picoclaw-alpha-authorization-header"
 authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_ALPHA_TOKEN" } }
 
 [[picoclaw-alpha.path]]
-group = { protectedByRoles = [{ name = "alpha" }] }
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
 path = "/v1/chat/completions"
 secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
@@ -239,7 +239,7 @@ name = "picoclaw-beta-authorization-header"
 authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_BETA_TOKEN" } }
 
 [[picoclaw-beta.path]]
-group = { protectedByRoles = [{ name = "beta" }] }
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
 path = "/v1/chat/completions"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
