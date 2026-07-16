@@ -200,14 +200,14 @@ group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
 path = "/v1/chat/completions"
 secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
-methods = ["ALL"]
+methods = ["POST"]
 
 [[picoclaw-alpha.path]]
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/models"
 secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
-methods = ["ALL"]
+methods = ["GET"]
 
 [[picoclaw-alpha.path]]
 group = { protectedByRoles = [{ name = "alpha" }] }
@@ -229,6 +229,16 @@ secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
 
+[[picoclaw-alpha.path]]
+# Secret injection (agent-customization feature): per-(user, agent), role-gated
+# with write (injecting is a write; GET/DELETE also gated the same, a member only
+# ever touches their own store). Values are write-only over the API.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/secrets"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST", "DELETE"]
+
 [[picoclaw-beta]]
 host = "crab-shell-proxy:8080"
 protocol = "http"
@@ -243,14 +253,14 @@ group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
 path = "/v1/chat/completions"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
-methods = ["ALL"]
+methods = ["POST"]
 
 [[picoclaw-beta.path]]
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/models"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
-methods = ["ALL"]
+methods = ["GET"]
 
 [[picoclaw-beta.path]]
 group = { protectedByRoles = [{ name = "beta" }] }
@@ -266,3 +276,11 @@ path = "/v1/subscriptions"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
+
+[[picoclaw-beta.path]]
+# Secret injection (see the picoclaw-alpha /v1/secrets comment).
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/secrets"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST", "DELETE"]
