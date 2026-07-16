@@ -7,9 +7,22 @@ import NavSidebar from "./nav-sidebar";
 import HistorySidebar from "./history-sidebar";
 import ChatView from "./chat-view";
 import EmptyState from "./empty-state";
+import { cva } from "class-variance-authority";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/cn";
+
+// Sidebar column: static on desktop; an off-canvas left drawer on mobile that
+// slides in when open.
+const drawer = cva(
+  "z-40 shrink-0 border-r border-brand/30 bg-surface max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:shadow-xl max-md:transition-transform md:static md:translate-x-0",
+  {
+    variants: {
+      pane: { nav: "w-[280px]", history: "w-[300px]" },
+      open: { true: "max-md:translate-x-0", false: "max-md:-translate-x-full" },
+    },
+    defaultVariants: { open: false },
+  },
+);
 
 // The whole /chat experience on one route: the nav drawer is always present;
 // the history drawer + chat view mount only when the fragment carries a valid
@@ -61,26 +74,12 @@ export default function ChatShell({ email }: { email: string }) {
           />
         )}
 
-        <aside
-          className={cn(
-            "z-40 w-[280px] shrink-0 border-r border-brand/30 bg-surface",
-            "max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:shadow-xl max-md:transition-transform",
-            "md:static md:translate-x-0",
-            navOpen ? "max-md:translate-x-0" : "max-md:-translate-x-full",
-          )}
-        >
+        <aside className={drawer({ pane: "nav", open: navOpen })}>
           <NavSidebar email={email} onSelect={closeDrawers} />
         </aside>
 
         {workspace && (
-          <aside
-            className={cn(
-              "z-40 w-[300px] shrink-0 border-r border-brand/30 bg-surface",
-              "max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:shadow-xl max-md:transition-transform",
-              "md:static md:translate-x-0",
-              historyOpen ? "max-md:translate-x-0" : "max-md:-translate-x-full",
-            )}
-          >
+          <aside className={drawer({ pane: "history", open: historyOpen })}>
             <HistorySidebar workspace={workspace} onSelect={() => setHistoryOpen(false)} />
           </aside>
         )}

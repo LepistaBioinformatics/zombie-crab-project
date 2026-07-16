@@ -5,10 +5,19 @@ import { useRouter } from "next/navigation";
 import { createConversation, touchConversation } from "@/lib/chatSession";
 import MessageContent from "@/app/chat/message-content";
 import Composer from "@/app/chat/composer";
+import { cva } from "class-variance-authority";
 import { setFragmentSid, historyQuery, type Workspace } from "@/app/chat/fragment";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/cn";
+
+const messageBubble = cva("max-w-[85%] rounded-2xl px-4 py-2.5", {
+  variants: {
+    role: {
+      user: "self-end bg-accent text-accent-fg",
+      assistant: "self-start border border-brand/30 bg-elevated text-fg",
+    },
+  },
+});
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -172,7 +181,6 @@ export default function ChatView({
         ) : (
           <div className="mx-auto flex max-w-[720px] flex-col gap-3">
             {messages.map((m, i) => {
-              const isUser = m.role === "user";
               const streaming = sending && i === messages.length - 1 && m.role === "assistant";
               return (
                 <div
@@ -180,12 +188,7 @@ export default function ChatView({
                   ref={(el) => {
                     messageRefs.current[i] = el;
                   }}
-                  className={cn(
-                    "max-w-[85%] rounded-2xl px-4 py-2.5",
-                    isUser
-                      ? "self-end bg-accent text-accent-fg"
-                      : "self-start border border-brand/30 bg-elevated text-fg",
-                  )}
+                  className={messageBubble({ role: m.role })}
                 >
                   <MessageContent content={m.content} />
                   {streaming && (

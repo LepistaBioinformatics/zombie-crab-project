@@ -1,4 +1,14 @@
 import ReactMarkdown from "react-markdown";
+import { cva } from "class-variance-authority";
+
+// Inline code gets a tinted chip; fenced/block code is bare (its <pre> wrapper
+// carries the surface).
+const codeText = cva("font-mono text-[0.85em]", {
+  variants: {
+    block: { true: "", false: "rounded bg-black/10 px-1 py-0.5" },
+  },
+  defaultVariants: { block: false },
+});
 
 // Renders assistant/user message content as markdown (picoclaw replies are
 // often formatted with headings, lists, code blocks, etc.). Everything uses
@@ -30,17 +40,7 @@ export default function MessageContent({ content }: { content: string }) {
             // react-markdown v9 gives block-level code a `language-*`
             // className (from the fenced ```lang block); inline code has none.
             const isBlock = Boolean(className);
-            return (
-              <code
-                className={
-                  isBlock
-                    ? "font-mono text-[0.85em]"
-                    : "rounded bg-black/10 px-1 py-0.5 font-mono text-[0.85em]"
-                }
-              >
-                {children}
-              </code>
-            );
+            return <code className={codeText({ block: isBlock })}>{children}</code>;
           },
           pre: ({ children }) => (
             <pre className="mb-2 overflow-x-auto rounded-lg bg-black/10 p-3">{children}</pre>

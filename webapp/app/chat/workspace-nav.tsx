@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { cva, type VariantProps } from "class-variance-authority";
 import { Building2, ChevronDown, ChevronRight, FolderClosed, Bot } from "lucide-react";
 import { createConversation } from "@/lib/chatSession";
 import {
@@ -15,7 +16,41 @@ import { useFragment, setWorkspace, type Workspace } from "./fragment";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
-import { cn } from "@/lib/cn";
+
+// Selectable agent leaf: active = M3 tonal selected fill (no border).
+const leafButton = cva(
+  "flex w-full items-center gap-2 rounded-lg py-1.5 pr-2 pl-8 text-left text-sm transition-colors disabled:opacity-60",
+  {
+    variants: {
+      active: {
+        true: "bg-accent/12 font-medium text-fg",
+        false: "text-fg hover:bg-elevated/60",
+      },
+    },
+    defaultVariants: { active: false },
+  },
+);
+
+// Collapsible tenant/account headers: indentation + label treatment vary by level.
+const groupHeader = cva(
+  "flex w-full items-center gap-1.5 rounded-lg py-1.5 pr-2 text-left transition-colors hover:bg-elevated/60",
+  {
+    variants: { level: { tenant: "pl-2", account: "pl-5" } },
+    defaultVariants: { level: "tenant" },
+  },
+);
+
+const groupHeaderLabel = cva("min-w-0 flex-1 truncate", {
+  variants: {
+    level: {
+      tenant: "font-mono text-xs text-fg-muted",
+      account: "text-sm font-medium text-fg",
+    },
+  },
+  defaultVariants: { level: "tenant" },
+});
+
+type GroupLevel = NonNullable<VariantProps<typeof groupHeader>["level"]>;
 
 // The "Workspaces" section body: fetches the caller's subscriptions, collapses
 // permission-duplicated rows, and renders a tenant -> account -> agent tree.
@@ -27,6 +62,7 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [entering, setEntering] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [tenantNames, setTenantNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
     (async () => {
@@ -50,14 +86,40 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
     })();
   }, [router]);
 
-  const activeKey = fragment?.t && fragment?.s && fragment?.r
-    ? `${fragment.t}|${fragment.s}|${fragment.r}`
-    : null;
+  // Resolve tenant display names lazily, per tenant, once the tree is grouped.
+  // The tree renders immediately with uuids; names replace them as each fetch
+  // lands -- never blocking the sidebar.
+  useEffect(() => {
+    if (!groups) return;
+    let cancelled = false;
+    for (const tenant of groups) {
+      fetch(`/api/tenants/${encodeURIComponent(tenant.tenantId)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (cancelled || !data) return;
+          // TODO: confirm the response shape from this log, then map the real
+          // name field in tenantDisplayName below.
+          console.log("[tenant]", tenant.tenantId, data);
+          const name = tenantDisplayName(data.tenant);
+          if (name) setTenantNames((prev) => ({ ...prev, [tenant.tenantId]: name }));
+        })
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [groups]);
+
+  const activeKey =
+    fragment?.t && fragment?.s && fragment?.r
+      ? `${fragment.t}|${fragment.s}|${fragment.r}`
+      : null;
 
   function toggle(key: string) {
     setCollapsed((prev) => {
       const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
@@ -108,9 +170,9 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
           <div key={tKey}>
             <GroupHeader
               icon={<Building2 size={15} aria-hidden />}
-              label={tenant.tenantId}
+              label={tenantNames[tenant.tenantId] ?? tenant.tenantId}
               open={tOpen}
-              depth={0}
+              level="tenant"
               onClick={() => toggle(tKey)}
             />
             {tOpen &&
@@ -123,7 +185,7 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
                       icon={<FolderClosed size={15} aria-hidden />}
                       label={account.accName || account.subsAccId}
                       open={aOpen}
-                      depth={1}
+                      level="account"
                       onClick={() => toggle(aKey)}
                     />
                     {aOpen &&
@@ -137,13 +199,7 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
                             type="button"
                             disabled={entering}
                             onClick={() => onPick(leaf)}
-                            className={cn(
-                              "flex w-full items-center gap-2 rounded-lg border-l-4 py-1.5 pr-2 pl-8 text-left text-sm transition-colors",
-                              "disabled:opacity-60",
-                              active
-                                ? "border-accent bg-elevated text-fg"
-                                : "border-transparent text-fg hover:bg-elevated/60",
-                            )}
+                            className={leafButton({ active })}
                           >
                             <Bot size={15} className="shrink-0 text-fg-muted" aria-hidden />
                             <span className="min-w-0 flex-1 truncate capitalize">{leaf.role}</span>
@@ -165,41 +221,38 @@ function GroupHeader({
   icon,
   label,
   open,
-  depth,
+  level,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   open: boolean;
-  depth: number;
+  level: GroupLevel;
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-1.5 rounded-lg py-1.5 pr-2 text-left transition-colors hover:bg-elevated/60",
-        depth === 0 ? "pl-2" : "pl-5",
-      )}
-    >
+    <button type="button" onClick={onClick} className={groupHeader({ level })}>
       {open ? (
         <ChevronDown size={14} className="shrink-0 text-fg-muted" aria-hidden />
       ) : (
         <ChevronRight size={14} className="shrink-0 text-fg-muted" aria-hidden />
       )}
       <span className="shrink-0 text-fg-muted">{icon}</span>
-      <span
-        className={cn(
-          "min-w-0 flex-1 truncate",
-          depth === 0
-            ? "font-mono text-xs text-fg-muted"
-            : "text-sm font-medium text-fg",
-        )}
-        title={label}
-      >
+      <span className={groupHeaderLabel({ level })} title={label}>
         {label}
       </span>
     </button>
   );
+}
+
+// The tenant response shape isn't finalized yet (see the console.log above) --
+// probe the fields most likely to hold a human name, else null (keep the uuid).
+function tenantDisplayName(tenant: unknown): string | null {
+  if (!tenant || typeof tenant !== "object") return null;
+  const t = tenant as Record<string, unknown>;
+  for (const key of ["name", "tenantName", "title", "displayName"]) {
+    const value = t[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
 }

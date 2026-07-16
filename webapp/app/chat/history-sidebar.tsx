@@ -12,8 +12,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/cn";
+import { cva } from "class-variance-authority";
 import { useFragment, setFragmentSid, historyQuery, type Workspace } from "./fragment";
+
+const conversationItem = cva(
+  "flex w-full flex-col items-start gap-1 rounded-lg px-3 py-2 text-left transition-colors",
+  {
+    variants: {
+      active: { true: "bg-accent/12", false: "hover:bg-elevated/60" },
+    },
+    defaultVariants: { active: false },
+  },
+);
 
 export default function HistorySidebar({
   workspace,
@@ -146,12 +156,7 @@ export default function HistorySidebar({
               <button
                 key={conversation.id}
                 onClick={() => onOpenConversation(conversation.id)}
-                className={cn(
-                  "flex w-full flex-col items-start gap-1 rounded-lg border-l-4 px-3 py-2 text-left transition-colors",
-                  active
-                    ? "border-accent bg-elevated"
-                    : "border-transparent hover:bg-elevated/60",
-                )}
+                className={conversationItem({ active })}
               >
                 <span className="w-full truncate text-sm text-fg">{conversation.title}</span>
                 <Badge tone="accent" className="capitalize">
