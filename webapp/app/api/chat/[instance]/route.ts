@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchMycelium, isInstance, MyceliumConnectivityError } from "@/lib/mycelium";
+import { fetchMycelium, isInstance, MyceliumConnectivityError, upstreamError } from "@/lib/mycelium";
 import { clearSession, getSession } from "@/lib/session";
 
 export async function POST(
@@ -19,7 +19,9 @@ export async function POST(
   const body = await req.json().catch(() => null);
   const message = typeof body?.message === "string" ? body.message : null;
   const sessionId = typeof body?.session_id === "string" ? body.session_id : null;
-  if (!message || !sessionId) {
+  const tenantId = typeof body?.tenant_id === "string" ? body.tenant_id : null;
+  const subsAccId = typeof body?.subs_acc_id === "string" ? body.subs_acc_id : null;
+  if (!message || !sessionId || !tenantId || !subsAccId) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
 
@@ -34,6 +36,8 @@ export async function POST(
       body: JSON.stringify({
         model: "picoclaw",
         session_id: sessionId,
+        tenant_id: tenantId,
+        subs_acc_id: subsAccId,
         stream: true,
         messages: [{ role: "user", content: message }],
       }),
@@ -45,18 +49,21 @@ export async function POST(
     throw err;
   }
 
-  // Auth/role errors are still checked on the initial response, before any
+  // Auth errors are still checked on the initial response, before any
   // streaming starts -- the proxy sends these as a plain (non-SSE) JSON body
   // even for a stream:true request, since it never gets past the auth check
-  // to open the event stream.
+  // to open the event stream. A 401 clears the session (re-signin); every
+  // other non-2xx surfaces the proxy's real status + message (WS-07), never
+  // the connectivity mask.
   if (res.status === 401) {
     await clearSession();
     return NextResponse.json({ error: "session_expired" }, { status: 401 });
   }
-  if (res.status === 403) {
-    return NextResponse.json({ error: "role_required" }, { status: 403 });
+  if (!res.ok) {
+    const { error, status } = await upstreamError(res);
+    return NextResponse.json({ error, status }, { status });
   }
-  if (!res.ok || !res.body) {
+  if (!res.body) {
     return NextResponse.json({ error: "connectivity" }, { status: 502 });
   }
 

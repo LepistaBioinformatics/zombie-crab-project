@@ -1,10 +1,10 @@
 import Box from "@mui/material/Box";
 import { getSession } from "@/lib/session";
-import Sidebar from "./sidebar";
+import Sidebar from "../sidebar";
 
 const SIDEBAR_WIDTH = 280;
 
-export default async function ChatLayout({ children }: { children: React.ReactNode }) {
+export default async function ChatSessionLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, FormEvent } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
@@ -10,28 +10,26 @@ import Button from "@mui/material/Button";
 import Alert from "@mui/material/Alert";
 import Paper from "@mui/material/Paper";
 import CircularProgress from "@mui/material/CircularProgress";
-import { isInstance } from "@/lib/mycelium";
-import { touchConversation } from "@/lib/chatSession";
+import { createConversation, touchConversation } from "@/lib/chatSession";
 import MessageContent from "@/app/chat/message-content";
+import { useFragment, setFragmentSid, toWorkspace, historyQuery } from "@/app/chat/fragment";
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
 
-type ErrorKind = "invalid_instance" | "session_expired" | "role_required" | "connectivity" | null;
-
-export default function ConversationPage() {
-  const params = useParams<{ instance: string; sessionId: string }>();
+export default function ChatSessionPage() {
   const router = useRouter();
-  const instance = params.instance;
-  const sessionId = params.sessionId;
+  const fragment = useFragment();
+  const workspace = fragment ? toWorkspace(fragment) : null;
+  const sessionId = fragment?.sid;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  const [error, setError] = useState<ErrorKind>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Chat-style scroll: a brand new message pins its *top* into view (so a
   // long reply can be read from the start while it's still streaming/
@@ -40,20 +38,42 @@ export default function ConversationPage() {
   // recent message.
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [scrollToIndex, setScrollToIndex] = useState<number | null>(null);
+  const creatingSid = useRef(false);
 
+  // The workspace + session are client-only state (in the URL fragment).
+  // Once the fragment has been read (fragment !== null): an incomplete/
+  // invalid workspace means a direct/bookmarked nav to the chat view with no
+  // choice made -- send them back to the picker. A valid workspace with no
+  // `sid` (manual URL) gets a fresh conversation (id minted server-side, so
+  // it also lands in the sidebar) instead of losing the chosen workspace.
   useEffect(() => {
-    if (!isInstance(instance)) {
-      setError("invalid_instance");
+    if (fragment === null) return;
+    const ws = toWorkspace(fragment);
+    if (!ws) {
+      router.replace("/chat");
       return;
     }
+    if (!fragment.sid && !creatingSid.current) {
+      creatingSid.current = true;
+      createConversation(ws)
+        .then((conversation) => setFragmentSid(conversation.id))
+        .finally(() => {
+          creatingSid.current = false;
+        });
+    }
+  }, [fragment, router]);
+
+  useEffect(() => {
+    if (!workspace || !sessionId) return;
     setError(null);
     setLoadingHistory(true);
 
+    let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
-          `/api/chat/${instance}/history?session_id=${encodeURIComponent(sessionId)}`,
-        );
+        const query = historyQuery(workspace, sessionId);
+        const res = await fetch(`/api/chat/${workspace.r}/history?${query}`);
+        if (cancelled) return;
         if (res.status === 401) {
           router.push("/signin");
           return;
@@ -72,12 +92,17 @@ export default function ConversationPage() {
           requestAnimationFrame(() => setScrollToIndex(loaded.length - 1));
         }
       } catch {
-        setMessages([]);
+        if (!cancelled) setMessages([]);
       } finally {
-        setLoadingHistory(false);
+        if (!cancelled) setLoadingHistory(false);
       }
     })();
-  }, [instance, sessionId, router]);
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace?.t, workspace?.s, workspace?.r, sessionId, router]);
 
   useEffect(() => {
     if (scrollToIndex === null) return;
@@ -95,7 +120,7 @@ export default function ConversationPage() {
 
   async function sendMessage() {
     const text = input.trim();
-    if (!text || !isInstance(instance) || sending) return;
+    if (!text || !workspace || !sessionId || sending) return;
 
     // The new user message's index -- scroll its *top* into view once it
     // (and the assistant placeholder after it) actually render.
@@ -109,24 +134,28 @@ export default function ConversationPage() {
     touchConversation(sessionId, text).catch(() => {});
 
     try {
-      const res = await fetch(`/api/chat/${instance}`, {
+      const res = await fetch(`/api/chat/${workspace.r}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, session_id: sessionId }),
+        body: JSON.stringify({
+          message: text,
+          session_id: sessionId,
+          tenant_id: workspace.t,
+          subs_acc_id: workspace.s,
+        }),
       });
 
       if (res.status === 401) {
         router.push("/signin");
         return;
       }
-      if (res.status === 403) {
-        setError("role_required");
-        setMessages((prev) => prev.slice(0, -1)); // drop the empty assistant placeholder
-        return;
-      }
       if (!res.ok || !res.body) {
-        setError("connectivity");
-        setMessages((prev) => prev.slice(0, -1));
+        // Surface the proxy's real reason (WS-07) -- 403 not licensed, 409
+        // not scaffolded, 400 bad request all carry their own message now,
+        // only genuine transport failure reads "connectivity".
+        const data = await res.json().catch(() => null);
+        setError(errorMessage(data?.error));
+        setMessages((prev) => prev.slice(0, -1)); // drop the empty assistant placeholder
         return;
       }
 
@@ -142,32 +171,28 @@ export default function ConversationPage() {
       });
     } catch {
       // Keep whatever partial content already streamed in -- only surface
-      // the error banner, don't discard the in-progress reply (spec.md
-      // "Streamed replies" AC#2).
-      setError("connectivity");
+      // the error banner, don't discard the in-progress reply.
+      setError("Can't reach the gateway right now.");
     } finally {
       setSending(false);
     }
   }
 
-  if (error === "invalid_instance") {
+  // Still resolving the fragment / redirecting away -- show a spinner rather
+  // than flashing an empty chat.
+  if (!workspace || !sessionId) {
     return (
-      <Container maxWidth="sm" sx={{ py: 6 }}>
-        <Alert severity="error">Unknown agent &quot;{instance}&quot;.</Alert>
-      </Container>
+      <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+        <CircularProgress size={28} />
+      </Box>
     );
   }
 
   return (
     <Box display="flex" flexDirection="column" height="100%">
-      {error === "role_required" && (
-        <Alert severity="warning" sx={{ m: 2, mb: 0 }}>
-          You don&apos;t have access to this agent yet -- ask an operator to assign your role.
-        </Alert>
-      )}
-      {error === "connectivity" && (
+      {error && (
         <Alert severity="error" sx={{ m: 2, mb: 0 }}>
-          Can&apos;t reach the gateway right now.
+          {error}
         </Alert>
       )}
 
@@ -243,6 +268,12 @@ export default function ConversationPage() {
       </Box>
     </Box>
   );
+}
+
+function errorMessage(raw: unknown): string {
+  if (raw === "connectivity") return "Can't reach the gateway right now.";
+  if (typeof raw === "string" && raw.trim()) return raw;
+  return "Something went wrong sending your message.";
 }
 
 // Parses the proxy's OpenAI-style SSE stream (`data: {...}\n\n`, terminated

@@ -1,13 +1,16 @@
 import type { Instance } from "@/lib/mycelium";
+import type { Workspace } from "@/app/chat/fragment";
 
 // Conversation metadata (title, agent, recency) now lives server-side in
-// Postgres, keyed by the signed-in account's email -- not localStorage. This
-// is what makes the sidebar the same across browsers/devices for the same
-// account, unlike the earlier client-only index (see .specs/project/STATE.md
-// for that discussion). This module is just the client-side fetch wrapper.
+// Postgres, scoped to the signed-in account's email AND the selected
+// workspace (tenant + subscription + role) -- not localStorage, and no longer
+// just email (workspace-selection resolved point 2). This module is just the
+// client-side fetch wrapper.
 export interface ConversationSummary {
-  id: string; // == session_id sent to /api/chat/[instance]
-  instance: Instance;
+  id: string; // == session_id (the fragment `sid`)
+  role: Instance;
+  tenantId: string;
+  subsAccId: string;
   title: string;
   updatedAt: number;
 }
@@ -29,6 +32,8 @@ function notifyUpdated(): void {
 interface ConversationApiRow {
   id: string;
   instance: string;
+  tenantId: string;
+  subsAccId: string;
   title: string;
   updatedAt: string;
 }
@@ -36,25 +41,35 @@ interface ConversationApiRow {
 function fromApiRow(row: ConversationApiRow): ConversationSummary {
   return {
     id: row.id,
-    instance: row.instance as Instance,
+    role: row.instance as Instance,
+    tenantId: row.tenantId,
+    subsAccId: row.subsAccId,
     title: row.title,
     updatedAt: new Date(row.updatedAt).getTime(),
   };
 }
 
-export async function listConversations(): Promise<ConversationSummary[]> {
-  const res = await fetch("/api/conversations");
+function workspaceQuery(workspace: Workspace): string {
+  return new URLSearchParams({
+    tenant_id: workspace.t,
+    subs_acc_id: workspace.s,
+    role: workspace.r,
+  }).toString();
+}
+
+export async function listConversations(workspace: Workspace): Promise<ConversationSummary[]> {
+  const res = await fetch(`/api/conversations?${workspaceQuery(workspace)}`);
   if (!res.ok) return [];
   const data = await res.json();
   const rows: ConversationApiRow[] = Array.isArray(data.conversations) ? data.conversations : [];
   return rows.map(fromApiRow);
 }
 
-export async function createConversation(instance: Instance): Promise<ConversationSummary> {
+export async function createConversation(workspace: Workspace): Promise<ConversationSummary> {
   const res = await fetch("/api/conversations", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ instance }),
+    body: JSON.stringify({ tenant_id: workspace.t, subs_acc_id: workspace.s, role: workspace.r }),
   });
   const data = await res.json();
   notifyUpdated();

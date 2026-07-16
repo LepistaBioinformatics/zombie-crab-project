@@ -216,6 +216,19 @@ secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
 
+[[picoclaw-alpha.path]]
+# Discovery (workspace-selection feature) is agent-agnostic: it returns ALL of
+# the caller's licensed subscriptions (across roles), and the client must reach
+# it BEFORE it knows which role it holds -- so it is `protected` (any resolvable
+# member), NOT role-gated. The proxy ignores the injected service-name here and
+# returns only the caller's own licensed_resources. Registered under both agents
+# for symmetry; either works for any member.
+group = "protected"
+path = "/v1/subscriptions"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
 [[picoclaw-beta]]
 host = "crab-shell-proxy:8080"
 protocol = "http"
@@ -242,6 +255,14 @@ methods = ["ALL"]
 [[picoclaw-beta.path]]
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/sessions/history"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[picoclaw-beta.path]]
+# Agent-agnostic discovery (see the picoclaw-alpha /v1/subscriptions comment).
+group = "protected"
+path = "/v1/subscriptions"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
