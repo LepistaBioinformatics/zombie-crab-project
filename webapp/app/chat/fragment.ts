@@ -48,6 +48,18 @@ export function setFragmentSid(sid: string): void {
   window.location.hash = params.toString();
 }
 
+// Selects a whole workspace (replacing any previous t/s/r) plus its opening
+// session in one write -- used when picking a workspace from the nav sidebar.
+// Same native-hashchange mechanism as setFragmentSid.
+export function setWorkspace(workspace: Workspace, sid: string): void {
+  window.location.hash = new URLSearchParams({
+    t: workspace.t,
+    s: workspace.s,
+    r: workspace.r,
+    sid,
+  }).toString();
+}
+
 // `null` means "not read yet" (first client render, before the mount effect
 // runs) -- distinct from "read and empty", so callers don't redirect a valid
 // fragment away on the initial paint before the hash has been parsed.

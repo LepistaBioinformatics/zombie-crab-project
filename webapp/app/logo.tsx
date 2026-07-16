@@ -1,21 +1,22 @@
 import Image from "next/image";
-import Box from "@mui/material/Box";
 
 // Two images, toggled purely by the `prefers-color-scheme` media query (no
-// JS, no flash) -- same mechanism the MUI theme itself uses
-// (cssVariables.colorSchemeSelector: "media", see lib/theme.ts).
+// JS, no flash). The app uses the media dark strategy (no `.dark` class), so
+// the toggle is an explicit arbitrary-media Tailwind variant rather than
+// `dark:`.
 export default function Logo({ size = 32 }: { size?: number }) {
   return (
     <>
-      <Box sx={{ "@media (prefers-color-scheme: dark)": { display: "none" } }}>
-        <Image src="/logo-light.jpg" alt="zombie-crab" width={size} height={size} style={{ borderRadius: size / 4 }} />
-      </Box>
-      <Box
-        sx={{
-          display: "none",
-          "@media (prefers-color-scheme: dark)": { display: "block" },
-        }}
-      >
+      <span className="contents motion-safe:contents [@media(prefers-color-scheme:dark)]:hidden">
+        <Image
+          src="/logo-light.jpg"
+          alt="zombie-crab"
+          width={size}
+          height={size}
+          style={{ borderRadius: size / 4 }}
+        />
+      </span>
+      <span className="hidden [@media(prefers-color-scheme:dark)]:contents">
         <Image
           src="/logo-dark.jpg"
           alt="zombie-crab"
@@ -23,7 +24,7 @@ export default function Logo({ size = 32 }: { size?: number }) {
           height={size}
           style={{ borderRadius: size / 4 }}
         />
-      </Box>
+      </span>
     </>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import Button from "@mui/material/Button";
+import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { IconButton } from "@/components/ui/icon-button";
 
 export default function LogoutButton() {
   const router = useRouter();
@@ -12,8 +13,8 @@ export default function LogoutButton() {
   }
 
   return (
-    <Button variant="outlined" size="small" onClick={onLogout}>
-      Log out
-    </Button>
+    <IconButton variant="ghost" size="sm" aria-label="Log out" title="Log out" onClick={onLogout}>
+      <LogOut size={18} aria-hidden />
+    </IconButton>
   );
 }

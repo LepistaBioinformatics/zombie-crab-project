@@ -1,13 +1,48 @@
 # State
 
-**Last Updated:** 2026-07-14T21:00:00-03:00
-**Current Work:** M4 (crab-shell-proxy) -- Go per-user picoclaw orchestrator implemented + unit/
-smoke verified; live-container E2E is operator-gated (needs seeded templates + LLM keys). M3
+**Last Updated:** 2026-07-16T00:00:00-03:00
+**Current Work:** chat-webapp UI refactor (`chat-ui-material-refactor`) -- MUI+Emotion fully ripped
+out, replaced with Tailwind v4 + class-variance-authority; two-rail shell (nav drawer + conditional
+history drawer + chat view) on a single `/chat` route; workspaces deduped/grouped by tenant→account→
+agent. `next build` passes; signin + shell + dark-mode tokens verified at runtime. Full chat E2E
+still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-container E2E and M3
 (protectedByRoles cutover) still pending.
 
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-010: chat-webapp migrated MUI+Emotion → Tailwind v4 + cva; two-rail workspace shell (2026-07-16)
+
+**Decision:** Full styling migration off `@mui/material`/`@mui/icons-material`/`@mui/material-nextjs`/
+`@emotion/*` (all removed from package.json, `lib/theme.ts` + `app/providers.tsx` deleted) onto
+**Tailwind v4** (`@tailwindcss/postcss`, CSS-first `@theme`) + **class-variance-authority** primitives
+(`webapp/components/ui/*`) + `lucide-react` icons. Design language = **Material 3 structure, Lepista
+skin** (user decision): M3 nav-drawer/state-layer/tonal-surface patterns, but keeping the Lepista
+brand tokens (cyan `#64C5EB`, violet border `#663a88`, Bricolage/Hanken/Space Mono, 8px). The
+signature hard-offset cyan shadow stays reserved for `/signin` only.
+**Structure:** the standalone workspace-picker page (`workspace-picker.tsx`) is gone; the two-page
+flow (`/chat` picker + `/chat/session` chat) collapses to a single `/chat` route rendering
+`ChatShell` -- a first sidebar (nav drawer: branding, a sectioned "Workspaces" navigator with room
+for future sections, user/logout footer) + a second sidebar (conversation history, mounts only when
+a workspace is selected) + the chat view. `/chat/session` route deleted; fragment-only workspace/
+session state (`#t&s&r&sid`) unchanged (DEC-4, privacy: ids never hit the server). `middleware.ts`
+(`/chat/:path*`) needed no change.
+**Workspace dedup (DEC-3):** `/api/subscriptions` returns one row per permission, so a read+write
+workspace showed as 2-3 entries. New pure `lib/subscriptions.ts` (`groupWorkspaces`/`accessLabel`)
+collapses on `tenantId|subsAccId|role`, unions perms, and renders a `read·write` badge. Backend/BFF
+contracts untouched -- pure frontend refactor.
+**Composer (signature element):** larger integrated chat box (rounded surface, violet border, cyan
+focus ring, circular accent send button), auto-grow textarea, and **autofocus on session open** --
+implemented as a deliberate deviation from the old code: the textarea is NOT disabled during history
+load (only the send control is), else `.focus()` no-ops on a disabled element and the caret never
+lands.
+**Verification:** `next build` passes (types + Tailwind compile, 12 routes); `groupWorkspaces` purity
+checked on sample rows incl. a read+write dup; `/signin` + `/chat` shell render at runtime; the CSS
+carries `--accent:#64c5eb` + a `prefers-color-scheme:dark` block with `--bg:#14171a`, confirming the
+`@theme inline` + `:root`/`@media` dark-mode pattern actually flips (the v4 footgun where a literal
+`@theme` value bakes and never switches). Full chat streaming E2E is operator-gated (backend stack).
+Spec/design/tasks in `.specs/features/chat-ui-material-refactor/`.
 
 ### AD-009: New `crab-shell-proxy` (Go) replaces the static picoclaw + Node-sidecar pairs with per-(agent,user) on-demand containers (2026-07-14)
 
