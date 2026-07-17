@@ -12,15 +12,29 @@ import SecretsDrawer from "@/app/chat/secrets-drawer";
 import UploadsSidebar from "@/app/chat/uploads-sidebar";
 import AttachmentButton from "@/app/chat/attachment-button";
 import { uploadMedia, parseAnexos, type Attachment } from "@/lib/media";
+import { CopyButton } from "@/components/ui/copy-button";
 import { Alert } from "@/components/ui/alert";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
 
-const messageBubble = cva("max-w-[85%] rounded-2xl px-4 py-2.5", {
+// Messages render as full-width bands (same width as the composer), not
+// left/right bubbles: a continuous transcript differentiated by a soft
+// background tint + which side the text is indented to (right for the user,
+// left for the agent). A soft gradient between bands marks each speaker change.
+const messageBand = cva("group relative w-full px-6 py-3 text-fg", {
   variants: {
     role: {
-      user: "self-end bg-accent text-accent-fg",
-      assistant: "self-start border border-brand/30 bg-elevated text-fg",
+      user: "bg-accent/10 pl-16 pr-6",
+      assistant: "bg-elevated/40 pl-6 pr-16",
+    },
+  },
+});
+
+const speakerTransition = cva("h-5 w-full", {
+  variants: {
+    change: {
+      "user-assistant": "bg-gradient-to-b from-accent/10 to-elevated/40",
+      "assistant-user": "bg-gradient-to-b from-elevated/40 to-accent/10",
     },
   },
 });
@@ -361,35 +375,49 @@ export default function ChatView({
       ) : (
         <>
           <div className="flex-1 overflow-auto px-4 py-6">
-            <div className="mx-auto flex max-w-[720px] flex-col gap-3">
+            <div className="mx-auto w-full max-w-[720px] overflow-hidden rounded-xl">
               {messages.map((m, i) => {
                 const streaming = sending && i === messages.length - 1 && m.role === "assistant";
                 const { text, refs } = parseAnexos(m.content);
+                const prev = messages[i - 1];
+                const changed = prev && prev.role !== m.role;
                 return (
                   <div
                     key={i}
                     ref={(el) => {
                       messageRefs.current[i] = el;
                     }}
-                    className={messageBubble({ role: m.role })}
                   >
-                    {text && <MessageContent content={text} />}
-                    {refs.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {refs.map((r) => (
-                          <AttachmentButton
-                            key={r.path}
-                            workspace={workspace}
-                            path={r.path}
-                            name={r.name}
-                            tone="chip"
-                          />
-                        ))}
-                      </div>
+                    {changed && (
+                      <div
+                        className={speakerTransition({
+                          change: `${prev.role}-${m.role}` as "user-assistant" | "assistant-user",
+                        })}
+                      />
                     )}
-                    {streaming && (
-                      <span className="ml-0.5 inline-block h-4 w-[0.45em] animate-blink bg-current align-text-bottom" />
-                    )}
+                    <div className={messageBand({ role: m.role })}>
+                      <CopyButton
+                        text={m.content}
+                        className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                      />
+                      {text && <MessageContent content={text} />}
+                      {refs.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {refs.map((r) => (
+                            <AttachmentButton
+                              key={r.path}
+                              workspace={workspace}
+                              path={r.path}
+                              name={r.name}
+                              tone="chip"
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {streaming && (
+                        <span className="ml-0.5 inline-block h-4 w-[0.45em] animate-blink bg-current align-text-bottom" />
+                      )}
+                    </div>
                   </div>
                 );
               })}
