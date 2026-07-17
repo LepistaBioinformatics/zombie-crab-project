@@ -75,19 +75,21 @@ export default function MessageContent({ content }: { content: string }) {
             <pre className="mb-2 overflow-x-auto rounded-lg bg-current/10 p-3">{children}</pre>
           ),
           table: ({ children }) => (
-            <div className="mb-2 overflow-x-auto">
-              <table className="w-max min-w-full border-collapse text-left text-[0.9em] [&_tbody_tr:nth-child(even)]:bg-current/5 [&_thead]:bg-current/15">
+            <div className="my-3 overflow-x-auto">
+              <table className="w-full border-collapse text-left text-[0.9em] [&_tbody_tr:nth-child(even)]:bg-current/[0.035] [&_thead]:bg-current/[0.06]">
                 {children}
               </table>
             </div>
           ),
-          thead: ({ children }) => <thead className="border-b-2 border-current/40">{children}</thead>,
+          thead: ({ children }) => <thead className="border-b border-current/25">{children}</thead>,
           tbody: ({ children }) => <tbody>{children}</tbody>,
-          tr: ({ children }) => <tr className="border-b border-current/15">{children}</tr>,
+          tr: ({ children }) => <tr className="border-b border-current/10">{children}</tr>,
           th: ({ children }) => (
-            <th className="whitespace-nowrap px-3 py-1.5 font-semibold">{children}</th>
+            <th className="px-3 py-1.5 align-top font-semibold [overflow-wrap:anywhere]">{children}</th>
           ),
-          td: ({ children }) => <td className="px-3 py-1.5 align-top">{children}</td>,
+          td: ({ children }) => (
+            <td className="px-3 py-1.5 align-top [overflow-wrap:anywhere]">{children}</td>
+          ),
           input: (props) => (
             <input {...props} disabled className="mr-1 align-middle accent-accent" />
           ),
