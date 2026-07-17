@@ -3,6 +3,7 @@
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Logo from "@/app/logo";
+import BrandName from "@/app/brand-name";
 import { Surface } from "@/components/ui/surface";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -70,7 +71,7 @@ export default function SignInPage() {
             <Logo size={44} />
             <div>
               <h1 className="font-display text-xl font-semibold text-fg">
-                zombie-crab chat
+                <BrandName /> chat
               </h1>
               <p className="text-sm text-fg-muted">
                 Sign in with your email -- no password needed.

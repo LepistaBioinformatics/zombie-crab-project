@@ -1,5 +1,6 @@
 import { PanelLeftClose } from "lucide-react";
 import Logo from "@/app/logo";
+import BrandName from "@/app/brand-name";
 import { IconButton } from "@/components/ui/icon-button";
 import LogoutButton from "./logout-button";
 import WorkspaceNav from "./workspace-nav";
@@ -22,9 +23,7 @@ export default function NavSidebar({
     <div className="flex h-full flex-col bg-surface">
       <div className="flex h-16 shrink-0 items-center gap-2 px-4">
         <Logo size={32} />
-        <span className="min-w-0 flex-1 truncate font-display text-base font-semibold text-fg">
-          zombie-crab
-        </span>
+        <BrandName className="min-w-0 flex-1 truncate font-display text-base font-semibold text-fg" />
         {onCollapse && (
           <IconButton
             variant="ghost"

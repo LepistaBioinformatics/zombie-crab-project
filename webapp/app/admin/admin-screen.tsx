@@ -4,17 +4,19 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cva } from "class-variance-authority";
-import { ArrowLeft, FileBox, KeyRound, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, FileBox, KeyRound, Palette, ShieldCheck, Users } from "lucide-react";
 import { listScopes, resolveScopeNames, type AdminScope, type ScopeRef } from "@/lib/admin";
 import Logo from "@/app/logo";
+import BrandName from "@/app/brand-name";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
 import { ScopeTree } from "./scope-tree";
 import SharedFilesPanel from "./shared-files-panel";
 import SharedSecretsPanel from "./shared-secrets-panel";
 import MembersPanel from "./members-panel";
+import BrandingPanel from "./branding-panel";
 
-type Tab = "files" | "secrets" | "members";
+type Tab = "files" | "secrets" | "members" | "branding";
 
 const tabButton = cva(
   "flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors",
@@ -35,6 +37,15 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "members", label: "Members", icon: <Users size={16} aria-hidden /> },
 ];
 
+// Instance-wide branding (FR-10) is a separate tab, appended only when the
+// caller can edit branding (GET /api/branding/can-edit). It renders full-width,
+// outside the per-scope rail every other tab shares.
+const BRANDING_TAB = {
+  key: "branding" as const,
+  label: "Branding",
+  icon: <Palette size={16} aria-hidden />,
+};
+
 // The administrative screen (FR-9). Server-side authz in the proxy is the real
 // gate (NFR-1); this screen is convenience. On load it fetches the caller's
 // manageable scopes: empty -> "no admin access" (a direct visit stays graceful,
@@ -46,6 +57,7 @@ export default function AdminScreen() {
   const [selected, setSelected] = useState<ScopeRef | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("files");
+  const [canEditBranding, setCanEditBranding] = useState(false);
   const [railWidth, setRailWidth] = useState(224);
 
   // Drag the rail's right edge to resize it (clamped); the scope tree truncates
@@ -68,6 +80,19 @@ export default function AdminScreen() {
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/branding/can-edit")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) setCanEditBranding(!!data?.canEdit);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,7 +137,20 @@ export default function AdminScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, scopes]);
 
+  // A caller with branding access but no manageable scopes only sees Branding;
+  // snap the active tab to it so the scope-rail tabs never render empty.
+  useEffect(() => {
+    if (scopes && scopes.length === 0 && canEditBranding && tab !== "branding") {
+      setTab("branding");
+    }
+  }, [scopes, canEditBranding, tab]);
+
   const subscriptionScopes = (scopes ?? []).filter((s) => s.kind === "subscription");
+
+  const visibleTabs = [
+    ...(scopes && scopes.length > 0 ? TABS : []),
+    ...(canEditBranding ? [BRANDING_TAB] : []),
+  ];
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-6">
@@ -126,7 +164,7 @@ export default function AdminScreen() {
         </Link>
         <div className="ml-auto flex items-center gap-2">
           <Logo size={26} />
-          <span className="font-display text-sm font-semibold text-fg">zombie-crab</span>
+          <BrandName className="font-display text-sm font-semibold text-fg" />
         </div>
       </header>
 
@@ -141,7 +179,7 @@ export default function AdminScreen() {
         <div className="flex justify-center py-16">
           <Spinner size={28} />
         </div>
-      ) : scopes.length === 0 ? (
+      ) : scopes.length === 0 && !canEditBranding ? (
         <Alert severity="info">
           You don&apos;t have administrative authority over any scope. Ask a tenant or subscription
           manager if you think this is a mistake.
@@ -152,7 +190,7 @@ export default function AdminScreen() {
             className="mb-5 flex gap-1 overflow-x-auto border-b border-brand/30"
             aria-label="Admin sections"
           >
-            {TABS.map((t) => (
+            {visibleTabs.map((t) => (
               <button
                 key={t.key}
                 type="button"
@@ -165,7 +203,9 @@ export default function AdminScreen() {
             ))}
           </nav>
 
-          {tab === "members" && subscriptionScopes.length === 0 ? (
+          {tab === "branding" ? (
+            <BrandingPanel />
+          ) : tab === "members" && subscriptionScopes.length === 0 ? (
             <Alert severity="info">
               You don&apos;t manage any subscriptions directly, so there are no member workspaces to
               list here.

@@ -44,6 +44,13 @@ function ensureSchema(): Promise<void> {
         PRIMARY KEY (conversation_id, name)
       );
       CREATE INDEX IF NOT EXISTS conversation_tags_conv_idx ON conversation_tags (conversation_id);
+      CREATE TABLE IF NOT EXISTS branding (
+        id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        app_name TEXT,
+        logo_light BYTEA, logo_light_type TEXT,
+        logo_dark  BYTEA, logo_dark_type  TEXT,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
     `).then(() => undefined);
   }
   return globalForDb.schemaReady;
@@ -265,6 +272,70 @@ export async function setSessionRefs(
     [id, email, sessionKey, sessionFile && sessionFile !== "" ? sessionFile : null],
   );
   return (rowCount ?? 0) > 0;
+}
+
+// Per-instance white-label branding is a singleton row (id=1). An empty table
+// (or a NULL app_name) yields the default name; unset logos return null so the
+// caller serves the bundled default. Writes are instance-admin only (gated in
+// the route layer, not here).
+export const DEFAULT_APP_NAME = "zombie-crab";
+
+export async function getAppName(): Promise<string> {
+  await ensureSchema();
+  const { rows } = await getPool().query(
+    `SELECT app_name FROM branding WHERE id = 1`,
+  );
+  return rows[0]?.app_name ?? DEFAULT_APP_NAME;
+}
+
+export async function setAppName(name: string | null): Promise<void> {
+  await ensureSchema();
+  const normalized = name && name.trim() !== "" ? name.trim() : null;
+  await getPool().query(
+    `INSERT INTO branding (id, app_name, updated_at)
+     VALUES (1, $1, now())
+     ON CONFLICT (id) DO UPDATE SET app_name = $1, updated_at = now()`,
+    [normalized],
+  );
+}
+
+export async function getLogo(
+  variant: "light" | "dark",
+): Promise<{ bytes: Buffer; type: string } | null> {
+  await ensureSchema();
+  const col = variant === "light" ? "logo_light" : "logo_dark";
+  const typeCol = variant === "light" ? "logo_light_type" : "logo_dark_type";
+  const { rows } = await getPool().query(
+    `SELECT ${col} AS bytes, ${typeCol} AS type FROM branding WHERE id = 1`,
+  );
+  const row = rows[0];
+  if (!row?.bytes || !row?.type) return null;
+  return { bytes: row.bytes as Buffer, type: row.type as string };
+}
+
+export async function setLogo(
+  variant: "light" | "dark",
+  bytes: Buffer,
+  type: string,
+): Promise<void> {
+  await ensureSchema();
+  const col = variant === "light" ? "logo_light" : "logo_dark";
+  const typeCol = variant === "light" ? "logo_light_type" : "logo_dark_type";
+  await getPool().query(
+    `INSERT INTO branding (id, ${col}, ${typeCol}, updated_at)
+     VALUES (1, $1, $2, now())
+     ON CONFLICT (id) DO UPDATE SET ${col} = $1, ${typeCol} = $2, updated_at = now()`,
+    [bytes, type],
+  );
+}
+
+export async function clearLogo(variant: "light" | "dark"): Promise<void> {
+  await ensureSchema();
+  const col = variant === "light" ? "logo_light" : "logo_dark";
+  const typeCol = variant === "light" ? "logo_light_type" : "logo_dark_type";
+  await getPool().query(
+    `UPDATE branding SET ${col} = NULL, ${typeCol} = NULL, updated_at = now() WHERE id = 1`,
+  );
 }
 
 export const TITLE_MAX_LENGTH = 60;
