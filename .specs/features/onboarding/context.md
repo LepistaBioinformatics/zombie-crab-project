@@ -31,18 +31,34 @@ profile, L-006), the user has **no account → show onboarding**. If **either**
 succeeds, the account exists → skip onboarding, go straight to the workspace
 list. No persisted flag — mycelium is the source of truth.
 
-**Note (source vs request):** the user suggested `POST`; the mycelium source
-decorates both as `#[get("")]`, so the probes are **GET**. Exact scope base
-paths (`/_adm/beginners/profile`, `/_adm/beginners/accounts`) to be confirmed
-empirically against the running gateway when wiring the BFF (the `/users` sibling
-base `/_adm/beginners/users` is already confirmed by the verify route).
+**FINAL — detection via JSON-RPC, verified 2026-07-17.** The REST beginners
+endpoints (`GET /_adm/beginners/{profile,accounts}`) require a resolvable profile
+and 403 for an internal (magic-link) user until invited — so REST detection was
+broken. The reference mycelium-webapp uses **JSON-RPC** (`POST /_adm/rpc`), and
+`beginners.accounts.get` returns the account object (or null) for a magic-link
+user with an account — no invitation needed (verified live: created an account
+via RPC, then `accounts.get` returned it). So `hasAccount` calls
+`beginners.profile.get` then `beginners.accounts.get` over `/_adm/rpc`; a
+non-null `accounts.get` result ⇒ "yes". No DB flag; mycelium (via RPC) is the
+source of truth.
 
-## CTX-OB-02: account creation moves from verify → the explicit onboarding action
+## CTX-OB-02: the button creates the ACCOUNT (not the user); verify stops creating
 
-**Decision:** remove the transparent `POST /_adm/beginners/users` from
-`verify/route.ts` (verify only authenticates + sets the session). The "Vamos
-começar" button triggers account creation via a BFF onboarding route. Returning
-users (account already exists) never see the button.
+**Decision (FINAL, verified 2026-07-17):** `verify/route.ts` stops creating
+anything (only authenticates + sets the session). The "Vamos começar" button
+creates the account via **JSON-RPC** `beginners.accounts.create` (params
+`{name: <email>}`) over `POST /_adm/rpc` — mirroring the reference
+mycelium-webapp `accountsCreate`.
+
+**Why RPC (two wrong turns ruled out empirically):**
+1. `POST /_adm/beginners/users` creates only the *user*, not the *account*
+   (verified: user row appears, no account) — the "button did nothing" bug.
+2. `POST /_adm/beginners/accounts` (REST) is **external-provider-only** — it 400s
+   `"Invalid provider"` for a magic-link (internal) token.
+3. The **RPC** `beginners.accounts.create` resolves the internal issuer and DOES
+   create a `"user"`-type account for a magic-link token (verified live: RPC
+   create → `accounts.get` returns the account). This is why the reference uses
+   `/_adm/rpc`. No external provider, no DB flag needed.
 
 ## CTX-OB-03: onboarding communicates the invite-gated reality
 

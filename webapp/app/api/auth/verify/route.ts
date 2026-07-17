@@ -50,28 +50,8 @@ export async function POST(req: NextRequest) {
   const data = (await res.json()) as VerifyResponse;
   const resolvedEmail = displayEmail(data.email, email);
 
-  // A magic-link JWT only proves identity -- it does NOT provision an
-  // account (verified empirically: a fresh verify's JWT hits chat routes
-  // with "authenticated but has not an account"). CHAT-01 AC#5 requires no
-  // separate signup step from the user's point of view, so this call
-  // happens transparently here. Best-effort: for a returning user this
-  // 201-or-conflict is not fatal to login either way, so any non-2xx is
-  // swallowed rather than failing the whole signin.
-  try {
-    await fetchMycelium("/_adm/beginners/users", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${data.token}`,
-      },
-      body: JSON.stringify({ email }),
-    });
-  } catch {
-    // connectivity failure here still leaves the caller signed in; the
-    // account-creation gap (if any) surfaces as a clear 403 on first chat
-    // attempt instead of silently failing signin.
-  }
-
+  // Verify only authenticates + sets the session; account creation is the
+  // explicit onboarding action now (onboarding OB-05 / CTX-OB-02).
   await setSession({ token: data.token, email: resolvedEmail });
 
   return NextResponse.json({ authenticated: true, email: resolvedEmail });

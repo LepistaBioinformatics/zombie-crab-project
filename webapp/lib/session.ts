@@ -5,6 +5,11 @@ export const SESSION_COOKIE = "myc_session";
 export interface SessionCookie {
   token: string;
   email: string;
+  // Set once mycelium detection resolves "yes" or after a successful onboarding
+  // create, so the chat entry probes account existence at most once per session
+  // (a UX optimization -- the proxy authz still gates access, see onboarding
+  // design.md R2).
+  accountReady?: boolean;
 }
 
 export async function setSession(session: SessionCookie): Promise<void> {

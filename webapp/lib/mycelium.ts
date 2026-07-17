@@ -53,3 +53,38 @@ export async function fetchMycelium(
     );
   }
 }
+
+// JSON-RPC 2.0 call to mycelium's /_adm/rpc, mirroring the reference
+// mycelium-webapp `rpcCall`. The beginners account endpoints must go over RPC
+// for an internal (magic-link) user: the REST create_default_account is
+// external-provider-only ("Invalid provider" 400), whereas the RPC dispatcher
+// resolves the internal issuer (verified empirically). Throws
+// MyceliumConnectivityError on transport failure (via fetchMycelium); otherwise
+// returns a discriminated result ({error} envelopes and non-2xx both -> ok:false).
+export type RpcResult<R> =
+  | { ok: true; result: R }
+  | { ok: false; status: number; message: string };
+
+export async function myceliumRpc<R>(
+  method: string,
+  params: unknown,
+  token: string,
+): Promise<RpcResult<R>> {
+  const res = await fetchMycelium("/_adm/rpc", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", method, params, id: 1 }),
+  });
+  if (!res.ok) {
+    const { error, status } = await upstreamError(res);
+    return { ok: false, status, message: error };
+  }
+  const json = await res.json().catch(() => null);
+  if (json?.error) {
+    return { ok: false, status: 400, message: json.error.message ?? "rpc error" };
+  }
+  return { ok: true, result: json?.result as R };
+}
