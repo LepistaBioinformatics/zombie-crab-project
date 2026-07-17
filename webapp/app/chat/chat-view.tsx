@@ -29,6 +29,11 @@ interface ChatMessage {
   content: string;
 }
 
+// After an upload, picoclaw reloads to pick up the new workspace file. Give it a
+// moment to settle before firing the turn, so the first message right after an
+// attach doesn't hit the container mid-reload ("Can't reach the gateway").
+const UPLOAD_SETTLE_MS = 1500;
+
 export default function ChatView({
   workspace,
   sessionId,
@@ -49,6 +54,8 @@ export default function ChatView({
   const [attachError, setAttachError] = useState<string | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
   const [mediaRefresh, setMediaRefresh] = useState(0);
+  const [settling, setSettling] = useState(false);
+  const lastUploadAtRef = useRef(0);
 
   // The uploads panel is a permanent right column; remember whether it's open.
   useEffect(() => {
@@ -162,6 +169,7 @@ export default function ChatView({
         const attachment = await uploadMedia(workspace, file);
         setAttachments((prev) => [...prev, attachment]);
         setMediaRefresh((n) => n + 1); // the workspace-files panel picks it up
+        lastUploadAtRef.current = Date.now();
       }
     } catch (err) {
       setAttachError(err instanceof Error ? err.message : "Upload failed.");
@@ -192,6 +200,17 @@ export default function ChatView({
     setInput("");
     setSending(true);
     setError(null);
+
+    // If a file was just uploaded, wait for picoclaw to settle (reload) before
+    // firing the turn, so the first message after an attach doesn't hit the
+    // container mid-reload. Shows a friendly "saving your file" note meanwhile.
+    const sinceUpload = Date.now() - lastUploadAtRef.current;
+    const settleWait = attachments.length > 0 ? Math.max(0, UPLOAD_SETTLE_MS - sinceUpload) : 0;
+    if (settleWait > 0) {
+      setSettling(true);
+      await new Promise((resolve) => setTimeout(resolve, settleWait));
+      setSettling(false);
+    }
 
     // If the user switches to another conversation mid-stream, we STOP painting
     // this reply (it would otherwise land in the wrong conversation) but keep
@@ -313,6 +332,12 @@ export default function ChatView({
       {error && (
         <div className="px-4 pt-4">
           <Alert severity="error">{error}</Alert>
+        </div>
+      )}
+
+      {settling && (
+        <div className="px-4 pt-4">
+          <Alert severity="info">Estamos guardando o arquivo para você…</Alert>
         </div>
       )}
 
