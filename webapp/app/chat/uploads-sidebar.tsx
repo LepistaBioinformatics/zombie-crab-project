@@ -4,6 +4,7 @@ import { MouseEvent, useEffect, useState } from "react";
 import { FileText, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { listWorkspaceMedia, deleteMedia, type Attachment } from "@/lib/media";
 import type { Workspace } from "./fragment";
+import AttachmentButton from "@/app/chat/attachment-button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -171,9 +172,7 @@ export default function UploadsSidebar({
               className="group flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-2 py-1.5"
             >
               <FileText size={14} className="shrink-0 text-fg-muted" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-sm text-fg" title={f.path}>
-                {f.name}
-              </span>
+              <AttachmentButton workspace={workspace} path={f.path} name={f.name} tone="row" />
               <span className="shrink-0 font-mono text-[11px] text-fg-muted">{formatSize(f.size)}</span>
               <IconButton
                 variant="ghost"

@@ -10,7 +10,8 @@ import { KeyRound, PanelRight } from "lucide-react";
 import { setFragmentSid, historyQuery, type Workspace } from "@/app/chat/fragment";
 import SecretsDrawer from "@/app/chat/secrets-drawer";
 import UploadsSidebar from "@/app/chat/uploads-sidebar";
-import { uploadMedia, type Attachment } from "@/lib/media";
+import AttachmentButton from "@/app/chat/attachment-button";
+import { uploadMedia, parseAnexos, type Attachment } from "@/lib/media";
 import { Alert } from "@/components/ui/alert";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
@@ -363,6 +364,7 @@ export default function ChatView({
             <div className="mx-auto flex max-w-[720px] flex-col gap-3">
               {messages.map((m, i) => {
                 const streaming = sending && i === messages.length - 1 && m.role === "assistant";
+                const { text, refs } = parseAnexos(m.content);
                 return (
                   <div
                     key={i}
@@ -371,7 +373,20 @@ export default function ChatView({
                     }}
                     className={messageBubble({ role: m.role })}
                   >
-                    <MessageContent content={m.content} />
+                    {text && <MessageContent content={text} />}
+                    {refs.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {refs.map((r) => (
+                          <AttachmentButton
+                            key={r.path}
+                            workspace={workspace}
+                            path={r.path}
+                            name={r.name}
+                            tone="chip"
+                          />
+                        ))}
+                      </div>
+                    )}
                     {streaming && (
                       <span className="ml-0.5 inline-block h-4 w-[0.45em] animate-blink bg-current align-text-bottom" />
                     )}

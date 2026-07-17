@@ -62,6 +62,54 @@ export async function listWorkspaceMedia(workspace: Workspace): Promise<Attachme
   return Array.isArray(data.files) ? data.files : [];
 }
 
+// Display name for a workspace path: drop the "uploads/" prefix and any legacy
+// 8-hex storage uid prefix.
+export function attachmentName(path: string): string {
+  return path.replace(/^uploads\//, "").replace(/^[0-9a-f]{8}-/, "");
+}
+
+const ANEXO_RE = /\[anexo:\s*(uploads\/[^\]\s]+)\]/gi;
+
+// Pulls `[anexo: uploads/...]` references out of a message so they can render as
+// download chips, and returns the remaining text (refs stripped) for markdown.
+export function parseAnexos(content: string): { text: string; refs: Attachment[] } {
+  const refs: Attachment[] = [];
+  const seen = new Set<string>();
+  let match: RegExpExecArray | null;
+  ANEXO_RE.lastIndex = 0;
+  while ((match = ANEXO_RE.exec(content)) !== null) {
+    const path = match[1];
+    if (!seen.has(path)) {
+      seen.add(path);
+      refs.push({ path, name: attachmentName(path) });
+    }
+  }
+  const text = content.replace(ANEXO_RE, "").replace(/\n{3,}/g, "\n\n").trim();
+  return { text, refs };
+}
+
+// Downloads one file: fetches the bytes and triggers a browser save with the
+// display name (no direct navigation, so it stays out of history).
+export async function downloadMedia(workspace: Workspace, path: string, name: string): Promise<void> {
+  const query = new URLSearchParams({
+    tenant_id: workspace.t,
+    subs_acc_id: workspace.s,
+    role: workspace.r,
+    path,
+  });
+  const res = await fetch(`/api/media/download?${query.toString()}`);
+  if (!res.ok) throw new Error(await errorMessage(res));
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function deleteMedia(workspace: Workspace, path: string): Promise<void> {
   const query = new URLSearchParams({
     tenant_id: workspace.t,
