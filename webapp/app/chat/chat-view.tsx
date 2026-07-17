@@ -6,9 +6,10 @@ import { createConversation, touchConversation } from "@/lib/chatSession";
 import MessageContent from "@/app/chat/message-content";
 import Composer from "@/app/chat/composer";
 import { cva } from "class-variance-authority";
-import { KeyRound } from "lucide-react";
+import { KeyRound, PanelRight } from "lucide-react";
 import { setFragmentSid, historyQuery, type Workspace } from "@/app/chat/fragment";
 import SecretsDrawer from "@/app/chat/secrets-drawer";
+import UploadsSidebar from "@/app/chat/uploads-sidebar";
 import { uploadMedia, type Attachment } from "@/lib/media";
 import { Alert } from "@/components/ui/alert";
 import { IconButton } from "@/components/ui/icon-button";
@@ -46,6 +47,16 @@ export default function ChatView({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [mediaRefresh, setMediaRefresh] = useState(0);
+
+  // The uploads panel is a permanent right column; remember whether it's open.
+  useEffect(() => {
+    setFilesOpen(localStorage.getItem("chat-files-open") === "1");
+  }, []);
+  useEffect(() => {
+    localStorage.setItem("chat-files-open", filesOpen ? "1" : "0");
+  }, [filesOpen]);
 
   // Chat-style scroll: a brand new message pins its *top* into view (so a long
   // reply can be read from the start while it's still streaming), while the
@@ -150,6 +161,7 @@ export default function ChatView({
       for (const file of Array.from(files)) {
         const attachment = await uploadMedia(workspace, file);
         setAttachments((prev) => [...prev, attachment]);
+        setMediaRefresh((n) => n + 1); // the workspace-files panel picks it up
       }
     } catch (err) {
       setAttachError(err instanceof Error ? err.message : "Upload failed.");
@@ -269,20 +281,33 @@ export default function ChatView({
   );
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full">
+      <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex items-center justify-between gap-2 border-b border-brand/30 px-4 py-2">
         <span className="min-w-0 truncate font-display text-sm font-semibold text-fg">
           agent {workspace.r}
         </span>
-        <IconButton
-          variant="ghost"
-          size="sm"
-          aria-label="Agent secrets"
-          title="Agent secrets"
-          onClick={() => setSecretsOpen(true)}
-        >
-          <KeyRound size={18} aria-hidden />
-        </IconButton>
+        <div className="flex items-center gap-1">
+          <IconButton
+            variant="ghost"
+            size="sm"
+            aria-label="Workspace files"
+            title="Workspace files"
+            onClick={() => setFilesOpen((o) => !o)}
+            className="hidden md:inline-flex"
+          >
+            <PanelRight size={18} aria-hidden />
+          </IconButton>
+          <IconButton
+            variant="ghost"
+            size="sm"
+            aria-label="Agent secrets"
+            title="Agent secrets"
+            onClick={() => setSecretsOpen(true)}
+          >
+            <KeyRound size={18} aria-hidden />
+          </IconButton>
+        </div>
       </div>
 
       {error && (
@@ -332,6 +357,15 @@ export default function ChatView({
           </div>
           <div className="px-4 pb-4">{composer}</div>
         </>
+      )}
+      </div>
+
+      {filesOpen && (
+        <UploadsSidebar
+          workspace={workspace}
+          refreshSignal={mediaRefresh}
+          onClose={() => setFilesOpen(false)}
+        />
       )}
 
       <SecretsDrawer

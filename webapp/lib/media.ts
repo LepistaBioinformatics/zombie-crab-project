@@ -48,6 +48,20 @@ export async function uploadMedia(workspace: Workspace, file: File): Promise<Att
   return { path: data.path, name: data.name, size: data.size };
 }
 
+// Lists the files already stored in the workspace uploads dir (for the uploads
+// sidebar).
+export async function listWorkspaceMedia(workspace: Workspace): Promise<Attachment[]> {
+  const query = new URLSearchParams({
+    tenant_id: workspace.t,
+    subs_acc_id: workspace.s,
+    role: workspace.r,
+  });
+  const res = await fetch(`/api/media?${query.toString()}`);
+  if (!res.ok) throw new Error(await errorMessage(res));
+  const data = await res.json();
+  return Array.isArray(data.files) ? data.files : [];
+}
+
 async function errorMessage(res: Response): Promise<string> {
   const data = await res.json().catch(() => null);
   const e = data?.error;
