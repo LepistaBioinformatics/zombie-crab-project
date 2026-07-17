@@ -76,7 +76,11 @@ export default function MessageContent({ content }: { content: string }) {
           ),
           table: ({ children }) => (
             <div className="my-3 overflow-x-auto">
-              <table className="border-collapse text-left text-[0.9em] [&_tbody_tr:nth-child(even)]:bg-current/[0.035] [&_thead]:bg-current/[0.06]">
+              {/* w-max: the table takes its natural (max-content) width and the
+                  wrapper scrolls horizontally, instead of squeezing columns to
+                  fit. Short cells stay on one line; only a cell longer than the
+                  per-cell cap (below) wraps. */}
+              <table className="w-max border-collapse text-left text-[0.9em] [&_tbody_tr:nth-child(even)]:bg-current/[0.035] [&_thead]:bg-current/[0.06]">
                 {children}
               </table>
             </div>
@@ -85,12 +89,14 @@ export default function MessageContent({ content }: { content: string }) {
           tbody: ({ children }) => <tbody>{children}</tbody>,
           tr: ({ children }) => <tr className="border-b border-current/10">{children}</tr>,
           th: ({ children }) => (
-            <th className="max-w-[32rem] px-3 py-1.5 align-top font-semibold [overflow-wrap:break-word]">
+            <th className="min-w-[9rem] max-w-[40rem] px-3 py-1.5 align-top font-semibold [overflow-wrap:break-word]">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className="max-w-[32rem] px-3 py-1.5 align-top [overflow-wrap:break-word]">{children}</td>
+            <td className="min-w-[9rem] max-w-[40rem] px-3 py-1.5 align-top [overflow-wrap:break-word]">
+              {children}
+            </td>
           ),
           input: (props) => (
             <input {...props} disabled className="mr-1 align-middle accent-accent" />

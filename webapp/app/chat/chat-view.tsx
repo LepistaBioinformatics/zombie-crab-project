@@ -22,12 +22,17 @@ import { Spinner } from "@/components/ui/spinner";
 // agent (::before) — plus distinct background tints and text indented to that
 // side. No soft gradient between speakers (sharp boundary); the gap does the
 // separating.
+// Chromotherapy: the agent's messages carry a warm-yellow skin so they stand
+// out and stick in memory. Light mode tints the whole band light yellow with a
+// stronger (still light) yellow origin bar; dark mode keeps the neutral band but
+// turns the text and bar yellow. The user's messages stay cyan, only shifting
+// their text to a soft blue in dark mode.
 const messageBand = cva("group relative w-full py-3 text-fg", {
   variants: {
     role: {
-      user: "bg-accent/12 pl-16 pr-8 max-md:pl-4 max-md:pr-4 after:absolute after:inset-y-0 after:right-0 after:w-1.5 after:bg-accent after:content-['']",
+      user: "bg-accent/12 pl-16 pr-8 max-md:pl-4 max-md:pr-4 dark:text-[#90CAF9] after:absolute after:inset-y-0 after:right-0 after:w-1.5 after:bg-accent after:content-['']",
       assistant:
-        "bg-elevated/70 pl-8 pr-16 max-md:pl-4 max-md:pr-4 before:absolute before:inset-y-0 before:left-0 before:w-2 before:bg-brand before:content-['']",
+        "bg-[#fef9e717] dark:bg-elevated/70 pl-8 pr-16 max-md:pl-4 max-md:pr-4 dark:text-[#c9c7be] before:absolute before:inset-y-0 before:left-0 before:w-2 before:bg-[#ad9d67] before:content-['']",
     },
   },
 });
@@ -71,6 +76,16 @@ function buildQuote(reply: ReplyTo): string {
 // attach doesn't hit the container mid-reload ("Can't reach the gateway").
 const UPLOAD_SETTLE_MS = 1500;
 
+// Sending a turn retries on transport / gateway failure (fetch throws or a 5xx)
+// with exponential backoff -- 1s, then doubling, capped -- up to
+// MAX_SEND_ATTEMPTS, showing a discreet notice while it retries. A 4xx
+// (auth/validation) is terminal and surfaced at once, never retried.
+const MAX_SEND_ATTEMPTS = 10;
+const RETRY_BASE_MS = 1000;
+const RETRY_MAX_MS = 30000;
+const retryDelay = (attempt: number) => Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS);
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export default function ChatView({
   workspace,
   sessionId,
@@ -93,6 +108,7 @@ export default function ChatView({
   const [mediaRefresh, setMediaRefresh] = useState(0);
   const [settling, setSettling] = useState(false);
   const [replyTo, setReplyTo] = useState<ReplyTo | null>(null);
+  const [retrying, setRetrying] = useState<number | null>(null);
   const lastUploadAtRef = useRef(0);
 
   // The uploads panel is a permanent right column; remember whether it's open.
@@ -138,6 +154,7 @@ export default function ChatView({
     // The newly-viewed conversation isn't the one mid-send (if any) -- reset so
     // its composer isn't stuck disabled by another conversation's in-flight send.
     setSending(false);
+    setRetrying(null);
     // Pending attachments belong to the composer of the conversation you were
     // in -- drop them when switching.
     setAttachments([]);
@@ -262,28 +279,58 @@ export default function ChatView({
     let detached = false;
 
     try {
-      const res = await fetch(`/api/chat/${workspace.r}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: composed,
-          session_id: sid,
-          tenant_id: workspace.t,
-          subs_acc_id: workspace.s,
-        }),
+      const body = JSON.stringify({
+        message: composed,
+        session_id: sid,
+        tenant_id: workspace.t,
+        subs_acc_id: workspace.s,
       });
 
-      if (res.status === 401) {
-        router.push("/signin");
-        return;
+      // Retry the send until picoclaw accepts the turn (a streamable body):
+      // transport failures and 5xx are retried with exponential backoff; a 4xx
+      // is terminal (its real reason is surfaced and we stop).
+      let stream: ReadableStream<Uint8Array> | null = null;
+      let terminal = false;
+      for (let attempt = 1; attempt <= MAX_SEND_ATTEMPTS && !terminal; attempt++) {
+        try {
+          const r = await fetch(`/api/chat/${workspace.r}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+          });
+          if (r.status === 401) {
+            router.push("/signin");
+            return;
+          }
+          if (r.ok && r.body) {
+            stream = r.body; // accepted -- stop retrying
+            break;
+          }
+          if (r.status < 500) {
+            // 4xx: the proxy's real reason (403 not licensed, 409 not
+            // scaffolded, 400 bad request). Retrying won't help.
+            const data = await r.json().catch(() => null);
+            if (activeSidRef.current === sid) setError(errorMessage(data?.error));
+            terminal = true;
+            break;
+          }
+          // 5xx / missing body -> fall through to the backoff retry
+        } catch {
+          // network/transport error -> fall through to the backoff retry
+        }
+        if (attempt < MAX_SEND_ATTEMPTS) {
+          if (activeSidRef.current === sid) setRetrying(attempt);
+          await sleep(retryDelay(attempt));
+        }
       }
-      if (!res.ok || !res.body) {
-        // Surface the proxy's real reason (403 not licensed, 409 not
-        // scaffolded, 400 bad request); only genuine transport failure reads
-        // "connectivity".
-        const data = await res.json().catch(() => null);
+      if (activeSidRef.current === sid) setRetrying(null);
+
+      if (!stream) {
+        // A terminal 4xx already set its error; otherwise every attempt failed.
         if (activeSidRef.current === sid) {
-          setError(errorMessage(data?.error));
+          if (!terminal) {
+            setError("Still can't reach the gateway after several attempts. Try again shortly.");
+          }
           setMessages((prev) => prev.slice(0, -1)); // drop the empty assistant placeholder
         }
         return;
@@ -296,7 +343,7 @@ export default function ChatView({
       touchConversation(workspace, sid, composed).catch(() => {});
       setAttachments([]); // consumed by this turn
 
-      await consumeStream(res.body, (delta) => {
+      await consumeStream(stream, (delta) => {
         if (detached) return;
         if (activeSidRef.current !== sid) {
           detached = true; // user navigated away -- keep draining, stop painting
@@ -327,7 +374,10 @@ export default function ChatView({
       // error banner if the user is still viewing this conversation.
       if (activeSidRef.current === sid) setError("Can't reach the gateway right now.");
     } finally {
-      if (activeSidRef.current === sid) setSending(false);
+      if (activeSidRef.current === sid) {
+        setSending(false);
+        setRetrying(null);
+      }
     }
   }
 
@@ -377,6 +427,13 @@ export default function ChatView({
           </IconButton>
         </div>
       </div>
+
+      {retrying !== null && (
+        <div className="flex items-center justify-center gap-2 px-4 py-1.5 text-xs text-fg-muted">
+          <Spinner size={12} />
+          <span>Couldn&apos;t reach the gateway — retrying… (attempt {retrying} of {MAX_SEND_ATTEMPTS})</span>
+        </div>
+      )}
 
       {error && (
         <div className="px-4 pt-4">
