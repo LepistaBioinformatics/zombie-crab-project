@@ -6,9 +6,34 @@ export interface Attachment {
   size?: number;
 }
 
-// Extension allowlist the proxy enforces (config default). Used as the file
-// input's `accept` so the picker pre-filters.
-export const MEDIA_ACCEPT = ".png,.jpg,.jpeg,.webp,.gif,.pdf,.txt,.md,.csv";
+// Attach categories shown in the composer's attach menu. Each opens the picker
+// filtered to its extensions; "Outros" (rendered separately) uses MEDIA_ACCEPT
+// (the full allowlist). Must stay in sync with the proxy's MediaAllowedExts.
+export interface MediaCategory {
+  key: string;
+  label: string;
+  exts: string[];
+}
+
+export const MEDIA_CATEGORIES: MediaCategory[] = [
+  { key: "image", label: "Imagens", exts: ["png", "jpg", "jpeg", "webp", "gif"] },
+  { key: "doc", label: "Documentos", exts: ["pdf", "txt", "md", "csv", "doc", "docx", "odt"] },
+  { key: "sheet", label: "Planilhas", exts: ["xls", "xlsx", "ods"] },
+  { key: "slides", label: "Apresentações", exts: ["ppt", "pptx", "odp"] },
+  { key: "archive", label: "Comprimidos", exts: ["zip", "tar", "gz", "tgz", "bz2", "xz", "7z", "rar"] },
+];
+
+// The full allowlist (union of every category) — the proxy rejects anything
+// outside it with 400.
+export const MEDIA_ALL_EXTS = [...new Set(MEDIA_CATEGORIES.flatMap((c) => c.exts))];
+
+// `accept` string for a set of extensions (e.g. ".png,.jpg").
+export function acceptFor(exts: string[]): string {
+  return exts.map((e) => `.${e}`).join(",");
+}
+
+// Full allowlist as an `accept` string (used by the "Outros" option).
+export const MEDIA_ACCEPT = acceptFor(MEDIA_ALL_EXTS);
 
 export async function uploadMedia(workspace: Workspace, file: File): Promise<Attachment> {
   const form = new FormData();

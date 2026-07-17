@@ -1,14 +1,32 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef } from "react";
-import { ArrowUp, Paperclip, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  ArrowUp,
+  FileArchive,
+  FileText,
+  Files,
+  Image as ImageIcon,
+  Paperclip,
+  Presentation,
+  Table2,
+  X,
+} from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { IconButton } from "@/components/ui/icon-button";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
-import { MEDIA_ACCEPT, type Attachment } from "@/lib/media";
+import { MEDIA_ACCEPT, MEDIA_CATEGORIES, acceptFor, type Attachment } from "@/lib/media";
 
 const MAX_HEIGHT = 200; // ~8 rows, then the field scrolls internally
+
+const CATEGORY_ICON: Record<string, typeof ImageIcon> = {
+  image: ImageIcon,
+  doc: FileText,
+  sheet: Table2,
+  slides: Presentation,
+  archive: FileArchive,
+};
 
 interface ComposerProps {
   value: string;
@@ -24,10 +42,9 @@ interface ComposerProps {
   onRemoveAttachment: (path: string) => void;
 }
 
-// The signature element: a large, inviting chat box (rounded surface, violet
-// border, cyan focus ring) with the send action integrated as a circular
-// accent button, plus an attach control and attached-file chips. Owns auto-grow
-// and the autofocus-on-open behavior.
+// The signature element: a large, inviting chat box with the send action as a
+// circular accent button, plus an attach menu (categories + "Outros") and
+// attached-file chips. Owns auto-grow and the autofocus-on-open behavior.
 export default function Composer({
   value,
   onChange,
@@ -43,6 +60,7 @@ export default function Composer({
 }: ComposerProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -57,6 +75,15 @@ export default function Composer({
 
   const canSend =
     (value.trim().length > 0 || attachments.length > 0) && !sending && !loadingHistory && !uploading;
+
+  // Open the OS picker filtered to `accept`, then let onChange handle the files.
+  function pick(accept: string) {
+    setMenuOpen(false);
+    const el = fileRef.current;
+    if (!el) return;
+    el.accept = accept;
+    el.click();
+  }
 
   return (
     <div className="mx-auto w-full max-w-[720px]">
@@ -105,17 +132,52 @@ export default function Composer({
             e.target.value = "";
           }}
         />
-        <IconButton
-          variant="ghost"
-          size="md"
-          aria-label="Attach file"
-          title="Attach file"
-          disabled={sending || loadingHistory}
-          onClick={() => fileRef.current?.click()}
-          className="mb-0.5 shrink-0"
-        >
-          <Paperclip size={20} aria-hidden />
-        </IconButton>
+
+        <div className="relative">
+          <IconButton
+            variant="ghost"
+            size="md"
+            aria-label="Attach file"
+            title="Attach file"
+            disabled={sending || loadingHistory}
+            onClick={() => setMenuOpen((o) => !o)}
+            className="mb-0.5 shrink-0"
+          >
+            <Paperclip size={20} aria-hidden />
+          </IconButton>
+
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden />
+              <div className="absolute bottom-full left-0 z-20 mb-2 w-56 rounded-xl border border-brand bg-surface p-1 shadow-xl">
+                {MEDIA_CATEGORIES.map((cat) => {
+                  const Icon = CATEGORY_ICON[cat.key] ?? Files;
+                  return (
+                    <button
+                      key={cat.key}
+                      type="button"
+                      onClick={() => pick(acceptFor(cat.exts))}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-fg transition-colors hover:bg-elevated"
+                    >
+                      <Icon size={16} className="shrink-0 text-fg-muted" aria-hidden />
+                      {cat.label}
+                    </button>
+                  );
+                })}
+                <div className="my-1 border-t border-brand/20" />
+                <button
+                  type="button"
+                  onClick={() => pick(MEDIA_ACCEPT)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-fg transition-colors hover:bg-elevated"
+                >
+                  <Files size={16} className="shrink-0 text-fg-muted" aria-hidden />
+                  Outros tipos
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
         <Textarea
           ref={ref}
           rows={1}
