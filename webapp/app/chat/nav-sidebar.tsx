@@ -3,6 +3,7 @@ import Logo from "@/app/logo";
 import { IconButton } from "@/components/ui/icon-button";
 import LogoutButton from "./logout-button";
 import WorkspaceNav from "./workspace-nav";
+import AdminLink from "./admin-link";
 
 // First sidebar (M3 navigation drawer): everything that is NOT a chat session
 // -- branding, the sectioned navigator (Workspaces now, room for more), and
@@ -19,7 +20,7 @@ export default function NavSidebar({
 }) {
   return (
     <div className="flex h-full flex-col bg-surface">
-      <div className="flex items-center gap-2 px-4 py-4">
+      <div className="flex h-16 shrink-0 items-center gap-2 px-4">
         <Logo size={32} />
         <span className="min-w-0 flex-1 truncate font-display text-base font-semibold text-fg">
           zombie-crab
@@ -38,10 +39,12 @@ export default function NavSidebar({
         )}
       </div>
 
-      <div className="flex-1 overflow-auto px-2 pb-2">
-        <Section label="Workspaces">
-          <WorkspaceNav onSelect={onSelect} />
-        </Section>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <WorkspaceNav onSelect={onSelect} />
+      </div>
+
+      <div className="border-t border-brand/20 px-2 py-2">
+        <AdminLink />
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-brand/20 px-4 py-3">
@@ -51,19 +54,5 @@ export default function NavSidebar({
         <LogoutButton />
       </div>
     </div>
-  );
-}
-
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <section className="py-2">
-      <div className="mb-1 flex items-center gap-2 px-2">
-        <span className="h-2 w-2 bg-accent" aria-hidden />
-        <h2 className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-          {label}
-        </h2>
-      </div>
-      {children}
-    </section>
   );
 }
