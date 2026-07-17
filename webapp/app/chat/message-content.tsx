@@ -76,12 +76,12 @@ export default function MessageContent({ content }: { content: string }) {
           ),
           table: ({ children }) => (
             <div className="mb-2 overflow-x-auto">
-              <table className="w-max min-w-full border-collapse text-left text-[0.9em]">
+              <table className="w-max min-w-full border-collapse text-left text-[0.9em] [&_tbody_tr:nth-child(even)]:bg-current/5 [&_thead]:bg-current/15">
                 {children}
               </table>
             </div>
           ),
-          thead: ({ children }) => <thead className="border-b border-current/30">{children}</thead>,
+          thead: ({ children }) => <thead className="border-b-2 border-current/40">{children}</thead>,
           tbody: ({ children }) => <tbody>{children}</tbody>,
           tr: ({ children }) => <tr className="border-b border-current/15">{children}</tr>,
           th: ({ children }) => (

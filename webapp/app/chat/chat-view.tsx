@@ -17,26 +17,26 @@ import { Alert } from "@/components/ui/alert";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
 
-// Messages render as full-width bands (same width as the composer), not
-// left/right bubbles: a continuous transcript differentiated by a soft
-// background tint + which side the text is indented to (right for the user,
-// left for the agent). A soft gradient between bands marks each speaker change.
-const messageBand = cva("group relative w-full px-6 py-3 text-fg", {
+// Full-width bands (composer width), clearly attributed: a colored origin bar —
+// accent cyan on the RIGHT for the user (::after), violet on the LEFT for the
+// agent (::before) — plus distinct background tints and text indented to that
+// side. No soft gradient between speakers (sharp boundary); the gap does the
+// separating.
+const messageBand = cva("group relative w-full py-3 text-fg", {
   variants: {
     role: {
-      user: "bg-accent/10 pl-16 pr-6",
-      assistant: "bg-elevated/40 pl-6 pr-16",
+      user: "bg-accent/12 pl-16 pr-8 after:absolute after:inset-y-0 after:right-0 after:w-1.5 after:bg-accent after:content-['']",
+      assistant:
+        "bg-elevated/70 pl-8 pr-16 before:absolute before:inset-y-0 before:left-0 before:w-1.5 before:bg-brand before:content-['']",
     },
   },
 });
 
-const speakerTransition = cva("h-5 w-full", {
-  variants: {
-    change: {
-      "user-assistant": "bg-gradient-to-b from-accent/10 to-elevated/40",
-      "assistant-user": "bg-gradient-to-b from-elevated/40 to-accent/10",
-    },
-  },
+// A clear gap when the speaker changes (distinct blocks), tight when the same
+// speaker continues (one flowing message).
+const bandGap = cva("", {
+  variants: { changed: { true: "mt-4", false: "mt-0.5" } },
+  defaultVariants: { changed: false },
 });
 
 interface ChatMessage {
@@ -374,26 +374,20 @@ export default function ChatView({
       ) : (
         <>
           <div className="flex-1 overflow-auto px-4 py-6">
-            <div className="mx-auto w-full max-w-[720px] overflow-hidden rounded-xl">
+            <div className="mx-auto w-full max-w-[720px]">
               {messages.map((m, i) => {
                 const streaming = sending && i === messages.length - 1 && m.role === "assistant";
                 const { text, refs } = parseAnexos(m.content);
                 const prev = messages[i - 1];
-                const changed = prev && prev.role !== m.role;
+                const changed = Boolean(prev && prev.role !== m.role);
                 return (
                   <div
                     key={i}
                     ref={(el) => {
                       messageRefs.current[i] = el;
                     }}
+                    className={bandGap({ changed })}
                   >
-                    {changed && (
-                      <div
-                        className={speakerTransition({
-                          change: `${prev.role}-${m.role}` as "user-assistant" | "assistant-user",
-                        })}
-                      />
-                    )}
                     <div className={messageBand({ role: m.role })}>
                       <CopyButton
                         text={m.content}
