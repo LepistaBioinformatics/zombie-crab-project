@@ -62,6 +62,17 @@ export async function listWorkspaceMedia(workspace: Workspace): Promise<Attachme
   return Array.isArray(data.files) ? data.files : [];
 }
 
+export async function deleteMedia(workspace: Workspace, path: string): Promise<void> {
+  const query = new URLSearchParams({
+    tenant_id: workspace.t,
+    subs_acc_id: workspace.s,
+    role: workspace.r,
+    path,
+  });
+  const res = await fetch(`/api/media?${query.toString()}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await errorMessage(res));
+}
+
 async function errorMessage(res: Response): Promise<string> {
   const data = await res.json().catch(() => null);
   const e = data?.error;

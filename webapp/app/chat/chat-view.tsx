@@ -310,21 +310,21 @@ export default function ChatView({
           <IconButton
             variant="ghost"
             size="sm"
+            aria-label="Agent secrets"
+            title="Agent secrets"
+            onClick={() => setSecretsOpen(true)}
+          >
+            <KeyRound size={18} aria-hidden />
+          </IconButton>
+          <IconButton
+            variant="ghost"
+            size="sm"
             aria-label="Workspace files"
             title="Workspace files"
             onClick={() => setFilesOpen((o) => !o)}
             className="hidden md:inline-flex"
           >
             <PanelRight size={18} aria-hidden />
-          </IconButton>
-          <IconButton
-            variant="ghost"
-            size="sm"
-            aria-label="Agent secrets"
-            title="Agent secrets"
-            onClick={() => setSecretsOpen(true)}
-          >
-            <KeyRound size={18} aria-hidden />
           </IconButton>
         </div>
       </div>

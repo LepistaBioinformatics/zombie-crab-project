@@ -246,7 +246,7 @@ group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
 path = "/v1/media"
 secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
-methods = ["GET", "POST"]
+methods = ["GET", "POST", "DELETE"]
 
 [[picoclaw-beta]]
 host = "crab-shell-proxy:8080"
@@ -300,4 +300,4 @@ group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
 path = "/v1/media"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
-methods = ["GET", "POST"]
+methods = ["GET", "POST", "DELETE"]
