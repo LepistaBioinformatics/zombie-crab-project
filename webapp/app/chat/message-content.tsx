@@ -85,10 +85,10 @@ export default function MessageContent({ content }: { content: string }) {
           tbody: ({ children }) => <tbody>{children}</tbody>,
           tr: ({ children }) => <tr className="border-b border-current/10">{children}</tr>,
           th: ({ children }) => (
-            <th className="px-3 py-1.5 align-top font-semibold [overflow-wrap:anywhere]">{children}</th>
+            <th className="px-3 py-1.5 align-top font-semibold [overflow-wrap:break-word]">{children}</th>
           ),
           td: ({ children }) => (
-            <td className="px-3 py-1.5 align-top [overflow-wrap:anywhere]">{children}</td>
+            <td className="px-3 py-1.5 align-top [overflow-wrap:break-word]">{children}</td>
           ),
           input: (props) => (
             <input {...props} disabled className="mr-1 align-middle accent-accent" />
