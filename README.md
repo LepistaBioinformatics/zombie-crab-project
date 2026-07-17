@@ -192,11 +192,15 @@ mycelium/
   config.standalone.toml   # gateway routes for picoclaw-alpha / picoclaw-beta
 webapp/                    # Next.js chat test client (BFF — signin, picker, chat)
 mycelium-webapp/           # Dockerfile for Mycelium's own admin UI (from upstream git)
+docs/                      # task guides (e.g. creating a custom agent)
 data/agents/               # per-agent templates + per-user volumes (gitignored)
 ```
 
 `crab-shell-proxy` is a submodule with its own
 [README](./crab-shell-proxy/README.md) going deeper on the isolation model.
+
+The [`docs/`](./docs/) folder holds guides for common tasks — start with
+[**Creating a Custom Agent**](./docs/CREATE_CUSTOM_AGENT.md).
 
 ## Before you take this to production
 
