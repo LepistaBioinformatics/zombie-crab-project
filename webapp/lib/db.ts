@@ -118,7 +118,36 @@ export async function upsertConversationRow(
   );
 }
 
-const TITLE_MAX_LENGTH = 60;
+// Owner-scoped title UPDATE. Deliberately touches only `title` -- NOT
+// updated_at -- so a rename never disturbs recency ordering. The `email` guard
+// means a non-owner id updates zero rows (returns false, never renames another
+// account's conversation).
+export async function renameConversation(
+  id: string,
+  email: string,
+  title: string,
+): Promise<boolean> {
+  await ensureSchema();
+  const { rowCount } = await getPool().query(
+    `UPDATE conversations SET title = $3 WHERE id = $1 AND email = $2`,
+    [id, email, title],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+// Owner-scoped delete of a conversation's index row. Removes it from the
+// sidebar list only -- picoclaw's transcript on disk is untouched (the proxy
+// exposes no session-delete). Returns false (→ 404) for a non-owner/unknown id.
+export async function deleteConversationRow(id: string, email: string): Promise<boolean> {
+  await ensureSchema();
+  const { rowCount } = await getPool().query(
+    `DELETE FROM conversations WHERE id = $1 AND email = $2`,
+    [id, email],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+export const TITLE_MAX_LENGTH = 60;
 
 function deriveTitle(firstUserMessage: string): string {
   const trimmed = firstUserMessage.trim();

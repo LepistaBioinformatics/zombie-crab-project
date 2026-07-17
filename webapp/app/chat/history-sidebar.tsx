@@ -1,23 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MessageSquarePlus, PanelLeftClose, Search } from "lucide-react";
+import { Check, MessageSquarePlus, PanelLeftClose, Pencil, Search, Trash2, X } from "lucide-react";
 import {
   createConversation,
+  deleteConversation,
   listConversations,
   onConversationsUpdated,
+  renameConversation,
   type ConversationSummary,
 } from "@/lib/chatSession";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cva } from "class-variance-authority";
 import { useFragment, setFragmentSid, historyQuery, type Workspace } from "./fragment";
 
-const conversationItem = cva(
-  "flex w-full items-center rounded-lg px-3 py-2 text-left transition-colors",
+const conversationRow = cva(
+  "group flex w-full items-center rounded-lg pr-1 transition-colors",
   {
     variants: {
       active: { true: "bg-accent/12", false: "hover:bg-elevated/60" },
@@ -42,6 +44,11 @@ export default function HistorySidebar({
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<ConversationSummary[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     const refresh = () => listConversations(workspace).then(setConversations);
@@ -109,17 +116,72 @@ export default function HistorySidebar({
     onSelect?.();
   }
 
+  function startRename(conversation: ConversationSummary) {
+    setEditingId(conversation.id);
+    setDraft(conversation.title);
+    setRenameError(null);
+  }
+
+  function cancelRename() {
+    setEditingId(null);
+    setRenameError(null);
+  }
+
+  async function submitRename(id: string) {
+    const title = draft.trim();
+    if (!title) {
+      setRenameError("Title can't be empty.");
+      return;
+    }
+    try {
+      const saved = await renameConversation(id, title);
+      const apply = (list: ConversationSummary[]) =>
+        list.map((c) => (c.id === id ? { ...c, title: saved } : c));
+      setConversations(apply);
+      setSearchResults((prev) => (prev ? apply(prev) : prev));
+      setEditingId(null);
+      setRenameError(null);
+    } catch (err) {
+      setRenameError(err instanceof Error ? err.message : "Couldn't rename this chat.");
+    }
+  }
+
+  async function onDelete(id: string) {
+    setDeleteError(null);
+    try {
+      await deleteConversation(id);
+      const drop = (list: ConversationSummary[]) => list.filter((c) => c.id !== id);
+      setConversations(drop);
+      setSearchResults((prev) => (prev ? drop(prev) : prev));
+      setDeletingId(null);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Couldn't delete this chat.");
+    }
+  }
+
+  const pendingDelete = deletingId ? visible.find((c) => c.id === deletingId) : null;
+
   return (
     <div className="flex h-full flex-col bg-surface">
       <div className="flex items-center gap-2 p-2">
-        <Button variant="filled" size="md" className="flex-1" onClick={onNewChat}>
-          <MessageSquarePlus size={18} />
-          New chat
-        </Button>
+        <div className="relative flex-1">
+          <Search
+            size={16}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted"
+          />
+          <Input
+            variant="subtle"
+            inputSize="sm"
+            className="pl-9"
+            placeholder="Search conversations"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
         {onCollapse && (
           <IconButton
             variant="ghost"
-            size="md"
+            size="sm"
             aria-label="Collapse Conversations"
             title="Collapse"
             onClick={onCollapse}
@@ -131,19 +193,10 @@ export default function HistorySidebar({
       </div>
 
       <div className="px-2 pb-2">
-        <div className="relative">
-          <Search
-            size={16}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted"
-          />
-          <Input
-            inputSize="sm"
-            className="pl-9"
-            placeholder="Search conversations"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
+        <Button variant="filled" size="md" className="w-full" onClick={onNewChat}>
+          <MessageSquarePlus size={18} />
+          New chat
+        </Button>
       </div>
 
       <div className="flex items-center gap-2 px-3 pb-1">
@@ -170,17 +223,96 @@ export default function HistorySidebar({
         {!searching &&
           visible.map((conversation) => {
             const active = conversation.id === activeSessionId;
+            if (editingId === conversation.id) {
+              return (
+                <form
+                  key={conversation.id}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    submitRename(conversation.id);
+                  }}
+                  className="flex flex-col gap-1 px-1 py-1"
+                >
+                  <div className="flex items-center gap-1">
+                    <Input
+                      inputSize="sm"
+                      autoFocus
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") cancelRename();
+                      }}
+                      aria-label="Rename conversation"
+                    />
+                    <IconButton type="submit" variant="ghost" size="sm" aria-label="Save" title="Save">
+                      <Check size={16} aria-hidden />
+                    </IconButton>
+                    <IconButton
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Cancel"
+                      title="Cancel"
+                      onClick={cancelRename}
+                    >
+                      <X size={16} aria-hidden />
+                    </IconButton>
+                  </div>
+                  {renameError && <p className="px-1 text-xs text-red-500">{renameError}</p>}
+                </form>
+              );
+            }
             return (
-              <button
-                key={conversation.id}
-                onClick={() => onOpenConversation(conversation.id)}
-                className={conversationItem({ active })}
-              >
-                <span className="w-full truncate text-sm text-fg">{conversation.title}</span>
-              </button>
+              <div key={conversation.id} className={conversationRow({ active })}>
+                <button
+                  type="button"
+                  onClick={() => onOpenConversation(conversation.id)}
+                  className="flex min-w-0 flex-1 items-center px-3 py-2 text-left"
+                >
+                  <span className="w-full truncate text-sm text-fg">{conversation.title}</span>
+                </button>
+                <IconButton
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Rename conversation"
+                  title="Rename"
+                  onClick={() => startRename(conversation)}
+                  className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                  <Pencil size={14} aria-hidden />
+                </IconButton>
+                <IconButton
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Delete conversation"
+                  title="Delete"
+                  onClick={() => {
+                    setDeleteError(null);
+                    setDeletingId(conversation.id);
+                  }}
+                  className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                >
+                  <Trash2 size={14} aria-hidden />
+                </IconButton>
+              </div>
             );
           })}
       </div>
+
+      <ConfirmDialog
+        open={deletingId !== null}
+        title="Delete chat?"
+        message={
+          deleteError ??
+          `"${pendingDelete?.title ?? "This chat"}" is removed from your list. This can't be undone.`
+        }
+        confirmLabel="Delete"
+        onConfirm={() => deletingId && onDelete(deletingId)}
+        onCancel={() => {
+          setDeletingId(null);
+          setDeleteError(null);
+        }}
+      />
     </div>
   );
 }

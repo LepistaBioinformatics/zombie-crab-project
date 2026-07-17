@@ -4,19 +4,25 @@ import { cn } from "@/lib/cn";
 
 const input = cva(
   [
-    "w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg",
+    "w-full rounded-lg px-3 text-sm text-fg",
     "placeholder:text-fg-muted",
     "transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
     "disabled:opacity-50 disabled:pointer-events-none",
   ],
   {
     variants: {
+      // `default` is the bordered field; `subtle` blends into the surface (no
+      // violet border, faint fill) for low-emphasis spots like a search box.
+      variant: {
+        default: "border border-brand bg-elevated",
+        subtle: "border border-transparent bg-elevated/60 hover:bg-elevated",
+      },
       inputSize: {
         sm: "h-9",
         md: "h-11",
       },
     },
-    defaultVariants: { inputSize: "md" },
+    defaultVariants: { variant: "default", inputSize: "md" },
   },
 );
 
@@ -27,8 +33,8 @@ export interface InputProps
     VariantProps<typeof input> {}
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, inputSize, ...props }, ref) => (
-    <input ref={ref} className={cn(input({ inputSize }), className)} {...props} />
+  ({ className, variant, inputSize, ...props }, ref) => (
+    <input ref={ref} className={cn(input({ variant, inputSize }), className)} {...props} />
   ),
 );
 Input.displayName = "Input";

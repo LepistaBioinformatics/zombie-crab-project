@@ -101,3 +101,32 @@ export async function touchConversation(
   });
   notifyUpdated();
 }
+
+// Renames a conversation via the dedicated PUT path (owner-scoped server-side).
+// Returns the persisted title on success; throws the server error otherwise so
+// the caller can surface it and keep the old title.
+export async function renameConversation(id: string, title: string): Promise<string> {
+  const res = await fetch(`/api/conversations/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error ? String(data.error) : "rename_failed");
+  }
+  const data = await res.json();
+  notifyUpdated();
+  return typeof data?.title === "string" ? data.title : title;
+}
+
+// Removes a conversation from the sidebar index (owner-scoped server-side).
+// Throws the server error on failure so the caller can surface it.
+export async function deleteConversation(id: string): Promise<void> {
+  const res = await fetch(`/api/conversations/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error ? String(data.error) : "delete_failed");
+  }
+  notifyUpdated();
+}
