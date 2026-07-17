@@ -1,3 +1,6 @@
 [submodule "crab-shell-proxy"]
-	path = crab-shell-proxy
+	path = crab/crab-shell-proxy
 	url = https://github.com/sgelias/crab-shell-proxy.git
+[submodule "crab/crab-exoskeleton-webapp"]
+	path = crab/crab-exoskeleton-webapp
+	url = https://github.com/sgelias/crab-exoskeleton-webapp.git

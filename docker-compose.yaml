@@ -65,7 +65,7 @@ services:
   # picoclaw container per (agent, user) on demand, speaks the Pico Protocol to
   # it directly, and manages scale-to-zero / continuous lifecycle. Agent is
   # resolved from mycelium's injected x-mycelium-service-name; user from the
-  # x-mycelium-profile principal email. See crab-shell-proxy/ and
+  # x-mycelium-profile principal email. See crab/crab-shell-proxy/ and
   # .specs/features/crab-shell-proxy/.
   #
   # ONBOARDING (once, before first `up -d`): seed the config-only templates the
@@ -84,7 +84,7 @@ services:
   # stack; revisit for production (see design R2).
   crab-shell-proxy:
     build:
-      context: ./crab-shell-proxy
+      context: ./crab/crab-shell-proxy
     restart: unless-stopped
     networks:
       - zombie_net
@@ -130,7 +130,7 @@ services:
 
   mycelium-gateway:
     build:
-      context: ./mycelium
+      context: ./fungi/mycelium
       dockerfile: Dockerfile.standalone
       args:
         MYCELIUM_GIT_REF: ${MYCELIUM_GIT_REF:-d471dc7ab3330cf49a0050da8d157d80fc55252f}
@@ -151,7 +151,7 @@ services:
     ports:
       - "${MYCELIUM_PORT:-8080}:8080"
     environment:
-      # mycelium/config.standalone.toml references all of these directly via
+      # fungi/mycelium/config.standalone.toml references all of these directly via
       # its field-level `{ env = "..." }` secret resolver -- real values live
       # only in .env (gitignored), never in the committed TOML.
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
@@ -205,7 +205,7 @@ services:
   # Mycelium JWT (see AD-001, context.md).
   chat-webapp:
     build:
-      context: ./webapp
+      context: ./crab/crab-exoskeleton-webapp
     restart: unless-stopped
     networks:
       - zombie_net
@@ -228,7 +228,7 @@ services:
   # (config.standalone.toml) has to include this service's own origin.
   mycelium-webapp:
     build:
-      context: ./mycelium-webapp
+      context: ./fungi/mycelium-webapp
       args:
         VITE_MYCELIUM_API_URL: http://localhost:${MYCELIUM_PORT:-8080}
     restart: unless-stopped

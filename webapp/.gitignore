@@ -1,6 +1,0 @@
-node_modules/
-.next/
-next-env.d.ts
-
-# TypeScript incremental build cache
-tsconfig.tsbuildinfo

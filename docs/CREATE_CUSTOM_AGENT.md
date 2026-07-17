@@ -12,7 +12,7 @@ picoclaw config — that users can chat with through the portal.
 An **agent** is one named picoclaw personality (e.g. `alpha`, `beta`). Two pieces
 define it:
 
-1. **An entry in `crab-shell-proxy/config.yaml`** — the agent's name, which
+1. **An entry in `crab/crab-shell-proxy/config.yaml`** — the agent's name, which
    mycelium service routes to it, which LLM model it uses, and which **template**
    it clones from.
 2. **A template directory** on disk — the files that get copied into every user's
@@ -132,7 +132,7 @@ Edit the `workspace/` files to shape the agent:
 
 ### 4.4 Register the agent in `config.yaml`
 
-Add an entry under `agents:` in `crab-shell-proxy/config.yaml`:
+Add an entry under `agents:` in `crab/crab-shell-proxy/config.yaml`:
 
 ```yaml
 agents:
@@ -153,7 +153,7 @@ agents:
 
 ### 4.5 Register the mycelium route
 
-In `mycelium/config.standalone.toml`, copy the existing `picoclaw-alpha` service
+In `fungi/mycelium/config.standalone.toml`, copy the existing `picoclaw-alpha` service
 block and rename it to `picoclaw-meuagente` (the callers hit
 `/picoclaw-meuagente/...`). Keep the same `token = { env = ... }`,
 `healthCheckPath`, and `group` role settings — just change the name.
@@ -172,7 +172,7 @@ injected into each user's `.security.yml`.
 
 ### 4.7 Rebuild and restart
 
-`config.yaml` and `mycelium/config.standalone.toml` are **baked into their
+`config.yaml` and `fungi/mycelium/config.standalone.toml` are **baked into their
 images** at build time, so an agent change requires a rebuild:
 
 ```bash
@@ -190,8 +190,8 @@ does not need a rebuild — but remember the first-provision rule (section 3).
 - [ ] `data/templates/<name>/.security.yml` exists (model_list has your model; no keys)
 - [ ] `data/templates/<name>/workspace/{AGENT.md,SOUL.md,USER.md}` written
 - [ ] Optional `workspace/memory/` and `workspace/skills/<skill>/SKILL.md`
-- [ ] Agent entry added to `crab-shell-proxy/config.yaml` (`template:` points to `<name>`)
-- [ ] Route added to `mycelium/config.standalone.toml` (`picoclaw-<name>`)
+- [ ] Agent entry added to `crab/crab-shell-proxy/config.yaml` (`template:` points to `<name>`)
+- [ ] Route added to `fungi/mycelium/config.standalone.toml` (`picoclaw-<name>`)
 - [ ] `.env` has `MYC_PICOCLAW_<NAME>_TOKEN` and `PICOCLAW_<NAME>_API_KEY`
 - [ ] `docker compose up -d --build crab-shell-proxy mycelium-gateway`
 - [ ] Templates finalized **before** users start chatting

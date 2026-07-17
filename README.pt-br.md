@@ -151,7 +151,7 @@ provisionamento — então o template continua um scaffold cru e sem segredos.
 - `MYC_STANDALONE_BOOTSTRAP_SECRET` — libera o bootstrap único de Staff.
 
 Qual provider/model cada agente usa é declarado em
-[`crab-shell-proxy/config.yaml`](./crab-shell-proxy/config.yaml) (ex.:
+[`crab/crab-shell-proxy/config.yaml`](./crab/crab-shell-proxy/config.yaml) (ex.:
 `deepseek` / `deepseek-chat`), apontando para o env var acima.
 
 **4. Suba tudo:**
@@ -186,18 +186,20 @@ o cold-start do *seu próprio* container; o `docker ps` mostrará
 ```
 docker-compose.yaml        # a stack inteira (gateway + crab-shell-proxy + webapps + db)
 .env.example               # knobs de runtime, bearer tokens e chaves LLM por-instância
-crab-shell-proxy/          # submódulo git — o orquestrador Go de isolamento por-usuário
-mycelium/
-  Dockerfile.standalone    # builda o mycelium-api do git upstream (sem fonte local)
-  config.standalone.toml   # rotas do gateway para picoclaw-alpha / picoclaw-beta
-webapp/                    # cliente de chat Next.js (BFF — signin, picker, chat)
-mycelium-webapp/           # Dockerfile da UI de admin do Mycelium (do git upstream)
+crab/                      # o lado crab (isolamento por-usuário + seu cliente de chat)
+  crab-shell-proxy/        # submódulo git — o orquestrador Go de isolamento por-usuário
+  crab-exoskeleton-webapp/ # submódulo git — o cliente de chat Next.js (BFF)
+fungi/                     # o lado mycelium (gateway + sua UI de admin)
+  mycelium/
+    Dockerfile.standalone  # builda o mycelium-api do git upstream (sem fonte local)
+    config.standalone.toml # rotas do gateway para picoclaw-alpha / picoclaw-beta
+  mycelium-webapp/         # Dockerfile da UI de admin do Mycelium (do git upstream)
 docs/                      # guias de tarefas (ex.: criar um agente customizado)
 data/agents/               # templates por-agente + volumes por-usuário (gitignored)
 ```
 
 O `crab-shell-proxy` é um submódulo com seu próprio
-[README](./crab-shell-proxy/README.md) detalhando o modelo de isolamento.
+[README](./crab/crab-shell-proxy/README.md) detalhando o modelo de isolamento.
 
 A pasta [`docs/`](./docs/) reúne guias para tarefas comuns — comece por
 [**Criando um Agente Customizado**](./docs/CREATE_CUSTOM_AGENT.pt-br.md).
