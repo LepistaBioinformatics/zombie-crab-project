@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createConversation, touchConversation } from "@/lib/chatSession";
+import { createConversation, touchConversation, syncSessionRefs } from "@/lib/chatSession";
 import MessageContent from "@/app/chat/message-content";
 import Composer from "@/app/chat/composer";
 import { cva } from "class-variance-authority";
@@ -25,9 +25,9 @@ import { Spinner } from "@/components/ui/spinner";
 const messageBand = cva("group relative w-full py-3 text-fg", {
   variants: {
     role: {
-      user: "bg-accent/12 pl-16 pr-8 after:absolute after:inset-y-0 after:right-0 after:w-1.5 after:bg-accent after:content-['']",
+      user: "bg-accent/12 pl-16 pr-8 max-md:pl-4 max-md:pr-4 after:absolute after:inset-y-0 after:right-0 after:w-1.5 after:bg-accent after:content-['']",
       assistant:
-        "bg-elevated/70 pl-8 pr-16 before:absolute before:inset-y-0 before:left-0 before:w-1.5 before:bg-brand before:content-['']",
+        "bg-elevated/70 pl-8 pr-16 max-md:pl-4 max-md:pr-4 before:absolute before:inset-y-0 before:left-0 before:w-2 before:bg-brand before:content-['']",
     },
   },
 });
@@ -289,6 +289,12 @@ export default function ChatView({
       if (detached && activeSidRef.current === sid) {
         await reloadHistory(sid);
       }
+
+      // The turn is done and picoclaw has persisted the session -- resolve and
+      // store the proxy session ids on the postgres row (best-effort). Not
+      // gated on the active sid: the reply drained even if the user navigated
+      // away, so its refs are still correct.
+      syncSessionRefs(workspace, sid).catch(() => {});
     } catch {
       // Keep whatever partial content already streamed in -- only surface the
       // error banner if the user is still viewing this conversation.

@@ -76,7 +76,7 @@ export default function MessageContent({ content }: { content: string }) {
           ),
           table: ({ children }) => (
             <div className="my-3 overflow-x-auto">
-              <table className="w-full border-collapse text-left text-[0.9em] [&_tbody_tr:nth-child(even)]:bg-current/[0.035] [&_thead]:bg-current/[0.06]">
+              <table className="border-collapse text-left text-[0.9em] [&_tbody_tr:nth-child(even)]:bg-current/[0.035] [&_thead]:bg-current/[0.06]">
                 {children}
               </table>
             </div>
@@ -85,10 +85,12 @@ export default function MessageContent({ content }: { content: string }) {
           tbody: ({ children }) => <tbody>{children}</tbody>,
           tr: ({ children }) => <tr className="border-b border-current/10">{children}</tr>,
           th: ({ children }) => (
-            <th className="px-3 py-1.5 align-top font-semibold [overflow-wrap:break-word]">{children}</th>
+            <th className="max-w-[32rem] px-3 py-1.5 align-top font-semibold [overflow-wrap:break-word]">
+              {children}
+            </th>
           ),
           td: ({ children }) => (
-            <td className="px-3 py-1.5 align-top [overflow-wrap:break-word]">{children}</td>
+            <td className="max-w-[32rem] px-3 py-1.5 align-top [overflow-wrap:break-word]">{children}</td>
           ),
           input: (props) => (
             <input {...props} disabled className="mr-1 align-middle accent-accent" />
