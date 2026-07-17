@@ -77,7 +77,7 @@ flowchart TB
 | Layer | Component | Its one job |
 |---|---|---|
 | **1 · Edge** | [**Mycelium**](https://github.com/LepistaBioinformatics/mycelium) (standalone) | The only thing exposed. Authenticates the caller, enforces RBAC, and injects a **verified, unforgeable** account profile into the request. Nothing downstream is reachable except through it. |
-| **2 · Orchestration** | [**crab-shell-proxy**](https://github.com/sgelias/crab-shell-proxy) (Go) | Reads the agent from the injected service name and the user from the profile's `accId`, then ensures that user's own PicoClaw container is running — spinning it up on demand, tearing it down when idle. Speaks OpenAI HTTP outward and Pico Protocol inward. |
+| **2 · Orchestration** | [**crab-shell-proxy**](https://github.com/LepistaBioinformatics/crab-shell-proxy) (Go) | Reads the agent from the injected service name and the user from the profile's `accId`, then ensures that user's own PicoClaw container is running — spinning it up on demand, tearing it down when idle. Speaks OpenAI HTTP outward and Pico Protocol inward. |
 | **3 · Agent** | [**PicoClaw**](https://github.com/sipeed/picoclaw) | The actual assistant, one **isolated, non-root container per `(agent, user)`**, with its own volume for workspace, memory, and sessions. |
 
 **Why this separation matters — it's defense in depth, and the isolation is real:**
@@ -122,7 +122,7 @@ From zero to a working, isolated agent:
 **1. Clone, with submodules:**
 
 ```bash
-git clone --recurse-submodules https://github.com/sgelias/zombie-crab-project.git
+git clone --recurse-submodules https://github.com/LepistaBioinformatics/zombie-crab-project.git
 cd zombie-crab-project
 ```
 

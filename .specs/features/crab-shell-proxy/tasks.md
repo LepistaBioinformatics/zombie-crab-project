@@ -33,7 +33,7 @@ Legend: `[P]` = parallelizable with siblings at the same depth.
 ## Phase 0 — Scaffold
 
 ### T01 — Go module + repo skeleton
-- **What:** `crab-shell-proxy/` dir, `go.mod` (`github.com/sgelias/crab-shell-proxy`, Go 1.23),
+- **What:** `crab-shell-proxy/` dir, `go.mod` (`github.com/LepistaBioinformatics/crab-shell-proxy`, Go 1.23),
   package dirs per design §3, `git init`, `.gitignore`, minimal `main.go` that loads config and
   serves `/healthz`.
 - **Done when:** `docker build ./crab-shell-proxy` succeeds; container answers `/healthz` 200.

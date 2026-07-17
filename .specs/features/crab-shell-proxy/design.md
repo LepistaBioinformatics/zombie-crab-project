@@ -229,7 +229,7 @@ crab-shell-proxy/
                                     # three at runtime. debian-slim runtime (not distroless).
   README.md
 ```
-Module path: `github.com/sgelias/crab-shell-proxy` (private). Built entirely inside Docker (no
+Module path: `github.com/LepistaBioinformatics/crab-shell-proxy` (private). Built entirely inside Docker (no
 host Go toolchain); `go test ./...` runs as a Dockerfile stage so CI/`docker build` exercises it.
 
 ---
