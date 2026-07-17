@@ -35,7 +35,10 @@ import { cva } from "class-variance-authority";
 import { useFragment, setFragmentSid, historyQuery, type Workspace } from "./fragment";
 
 const conversationRow = cva(
-  "group flex w-full items-center rounded-lg pr-1 transition-colors",
+  // Column on mobile (name on top, actions below); row on desktop with the
+  // actions absolutely positioned so they reserve no width (the name never
+  // truncates just to make room for hidden buttons).
+  "group relative flex w-full flex-col rounded-lg transition-colors md:flex-row md:items-center md:pr-1",
   {
     variants: {
       active: { true: "bg-accent/12", false: "hover:bg-elevated/60" },
@@ -319,40 +322,42 @@ export default function HistorySidebar({
                       </span>
                     )}
                   </button>
-                  <IconButton
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Alias and tags"
-                    title="Alias and tags"
-                    onClick={() => setEnrichingId(enriching ? null : conversation.id)}
-                    className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
-                    aria-expanded={enriching}
-                  >
-                    <Tags size={14} aria-hidden />
-                  </IconButton>
-                  <IconButton
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Rename conversation"
-                    title="Rename"
-                    onClick={() => startRename(conversation)}
-                    className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                  >
-                    <Pencil size={14} aria-hidden />
-                  </IconButton>
-                  <IconButton
-                    variant="ghost"
-                    size="sm"
-                    aria-label="Delete conversation"
-                    title="Delete"
-                    onClick={() => {
-                      setDeleteError(null);
-                      setDeletingId(conversation.id);
-                    }}
-                    className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                  >
-                    <Trash2 size={14} aria-hidden />
-                  </IconButton>
+                  {/* Mobile: an always-visible action row below the name. Desktop:
+                      an absolute box on the right, revealed on hover, so it costs
+                      the name no width. */}
+                  <div className="flex items-center gap-0.5 border-t border-brand/10 px-2 py-1 md:absolute md:right-1 md:top-1/2 md:z-10 md:-translate-y-1/2 md:rounded-lg md:border-0 md:bg-surface/95 md:px-0.5 md:py-0.5 md:opacity-0 md:shadow-sm md:backdrop-blur md:transition-opacity md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Alias and tags"
+                      title="Alias and tags"
+                      onClick={() => setEnrichingId(enriching ? null : conversation.id)}
+                      aria-expanded={enriching}
+                    >
+                      <Tags size={14} aria-hidden />
+                    </IconButton>
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Rename conversation"
+                      title="Rename"
+                      onClick={() => startRename(conversation)}
+                    >
+                      <Pencil size={14} aria-hidden />
+                    </IconButton>
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Delete conversation"
+                      title="Delete"
+                      onClick={() => {
+                        setDeleteError(null);
+                        setDeletingId(conversation.id);
+                      }}
+                    >
+                      <Trash2 size={14} aria-hidden />
+                    </IconButton>
+                  </div>
                 </div>
                 {enriching && (
                   <ConversationEditor

@@ -67,6 +67,12 @@ export default function Composer({
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Touch devices have no Shift key, so Enter must stay a newline there (send is
+  // the button); only fine-pointer (desktop) gets Enter-to-send + the hint.
+  const [coarsePointer, setCoarsePointer] = useState(false);
+  useEffect(() => {
+    setCoarsePointer(window.matchMedia?.("(pointer: coarse)").matches ?? false);
+  }, []);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -219,12 +225,16 @@ export default function Composer({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            if (e.key === "Enter" && !e.shiftKey && !coarsePointer) {
               e.preventDefault();
               if (canSend) onSend();
             }
           }}
-          placeholder="Message your agent…  (Shift+Enter for a new line)"
+          placeholder={
+            coarsePointer
+              ? "Message your agent…"
+              : "Message your agent…  (Shift+Enter for a new line)"
+          }
           className="max-h-[200px] py-1.5 leading-relaxed"
         />
         <IconButton

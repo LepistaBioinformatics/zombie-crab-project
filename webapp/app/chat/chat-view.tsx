@@ -44,6 +44,16 @@ const bandGap = cva("", {
   defaultVariants: { changed: false },
 });
 
+// A tiny, low-emphasis 1-based message index at the top of the origin bar --
+// left for the agent (::before side), right for the user (::after side) -- so the
+// count of exchanged messages is visible at a glance.
+const indexLabel = cva(
+  "pointer-events-none absolute top-1 select-none text-[10px] leading-none text-current/40 tabular-nums",
+  {
+    variants: { role: { user: "right-2.5", assistant: "left-2.5" } },
+  },
+);
+
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
@@ -481,27 +491,25 @@ export default function ChatView({
                     className={bandGap({ changed })}
                   >
                     <div className={messageBand({ role: m.role })}>
+                      <span className={indexLabel({ role: m.role })} aria-hidden>
+                        {i + 1}
+                      </span>
                       {m.content.trim() !== "" && (
-                        // Sticky within the card: the toolbar rides the top of
-                        // the message area while the card is on screen, so it
-                        // stays reachable even after the card's top scrolls off.
-                        // h-0 keeps it out of flow (no content push). Always
-                        // visible on mobile (no hover there); hover/focus-gated
-                        // on desktop. Its own background box keeps it legible
-                        // over the message.
-                        <div className="pointer-events-none sticky top-2 z-20 flex h-0 justify-end pr-2 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
-                          <div className="pointer-events-auto flex gap-0.5 rounded-lg border border-brand/20 bg-surface/95 px-1 py-0.5 shadow-md backdrop-blur">
-                            <IconButton
-                              variant="ghost"
-                              size="sm"
-                              aria-label="Responder a esta mensagem"
-                              title="Responder"
-                              onClick={() => setReplyTo({ role: m.role, content: m.content })}
-                            >
-                              <Reply size={15} aria-hidden />
-                            </IconButton>
-                            <CopyButton text={m.content} />
-                          </div>
+                        // Anchored at the message's bottom-right corner (the end
+                        // of the message). Transparent, revealed on hover on
+                        // desktop; always visible on mobile (no hover there) so
+                        // it stays tappable.
+                        <div className="absolute bottom-1.5 right-1.5 z-10 flex gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
+                          <IconButton
+                            variant="ghost"
+                            size="sm"
+                            aria-label="Responder a esta mensagem"
+                            title="Responder"
+                            onClick={() => setReplyTo({ role: m.role, content: m.content })}
+                          >
+                            <Reply size={15} aria-hidden />
+                          </IconButton>
+                          <CopyButton text={m.content} />
                         </div>
                       )}
                       {text && <MessageContent content={text} />}
