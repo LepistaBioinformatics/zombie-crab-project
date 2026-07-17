@@ -151,7 +151,7 @@ time — so the template stays a bare, secret-free scaffold.
 - `MYC_STANDALONE_BOOTSTRAP_SECRET` — gates the one-time Staff bootstrap.
 
 Which provider/model each agent uses is declared in
-[`crab-shell-proxy/config.yaml`](./crab-shell-proxy/config.yaml) (e.g.
+[`crab/crab-shell-proxy/config.yaml`](./crab/crab-shell-proxy/config.yaml) (e.g.
 `deepseek` / `deepseek-chat`), pointing at the env var above.
 
 **4. Bring it up:**
@@ -186,17 +186,23 @@ cold-starts *your own* container; `docker ps` will show
 ```
 docker-compose.yaml        # the whole stack (gateway + crab-shell-proxy + webapps + db)
 .env.example               # runtime knobs, per-instance bearer tokens & LLM keys
-crab-shell-proxy/          # git submodule — the Go per-user isolation orchestrator
-mycelium/
-  Dockerfile.standalone    # builds mycelium-api from upstream git (no local source)
-  config.standalone.toml   # gateway routes for picoclaw-alpha / picoclaw-beta
-webapp/                    # Next.js chat test client (BFF — signin, picker, chat)
-mycelium-webapp/           # Dockerfile for Mycelium's own admin UI (from upstream git)
+crab/                      # the crab side (per-user isolation + its chat client)
+  crab-shell-proxy/        # git submodule — the Go per-user isolation orchestrator
+  crab-exoskeleton-webapp/ # git submodule — the Next.js chat client (BFF)
+fungi/                     # the mycelium side (gateway + its admin UI)
+  mycelium/
+    Dockerfile.standalone  # builds mycelium-api from upstream git (no local source)
+    config.standalone.toml # gateway routes for picoclaw-alpha / picoclaw-beta
+  mycelium-webapp/         # Dockerfile for Mycelium's own admin UI (from upstream git)
+docs/                      # task guides (e.g. creating a custom agent)
 data/agents/               # per-agent templates + per-user volumes (gitignored)
 ```
 
 `crab-shell-proxy` is a submodule with its own
-[README](./crab-shell-proxy/README.md) going deeper on the isolation model.
+[README](./crab/crab-shell-proxy/README.md) going deeper on the isolation model.
+
+The [`docs/`](./docs/) folder holds guides for common tasks — start with
+[**Creating a Custom Agent**](./docs/CREATE_CUSTOM_AGENT.md).
 
 ## Before you take this to production
 
