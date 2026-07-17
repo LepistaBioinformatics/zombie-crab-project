@@ -74,6 +74,14 @@ the agent as a **file in the workspace** referenced by the (text) turn.
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
+**Implemented (2026-07-16):** MU-01..04 proxy `POST /v1/media` (docker build: vet
++ tests as root, green); MU-05 mycelium `/v1/media` route (TOML valid, compose
+config -q ok); MU-06..09 webapp (BFF `/api/media`, composer attach + chips,
+on-send `[anexo: <path>]` reference) — `next build` green + headless-verified
+(attach → chip → send carries the path → chip clears). **Operator-gated:** the
+live upload→workspace-store→agent-read path needs the gateway rebuilt to route
+`/v1/media` and a licensed workspace.
+
 ---
 
 ## Success Criteria

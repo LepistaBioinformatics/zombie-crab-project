@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Paperclip, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { IconButton } from "@/components/ui/icon-button";
+import { Alert } from "@/components/ui/alert";
+import { Spinner } from "@/components/ui/spinner";
+import { MEDIA_ACCEPT, type Attachment } from "@/lib/media";
 
 const MAX_HEIGHT = 200; // ~8 rows, then the field scrolls internally
 
@@ -14,11 +17,17 @@ interface ComposerProps {
   sending: boolean;
   loadingHistory: boolean;
   sessionId: string;
+  attachments: Attachment[];
+  uploading: boolean;
+  attachError: string | null;
+  onPickFiles: (files: FileList) => void;
+  onRemoveAttachment: (path: string) => void;
 }
 
 // The signature element: a large, inviting chat box (rounded surface, violet
 // border, cyan focus ring) with the send action integrated as a circular
-// accent button. Owns auto-grow and the autofocus-on-open behavior.
+// accent button, plus an attach control and attached-file chips. Owns auto-grow
+// and the autofocus-on-open behavior.
 export default function Composer({
   value,
   onChange,
@@ -26,10 +35,15 @@ export default function Composer({
   sending,
   loadingHistory,
   sessionId,
+  attachments,
+  uploading,
+  attachError,
+  onPickFiles,
+  onRemoveAttachment,
 }: ComposerProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  // Grow with content up to a cap.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -37,19 +51,71 @@ export default function Composer({
     el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
   }, [value]);
 
-  // Focus when a conversation is opened (sessionId change) and once its history
-  // finishes loading -- the field is intentionally never disabled during load,
-  // so the caret lands here with no extra click. Not keyed on messages, so a
-  // streaming reply never yanks focus back.
   useEffect(() => {
     if (!loadingHistory) ref.current?.focus();
   }, [sessionId, loadingHistory]);
 
-  const canSend = value.trim().length > 0 && !sending && !loadingHistory;
+  const canSend =
+    (value.trim().length > 0 || attachments.length > 0) && !sending && !loadingHistory && !uploading;
 
   return (
     <div className="mx-auto w-full max-w-[720px]">
+      {attachError && (
+        <div className="mb-2">
+          <Alert severity="error">{attachError}</Alert>
+        </div>
+      )}
+
+      {(attachments.length > 0 || uploading) && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {attachments.map((a) => (
+            <span
+              key={a.path}
+              className="inline-flex items-center gap-1 rounded-lg border border-brand/40 bg-elevated px-2 py-1 text-xs text-fg"
+            >
+              <Paperclip size={12} aria-hidden />
+              <span className="max-w-[160px] truncate">{a.name}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${a.name}`}
+                onClick={() => onRemoveAttachment(a.path)}
+                className="text-fg-muted transition-colors hover:text-fg"
+              >
+                <X size={12} aria-hidden />
+              </button>
+            </span>
+          ))}
+          {uploading && (
+            <span className="inline-flex items-center gap-1 rounded-lg border border-brand/40 bg-elevated px-2 py-1 text-xs text-fg-muted">
+              <Spinner size={12} /> Uploading…
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="flex items-end gap-2 rounded-2xl border border-brand bg-elevated px-3 py-2 transition-shadow focus-within:ring-2 focus-within:ring-accent-soft">
+        <input
+          ref={fileRef}
+          type="file"
+          accept={MEDIA_ACCEPT}
+          multiple
+          hidden
+          onChange={(e) => {
+            if (e.target.files?.length) onPickFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
+        <IconButton
+          variant="ghost"
+          size="md"
+          aria-label="Attach file"
+          title="Attach file"
+          disabled={sending || loadingHistory}
+          onClick={() => fileRef.current?.click()}
+          className="mb-0.5 shrink-0"
+        >
+          <Paperclip size={20} aria-hidden />
+        </IconButton>
         <Textarea
           ref={ref}
           rows={1}

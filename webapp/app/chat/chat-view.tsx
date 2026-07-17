@@ -9,6 +9,7 @@ import { cva } from "class-variance-authority";
 import { KeyRound } from "lucide-react";
 import { setFragmentSid, historyQuery, type Workspace } from "@/app/chat/fragment";
 import SecretsDrawer from "@/app/chat/secrets-drawer";
+import { uploadMedia, type Attachment } from "@/lib/media";
 import { Alert } from "@/components/ui/alert";
 import { IconButton } from "@/components/ui/icon-button";
 import { Spinner } from "@/components/ui/spinner";
@@ -42,6 +43,9 @@ export default function ChatView({
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [secretsOpen, setSecretsOpen] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
 
   // Chat-style scroll: a brand new message pins its *top* into view (so a long
   // reply can be read from the start while it's still streaming), while the
@@ -78,6 +82,10 @@ export default function ChatView({
     // The newly-viewed conversation isn't the one mid-send (if any) -- reset so
     // its composer isn't stuck disabled by another conversation's in-flight send.
     setSending(false);
+    // Pending attachments belong to the composer of the conversation you were
+    // in -- drop them when switching.
+    setAttachments([]);
+    setAttachError(null);
     setLoadingHistory(true);
 
     let cancelled = false;
@@ -135,15 +143,40 @@ export default function ChatView({
     }
   }
 
+  async function uploadFiles(files: FileList) {
+    setAttachError(null);
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        const attachment = await uploadMedia(workspace, file);
+        setAttachments((prev) => [...prev, attachment]);
+      }
+    } catch (err) {
+      setAttachError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function removeAttachment(path: string) {
+    setAttachments((prev) => prev.filter((a) => a.path !== path));
+  }
+
   async function sendMessage() {
     const text = input.trim();
-    if (!text || !sessionId || sending) return;
+    if ((!text && attachments.length === 0) || !sessionId || sending) return;
     const sid = sessionId; // the conversation this reply belongs to
+
+    // The turn is text-only: attachments ride along as workspace path references
+    // the agent (a vision model / reader skill) can open. The visible message
+    // shows the same, so the user sees what was sent.
+    const refs = attachments.map((a) => `[anexo: ${a.path}]`).join("\n");
+    const composed = refs ? (text ? `${text}\n\n${refs}` : refs) : text;
 
     // The new user message's index -- scroll its *top* into view once it (and
     // the assistant placeholder after it) render.
     setScrollToIndex(messages.length);
-    setMessages((prev) => [...prev, { role: "user", content: text }, { role: "assistant", content: "" }]);
+    setMessages((prev) => [...prev, { role: "user", content: composed }, { role: "assistant", content: "" }]);
     setInput("");
     setSending(true);
     setError(null);
@@ -160,7 +193,7 @@ export default function ChatView({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: text,
+          message: composed,
           session_id: sid,
           tenant_id: workspace.t,
           subs_acc_id: workspace.s,
@@ -187,7 +220,8 @@ export default function ChatView({
       // the session. ONLY now create/bump the postgres row (deferred +
       // success-gated), so clicking a chat or a failed/rejected send never
       // leaves a conversation row with no picoclaw transcript behind it.
-      touchConversation(workspace, sid, text).catch(() => {});
+      touchConversation(workspace, sid, composed).catch(() => {});
+      setAttachments([]); // consumed by this turn
 
       await consumeStream(res.body, (delta) => {
         if (detached) return;
@@ -226,6 +260,11 @@ export default function ChatView({
       sending={sending}
       loadingHistory={loadingHistory}
       sessionId={sessionId ?? ""}
+      attachments={attachments}
+      uploading={uploading}
+      attachError={attachError}
+      onPickFiles={uploadFiles}
+      onRemoveAttachment={removeAttachment}
     />
   );
 

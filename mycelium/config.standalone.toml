@@ -239,6 +239,15 @@ secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST", "DELETE"]
 
+[[picoclaw-alpha.path]]
+# Media upload (media-upload feature): stores a file in the caller's workspace,
+# role-gated with write (same chain as chat). POST multipart only.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/media"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
 [[picoclaw-beta]]
 host = "crab-shell-proxy:8080"
 protocol = "http"
@@ -284,3 +293,11 @@ path = "/v1/secrets"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST", "DELETE"]
+
+[[picoclaw-beta.path]]
+# Media upload (see the picoclaw-alpha /v1/media comment).
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/media"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
