@@ -337,7 +337,6 @@ export default function ChatView({
             aria-label="Workspace files"
             title="Workspace files"
             onClick={() => setFilesOpen((o) => !o)}
-            className="hidden md:inline-flex"
           >
             <PanelRight size={18} aria-hidden />
           </IconButton>

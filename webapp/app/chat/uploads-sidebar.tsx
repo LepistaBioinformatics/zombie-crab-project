@@ -104,16 +104,19 @@ export default function UploadsSidebar({
   const pending = deletingPath ? (files ?? []).find((f) => f.path === deletingPath) : null;
 
   return (
-    <aside
-      style={{ width }}
-      className="relative hidden shrink-0 flex-col border-l border-brand/30 bg-surface md:flex"
-    >
+    <>
+      {/* On mobile the panel is an overlay drawer; the backdrop dismisses it. */}
+      <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={onClose} aria-hidden />
+      <aside
+        style={{ width }}
+        className="relative flex shrink-0 flex-col border-l border-brand/30 bg-surface max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:max-w-[90vw] max-md:shadow-xl"
+      >
       <div
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize Workspace files"
         onMouseDown={startResize}
-        className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-col-resize hover:bg-accent/40"
+        className="absolute inset-y-0 left-0 z-10 hidden w-1.5 cursor-col-resize hover:bg-accent/40 md:block"
       />
 
       <div className="flex items-center gap-2 border-b border-brand/30 px-3 py-2">
@@ -206,6 +209,7 @@ export default function UploadsSidebar({
           setDeleteError(null);
         }}
       />
-    </aside>
+      </aside>
+    </>
   );
 }
