@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cva, type VariantProps } from "class-variance-authority";
-import { Building2, ChevronDown, ChevronRight, FolderClosed, Bot } from "lucide-react";
+import { Building2, ChevronDown, ChevronRight, FolderClosed, Bot, Search } from "lucide-react";
 import { createConversation } from "@/lib/chatSession";
 import {
   groupWorkspaces,
@@ -16,6 +16,7 @@ import { useFragment, setWorkspace, type Workspace } from "./fragment";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
 
 // Selectable agent leaf: active = M3 tonal selected fill (no border).
 const leafButton = cva(
@@ -63,6 +64,7 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
   const [entering, setEntering] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [tenantNames, setTenantNames] = useState<Record<string, string>>({});
+  const [filter, setFilter] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -158,24 +160,45 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
     );
   }
 
+  const q = filter.trim().toLowerCase();
+  const visibleGroups = q ? filterGroups(groups, tenantNames, q) : groups;
+
   return (
-    <div className="flex flex-col gap-0.5">
-      {groups.map((tenant) => {
-        const tKey = tenant.tenantId;
-        const tOpen = !collapsed.has(tKey);
-        return (
-          <div key={tKey}>
-            <GroupHeader
-              icon={<Building2 size={15} aria-hidden />}
-              label={tenantNames[tenant.tenantId] ?? tenant.tenantId}
-              open={tOpen}
-              level="tenant"
-              onClick={() => toggle(tKey)}
-            />
-            {tOpen &&
-              tenant.accounts.map((account) => {
-                const aKey = `${tenant.tenantId}|${account.subsAccId}`;
-                const aOpen = !collapsed.has(aKey);
+    <div className="flex flex-col gap-2">
+      <div className="relative">
+        <Search
+          size={16}
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted"
+        />
+        <Input
+          inputSize="sm"
+          className="pl-9"
+          placeholder="Filter workspaces"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+      </div>
+
+      {visibleGroups.length === 0 ? (
+        <p className="px-2 py-3 text-sm text-fg-muted">No workspaces match your filter.</p>
+      ) : (
+        <div className="flex flex-col gap-0.5">
+          {visibleGroups.map((tenant) => {
+            const tKey = tenant.tenantId;
+            const tOpen = q ? true : !collapsed.has(tKey);
+            return (
+              <div key={tKey}>
+                <GroupHeader
+                  icon={<Building2 size={15} aria-hidden />}
+                  label={tenantNames[tenant.tenantId] ?? tenant.tenantId}
+                  open={tOpen}
+                  level="tenant"
+                  onClick={() => toggle(tKey)}
+                />
+                {tOpen &&
+                  tenant.accounts.map((account) => {
+                    const aKey = `${tenant.tenantId}|${account.subsAccId}`;
+                    const aOpen = q ? true : !collapsed.has(aKey);
                 return (
                   <div key={aKey}>
                     <GroupHeader
@@ -207,9 +230,11 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
                   </div>
                 );
               })}
-          </div>
-        );
-      })}
+            </div>
+          );
+        })}
+        </div>
+      )}
     </div>
   );
 }
@@ -240,6 +265,34 @@ function GroupHeader({
       </span>
     </button>
   );
+}
+
+// Client-side narrowing of the already-loaded discovery tree (no refetch): a
+// leaf survives if the query substring-matches its tenant display name, its
+// account label, or its role -- the fields the card shows. Tenants/accounts
+// with no surviving leaf drop out.
+function filterGroups(
+  groups: TenantGroup[],
+  tenantNames: Record<string, string>,
+  q: string,
+): TenantGroup[] {
+  return groups
+    .map((tenant) => {
+      const tenantLabel = (tenantNames[tenant.tenantId] ?? tenant.tenantId).toLowerCase();
+      const tenantMatch = tenantLabel.includes(q);
+      const accounts = tenant.accounts
+        .map((account) => {
+          const accMatch = (account.accName || account.subsAccId).toLowerCase().includes(q);
+          const agents =
+            tenantMatch || accMatch
+              ? account.agents
+              : account.agents.filter((leaf) => leaf.role.toLowerCase().includes(q));
+          return { ...account, agents };
+        })
+        .filter((account) => account.agents.length > 0);
+      return { ...tenant, accounts };
+    })
+    .filter((tenant) => tenant.accounts.length > 0);
 }
 
 // mycelium's public tenant object: { id, name, description, owners, ... }.
