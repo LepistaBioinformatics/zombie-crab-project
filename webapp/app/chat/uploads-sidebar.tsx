@@ -5,6 +5,7 @@ import { FileText, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { listWorkspaceMedia, deleteMedia, type Attachment } from "@/lib/media";
 import type { Workspace } from "./fragment";
 import AttachmentButton from "@/app/chat/attachment-button";
+import MemoryEditor from "@/app/chat/memory-editor";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
@@ -120,8 +121,17 @@ export default function UploadsSidebar({
       />
 
       <div className="flex items-center gap-2 border-b border-brand/30 px-3 py-2">
+        <h2 className="flex-1 font-display text-sm font-semibold text-fg">Workspace</h2>
+        <IconButton variant="ghost" size="sm" aria-label="Close panel" onClick={onClose}>
+          <X size={16} aria-hidden />
+        </IconButton>
+      </div>
+
+      <MemoryEditor workspace={workspace} />
+
+      <div className="flex items-center gap-2 px-3 pt-3">
         <FileText size={16} className="text-accent" aria-hidden />
-        <h2 className="flex-1 font-display text-sm font-semibold text-fg">Workspace files</h2>
+        <h3 className="flex-1 font-display text-sm font-semibold text-fg">Files</h3>
         <IconButton
           variant="ghost"
           size="sm"
@@ -130,9 +140,6 @@ export default function UploadsSidebar({
           onClick={() => setLocalRefresh((n) => n + 1)}
         >
           <RefreshCw size={15} aria-hidden />
-        </IconButton>
-        <IconButton variant="ghost" size="sm" aria-label="Close files panel" onClick={onClose}>
-          <X size={16} aria-hidden />
         </IconButton>
       </div>
 
