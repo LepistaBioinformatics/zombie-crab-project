@@ -30,9 +30,9 @@ import { Spinner } from "@/components/ui/spinner";
 const messageBand = cva("group relative w-full py-3 text-fg", {
   variants: {
     role: {
-      user: "bg-accent/12 pl-16 pr-8 max-md:pl-4 max-md:pr-4 dark:text-[#90CAF9] after:absolute after:inset-y-0 after:right-0 after:w-1.5 after:bg-accent after:content-['']",
+      user: "bg-accent/12 pl-16 pr-8 max-md:pl-4 max-md:pr-4 dark:text-[#90CAF9] after:absolute after:inset-y-0 after:right-0 after:w-[3px] after:bg-accent after:content-['']",
       assistant:
-        "bg-[#fef9e717] dark:bg-elevated/70 pl-8 pr-16 max-md:pl-4 max-md:pr-4 dark:text-[#c9c7be] before:absolute before:inset-y-0 before:left-0 before:w-2 before:bg-[#ad9d67] before:content-['']",
+        "bg-[#fef9e742] dark:bg-elevated/70 pl-8 pr-16 max-md:pl-4 max-md:pr-4 dark:text-[#c9c7be] before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-[#ad9d67] before:content-['']",
     },
   },
 });
@@ -43,16 +43,6 @@ const bandGap = cva("", {
   variants: { changed: { true: "mt-4", false: "mt-0.5" } },
   defaultVariants: { changed: false },
 });
-
-// A tiny, low-emphasis 1-based message index at the top of the origin bar --
-// left for the agent (::before side), right for the user (::after side) -- so the
-// count of exchanged messages is visible at a glance.
-const indexLabel = cva(
-  "pointer-events-none absolute top-1 select-none text-[10px] leading-none text-current/40 tabular-nums",
-  {
-    variants: { role: { user: "right-2.5", assistant: "left-2.5" } },
-  },
-);
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -119,6 +109,9 @@ export default function ChatView({
   const [settling, setSettling] = useState(false);
   const [replyTo, setReplyTo] = useState<ReplyTo | null>(null);
   const [retrying, setRetrying] = useState<number | null>(null);
+  // On touch (no hover), tapping a message opens its action row below the card;
+  // holds the index of the message whose actions are open (mobile only).
+  const [openActions, setOpenActions] = useState<number | null>(null);
   const lastUploadAtRef = useRef(0);
 
   // The uploads panel is a permanent right column; remember whether it's open.
@@ -170,6 +163,7 @@ export default function ChatView({
     setAttachments([]);
     setAttachError(null);
     setReplyTo(null);
+    setOpenActions(null);
     setLoadingHistory(true);
 
     let cancelled = false;
@@ -391,6 +385,27 @@ export default function ChatView({
     }
   }
 
+  // The message index + reply + copy, reused by the desktop (hover, bottom-right)
+  // and mobile (tap-to-open, below the card) placements. The index rides in the
+  // same cluster as the buttons.
+  const renderActions = (m: ChatMessage, index: number) => (
+    <>
+      <span className="select-none self-center px-1 text-[11px] font-semibold tabular-nums text-fg-muted">
+        {index + 1}
+      </span>
+      <IconButton
+        variant="ghost"
+        size="sm"
+        aria-label="Responder a esta mensagem"
+        title="Responder"
+        onClick={() => setReplyTo({ role: m.role, content: m.content })}
+      >
+        <Reply size={15} aria-hidden />
+      </IconButton>
+      <CopyButton text={m.content} />
+    </>
+  );
+
   const composer = (
     <Composer
       value={input}
@@ -490,26 +505,18 @@ export default function ChatView({
                     }}
                     className={bandGap({ changed })}
                   >
-                    <div className={messageBand({ role: m.role })}>
-                      <span className={indexLabel({ role: m.role })} aria-hidden>
-                        {i + 1}
-                      </span>
+                    <div
+                      className={messageBand({ role: m.role })}
+                      onClick={() =>
+                        setOpenActions((cur) => (cur === i ? null : i))
+                      }
+                    >
                       {m.content.trim() !== "" && (
-                        // Anchored at the message's bottom-right corner (the end
-                        // of the message). Transparent, revealed on hover on
-                        // desktop; always visible on mobile (no hover there) so
-                        // it stays tappable.
-                        <div className="absolute bottom-1.5 right-1.5 z-10 flex gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100">
-                          <IconButton
-                            variant="ghost"
-                            size="sm"
-                            aria-label="Responder a esta mensagem"
-                            title="Responder"
-                            onClick={() => setReplyTo({ role: m.role, content: m.content })}
-                          >
-                            <Reply size={15} aria-hidden />
-                          </IconButton>
-                          <CopyButton text={m.content} />
+                        // Desktop only: transparent toolbar at the message's
+                        // bottom-right, revealed on hover. Mobile uses the tapped
+                        // row below the card instead (rendered after the band).
+                        <div className="absolute bottom-1.5 right-1.5 z-10 hidden items-center gap-0.5 opacity-0 transition-opacity md:flex md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                          {renderActions(m, i)}
                         </div>
                       )}
                       {text && <MessageContent content={text} />}
@@ -530,6 +537,13 @@ export default function ChatView({
                         <span className="ml-0.5 inline-block h-4 w-[0.45em] animate-blink bg-current align-text-bottom" />
                       )}
                     </div>
+                    {/* Mobile only: tapping the card opens this action row below
+                        it (before the next message); no hover on touch. */}
+                    {m.content.trim() !== "" && openActions === i && (
+                      <div className="flex items-center gap-0.5 px-2 py-1 md:hidden">
+                        {renderActions(m, i)}
+                      </div>
+                    )}
                   </div>
                 );
               })}
