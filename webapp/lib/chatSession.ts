@@ -6,6 +6,14 @@ import type { Workspace } from "@/app/chat/fragment";
 // workspace (tenant + subscription + role) -- not localStorage, and no longer
 // just email (workspace-selection resolved point 2). This module is just the
 // client-side fetch wrapper.
+// A per-conversation tag: a name, an optional value, and an arbitrary metadata
+// blob (the front reads `metadata.color`/`metadata.description`).
+export interface Tag {
+  name: string;
+  value: string | null;
+  metadata: Record<string, unknown>;
+}
+
 export interface ConversationSummary {
   id: string; // == session_id (the fragment `sid`)
   role: Instance;
@@ -13,6 +21,10 @@ export interface ConversationSummary {
   subsAccId: string;
   title: string;
   updatedAt: number;
+  alias: string | null;
+  tags: Tag[];
+  sessionKey: string | null;
+  sessionFile: string | null;
 }
 
 // The sidebar (a separate component from wherever a conversation is
@@ -36,6 +48,10 @@ interface ConversationApiRow {
   subsAccId: string;
   title: string;
   updatedAt: string;
+  alias: string | null;
+  tags: Tag[];
+  sessionKey: string | null;
+  sessionFile: string | null;
 }
 
 function fromApiRow(row: ConversationApiRow): ConversationSummary {
@@ -46,6 +62,10 @@ function fromApiRow(row: ConversationApiRow): ConversationSummary {
     subsAccId: row.subsAccId,
     title: row.title,
     updatedAt: new Date(row.updatedAt).getTime(),
+    alias: row.alias ?? null,
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    sessionKey: row.sessionKey ?? null,
+    sessionFile: row.sessionFile ?? null,
   };
 }
 
@@ -77,6 +97,10 @@ export async function createConversation(workspace: Workspace): Promise<Conversa
     subsAccId: workspace.s,
     title: "New chat",
     updatedAt: Date.now(),
+    alias: null,
+    tags: [],
+    sessionKey: null,
+    sessionFile: null,
   };
 }
 
@@ -129,4 +153,65 @@ export async function deleteConversation(id: string): Promise<void> {
     throw new Error(data?.error ? String(data.error) : "delete_failed");
   }
   notifyUpdated();
+}
+
+// Sets (or clears, with an empty string) a conversation's display alias
+// (owner-scoped server-side). Throws the server error on failure.
+export async function setAlias(id: string, alias: string): Promise<void> {
+  const res = await fetch(`/api/conversations/${encodeURIComponent(id)}/alias`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ alias }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error ? String(data.error) : "alias_failed");
+  }
+  notifyUpdated();
+}
+
+// Adds or updates a tag on a conversation (upsert by name, owner-scoped
+// server-side). Throws the server error on failure.
+export async function upsertTag(id: string, tag: Tag): Promise<void> {
+  const res = await fetch(`/api/conversations/${encodeURIComponent(id)}/tags`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: tag.name, value: tag.value, metadata: tag.metadata }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error ? String(data.error) : "tag_failed");
+  }
+  notifyUpdated();
+}
+
+// Removes a tag by name from a conversation (owner-scoped server-side). Throws
+// the server error on failure.
+export async function deleteTag(id: string, name: string): Promise<void> {
+  const res = await fetch(
+    `/api/conversations/${encodeURIComponent(id)}/tags?name=${encodeURIComponent(name)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error ? String(data.error) : "tag_delete_failed");
+  }
+  notifyUpdated();
+}
+
+// Asks the proxy (via the BFF) to resolve and persist the session identifiers
+// behind a conversation, so the postgres row points at the exact picoclaw
+// transcript. Best-effort: called after a turn completes; the caller swallows
+// errors. Does not notify the sidebar (session refs aren't rendered).
+export async function syncSessionRefs(workspace: Workspace, id: string): Promise<void> {
+  await fetch(`/api/conversations/${encodeURIComponent(id)}/session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tenant_id: workspace.t,
+      subs_acc_id: workspace.s,
+      role: workspace.r,
+      session_id: id,
+    }),
+  });
 }

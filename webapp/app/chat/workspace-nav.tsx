@@ -18,9 +18,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { Alert } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 
-// Selectable agent leaf: active = M3 tonal selected fill (no border).
+// Selectable agent leaf: active = M3 tonal selected fill (no border). Depth
+// indentation comes from the hierarchy guide wrappers, not padding here.
 const leafButton = cva(
-  "flex w-full items-center gap-2 rounded-lg py-1.5 pr-2 pl-8 text-left text-sm transition-colors disabled:opacity-60",
+  "flex w-full items-center gap-2 rounded-lg py-1.5 pr-2 pl-2 text-left text-sm transition-colors disabled:opacity-60",
   {
     variants: {
       active: {
@@ -32,11 +33,12 @@ const leafButton = cva(
   },
 );
 
-// Collapsible tenant/account headers: indentation + label treatment vary by level.
+// Collapsible tenant/account headers: only the label treatment varies by level
+// (depth is drawn by the guide-line wrappers around the children).
 const groupHeader = cva(
-  "flex w-full items-center gap-1.5 rounded-lg py-1.5 pr-2 text-left transition-colors hover:bg-elevated/60",
+  "flex w-full items-center gap-1.5 rounded-lg py-1.5 pr-2 pl-2 text-left transition-colors hover:bg-elevated/60",
   {
-    variants: { level: { tenant: "pl-2", account: "pl-5" } },
+    variants: { level: { tenant: "", account: "" } },
     defaultVariants: { level: "tenant" },
   },
 );
@@ -136,105 +138,109 @@ export default function WorkspaceNav({ onSelect }: { onSelect?: () => void }) {
     }
   }
 
-  if (error) {
-    return (
-      <div className="px-2">
-        <Alert severity="error">{error}</Alert>
-      </div>
-    );
-  }
-
-  if (groups === null) {
-    return (
-      <div className="flex justify-center py-4">
-        <Spinner size={20} />
-      </div>
-    );
-  }
-
-  if (groups.length === 0) {
-    return (
-      <p className="px-2 py-3 text-sm text-fg-muted">
-        You aren&apos;t in any workspaces yet — ask an operator to add you to one.
-      </p>
-    );
-  }
-
   const q = filter.trim().toLowerCase();
-  const visibleGroups = q ? filterGroups(groups, tenantNames, q) : groups;
+  const visibleGroups = groups && q ? filterGroups(groups, tenantNames, q) : groups;
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="relative">
-        <Search
-          size={16}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted"
-        />
-        <Input
-          inputSize="sm"
-          className="pl-9"
-          placeholder="Filter workspaces"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 p-2">
+        <div className="relative">
+          <Search
+            size={16}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted"
+          />
+          <Input
+            variant="subtle"
+            inputSize="sm"
+            className="pl-9"
+            placeholder="Filter workspaces"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+        </div>
       </div>
 
-      {visibleGroups.length === 0 ? (
-        <p className="px-2 py-3 text-sm text-fg-muted">No workspaces match your filter.</p>
-      ) : (
-        <div className="flex flex-col gap-0.5">
-          {visibleGroups.map((tenant) => {
-            const tKey = tenant.tenantId;
-            const tOpen = q ? true : !collapsed.has(tKey);
-            return (
-              <div key={tKey}>
-                <GroupHeader
-                  icon={<Building2 size={15} aria-hidden />}
-                  label={tenantNames[tenant.tenantId] ?? tenant.tenantId}
-                  open={tOpen}
-                  level="tenant"
-                  onClick={() => toggle(tKey)}
-                />
-                {tOpen &&
-                  tenant.accounts.map((account) => {
-                    const aKey = `${tenant.tenantId}|${account.subsAccId}`;
-                    const aOpen = q ? true : !collapsed.has(aKey);
-                return (
-                  <div key={aKey}>
-                    <GroupHeader
-                      icon={<FolderClosed size={15} aria-hidden />}
-                      label={account.accName || account.subsAccId}
-                      open={aOpen}
-                      level="account"
-                      onClick={() => toggle(aKey)}
-                    />
-                    {aOpen &&
-                      account.agents.map((leaf) => {
-                        const lKey = `${leaf.tenantId}|${leaf.subsAccId}|${leaf.role}`;
-                        const active = lKey === activeKey;
-                        const badge = accessLabel(leaf.perms);
+      <div className="flex items-center gap-2 px-3 pb-1">
+        <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
+        <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+          WORKSPACES
+        </span>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto px-2 pb-2 pt-1">
+        {error ? (
+          <Alert severity="error">{error}</Alert>
+        ) : groups === null ? (
+          <div className="flex justify-center py-4">
+            <Spinner size={20} />
+          </div>
+        ) : groups.length === 0 ? (
+          <p className="px-2 py-3 text-sm text-fg-muted">
+            You aren&apos;t in any workspaces yet — ask an operator to add you to one.
+          </p>
+        ) : visibleGroups!.length === 0 ? (
+          <p className="px-2 py-3 text-sm text-fg-muted">No workspaces match your filter.</p>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {visibleGroups!.map((tenant) => {
+              const tKey = tenant.tenantId;
+              const tOpen = q ? true : !collapsed.has(tKey);
+              return (
+                <div key={tKey}>
+                  <GroupHeader
+                    icon={<Building2 size={15} aria-hidden />}
+                    label={tenantNames[tenant.tenantId] ?? tenant.tenantId}
+                    open={tOpen}
+                    level="tenant"
+                    onClick={() => toggle(tKey)}
+                  />
+                  {tOpen && (
+                    <div className="ml-[15px] mt-0.5 space-y-2 border-l border-brand/25 pl-2">
+                      {tenant.accounts.map((account) => {
+                        const aKey = `${tenant.tenantId}|${account.subsAccId}`;
+                        const aOpen = q ? true : !collapsed.has(aKey);
                         return (
-                          <button
-                            key={lKey}
-                            type="button"
-                            disabled={entering}
-                            onClick={() => onPick(leaf)}
-                            className={leafButton({ active })}
-                          >
-                            <Bot size={15} className="shrink-0 text-fg-muted" aria-hidden />
-                            <span className="min-w-0 flex-1 truncate capitalize">{leaf.role}</span>
-                            {badge && <Badge tone="accent">{badge}</Badge>}
-                          </button>
+                          <div key={aKey}>
+                            <GroupHeader
+                              icon={<FolderClosed size={15} aria-hidden />}
+                              label={account.accName || account.subsAccId}
+                              open={aOpen}
+                              level="account"
+                              onClick={() => toggle(aKey)}
+                            />
+                            {aOpen && (
+                              <div className="ml-[15px] mt-0.5 space-y-0.5 border-l border-brand/15 pl-2">
+                                {account.agents.map((leaf) => {
+                                  const lKey = `${leaf.tenantId}|${leaf.subsAccId}|${leaf.role}`;
+                                  const active = lKey === activeKey;
+                                  const badge = accessLabel(leaf.perms);
+                                  return (
+                                    <button
+                                      key={lKey}
+                                      type="button"
+                                      disabled={entering}
+                                      onClick={() => onPick(leaf)}
+                                      className={leafButton({ active })}
+                                    >
+                                      <Bot size={15} className="shrink-0 text-fg-muted" aria-hidden />
+                                      <span className="min-w-0 flex-1 truncate capitalize">{leaf.role}</span>
+                                      {badge && <Badge tone="accent">{badge}</Badge>}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-        </div>
-      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

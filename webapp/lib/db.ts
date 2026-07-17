@@ -33,9 +33,26 @@ function ensureSchema(): Promise<void> {
       ALTER TABLE conversations ADD COLUMN IF NOT EXISTS subs_acc_id TEXT;
       CREATE INDEX IF NOT EXISTS conversations_workspace_idx
         ON conversations (email, tenant_id, subs_acc_id, instance);
+      ALTER TABLE conversations ADD COLUMN IF NOT EXISTS alias TEXT;
+      ALTER TABLE conversations ADD COLUMN IF NOT EXISTS session_key TEXT;
+      ALTER TABLE conversations ADD COLUMN IF NOT EXISTS session_file TEXT;
+      CREATE TABLE IF NOT EXISTS conversation_tags (
+        conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        value TEXT,
+        metadata JSONB NOT NULL DEFAULT '{}',
+        PRIMARY KEY (conversation_id, name)
+      );
+      CREATE INDEX IF NOT EXISTS conversation_tags_conv_idx ON conversation_tags (conversation_id);
     `).then(() => undefined);
   }
   return globalForDb.schemaReady;
+}
+
+export interface Tag {
+  name: string;
+  value: string | null;
+  metadata: Record<string, unknown>;
 }
 
 export interface ConversationRow {
@@ -46,6 +63,10 @@ export interface ConversationRow {
   subsAccId: string;
   title: string;
   updatedAt: string;
+  alias: string | null;
+  tags: Tag[];
+  sessionKey: string | null;
+  sessionFile: string | null;
 }
 
 function rowFromDb(row: {
@@ -56,6 +77,10 @@ function rowFromDb(row: {
   subs_acc_id: string;
   title: string;
   updated_at: Date;
+  alias: string | null;
+  session_key: string | null;
+  session_file: string | null;
+  tags: Tag[];
 }): ConversationRow {
   return {
     id: row.id,
@@ -65,6 +90,10 @@ function rowFromDb(row: {
     subsAccId: row.subs_acc_id,
     title: row.title,
     updatedAt: row.updated_at.toISOString(),
+    alias: row.alias,
+    tags: row.tags,
+    sessionKey: row.session_key,
+    sessionFile: row.session_file,
   };
 }
 
@@ -82,11 +111,20 @@ export async function listConversationsForWorkspace(
   // which had no picoclaw transcript behind them (the postgres/picoclaw
   // divergence, chat-ui-material-refactor).
   const { rows } = await getPool().query(
-    `SELECT id, email, instance, tenant_id, subs_acc_id, title, updated_at
-     FROM conversations
-     WHERE email = $1 AND tenant_id = $2 AND subs_acc_id = $3 AND instance = $4
-       AND title <> 'New chat'
-     ORDER BY updated_at DESC`,
+    `SELECT c.id, c.email, c.instance, c.tenant_id, c.subs_acc_id, c.title,
+            c.updated_at, c.alias, c.session_key, c.session_file,
+            COALESCE(
+              json_agg(
+                json_build_object('name', t.name, 'value', t.value, 'metadata', t.metadata)
+              ) FILTER (WHERE t.name IS NOT NULL),
+              '[]'
+            ) AS tags
+     FROM conversations c
+     LEFT JOIN conversation_tags t ON t.conversation_id = c.id
+     WHERE c.email = $1 AND c.tenant_id = $2 AND c.subs_acc_id = $3 AND c.instance = $4
+       AND c.title <> 'New chat'
+     GROUP BY c.id
+     ORDER BY c.updated_at DESC`,
     [email, tenantId, subsAccId, role],
   );
   return rows.map(rowFromDb);
@@ -143,6 +181,88 @@ export async function deleteConversationRow(id: string, email: string): Promise<
   const { rowCount } = await getPool().query(
     `DELETE FROM conversations WHERE id = $1 AND email = $2`,
     [id, email],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+// Owner-scoped alias UPDATE. Like renameConversation it deliberately touches
+// only `alias` -- NOT updated_at -- so setting/clearing an alias never disturbs
+// recency ordering. An empty alias clears it (stored as NULL). A non-owner id
+// updates zero rows (returns false -> 404).
+export async function setAlias(
+  id: string,
+  email: string,
+  alias: string | null,
+): Promise<boolean> {
+  await ensureSchema();
+  const normalized = alias && alias.trim() !== "" ? alias : null;
+  const { rowCount } = await getPool().query(
+    `UPDATE conversations SET alias = $3 WHERE id = $1 AND email = $2`,
+    [id, email, normalized],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+// Owner-scoped upsert of one tag (unique by name per conversation). The tags
+// table has no email column, so ownership is enforced by gating the INSERT on
+// EXISTS(conversations WHERE id AND email): a non-owner id inserts zero rows
+// (returns false -> 404). On a name collision it updates value + metadata.
+export async function upsertTag(id: string, email: string, tag: Tag): Promise<boolean> {
+  await ensureSchema();
+  const { rowCount } = await getPool().query(
+    `INSERT INTO conversation_tags (conversation_id, name, value, metadata)
+     SELECT $1, $3, $4, $5::jsonb
+     WHERE EXISTS (SELECT 1 FROM conversations c WHERE c.id = $1 AND c.email = $2)
+     ON CONFLICT (conversation_id, name) DO UPDATE
+       SET value = EXCLUDED.value, metadata = EXCLUDED.metadata`,
+    [id, email, tag.name, tag.value, JSON.stringify(tag.metadata)],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+// Owner-scoped delete of one tag by name. Gated on EXISTS(conversations WHERE id
+// AND email) so a non-owner id removes zero rows; also returns false when the
+// owner has no tag by that name (both -> 404).
+export async function deleteTag(id: string, email: string, name: string): Promise<boolean> {
+  await ensureSchema();
+  const { rowCount } = await getPool().query(
+    `DELETE FROM conversation_tags
+     WHERE conversation_id = $1 AND name = $3
+       AND EXISTS (SELECT 1 FROM conversations c WHERE c.id = $1 AND c.email = $2)`,
+    [id, email, name],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+// Owner-scoped read of a conversation's tags. Returns [] for a non-owner/unknown
+// id (a safe empty read, not an error -- the GET route only 404s on writes).
+export async function listTags(id: string, email: string): Promise<Tag[]> {
+  await ensureSchema();
+  const { rows } = await getPool().query(
+    `SELECT t.name, t.value, t.metadata
+     FROM conversation_tags t
+     WHERE t.conversation_id = $1
+       AND EXISTS (SELECT 1 FROM conversations c WHERE c.id = $1 AND c.email = $2)
+     ORDER BY t.name`,
+    [id, email],
+  );
+  return rows as Tag[];
+}
+
+// Owner-scoped store of the proxy session identifiers. Like the alias/rename
+// updates it does NOT touch updated_at (never disturbs recency). session_file
+// is stored NULL until picoclaw has written the transcript. A non-owner id
+// updates zero rows (returns false -> 404).
+export async function setSessionRefs(
+  id: string,
+  email: string,
+  sessionKey: string,
+  sessionFile: string | null,
+): Promise<boolean> {
+  await ensureSchema();
+  const { rowCount } = await getPool().query(
+    `UPDATE conversations SET session_key = $3, session_file = $4 WHERE id = $1 AND email = $2`,
+    [id, email, sessionKey, sessionFile && sessionFile !== "" ? sessionFile : null],
   );
   return (rowCount ?? 0) > 0;
 }
