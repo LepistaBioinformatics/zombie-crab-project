@@ -6,7 +6,7 @@ import { createConversation, touchConversation, syncSessionRefs } from "@/lib/ch
 import MessageContent from "@/app/chat/message-content";
 import Composer from "@/app/chat/composer";
 import { cva } from "class-variance-authority";
-import { KeyRound, PanelRight } from "lucide-react";
+import { KeyRound, PanelRight, Reply } from "lucide-react";
 import { setFragmentSid, historyQuery, type Workspace } from "@/app/chat/fragment";
 import SecretsDrawer from "@/app/chat/secrets-drawer";
 import UploadsSidebar from "@/app/chat/uploads-sidebar";
@@ -44,6 +44,28 @@ interface ChatMessage {
   content: string;
 }
 
+// A message the composer is quoting (Telegram-style reply). Pico is text-only
+// and the transcript is reloaded from picoclaw, so a reply is carried as a
+// markdown blockquote embedded in the sent message -- it persists and gives the
+// agent the referenced context.
+export interface ReplyTo {
+  role: "user" | "assistant";
+  content: string;
+}
+
+const QUOTE_MAX = 280;
+
+// Turns the referenced message into a one-line attributed blockquote. Anexo
+// refs are stripped (only the prose is quoted) and newlines collapsed so the
+// quote stays a single tidy `>` line regardless of the original's length.
+function buildQuote(reply: ReplyTo): string {
+  const who = reply.role === "user" ? "Você" : "Agente";
+  const { text } = parseAnexos(reply.content);
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  const snippet = oneLine.length > QUOTE_MAX ? `${oneLine.slice(0, QUOTE_MAX - 1)}…` : oneLine;
+  return `> **${who}:** ${snippet}`;
+}
+
 // After an upload, picoclaw reloads to pick up the new workspace file. Give it a
 // moment to settle before firing the turn, so the first message right after an
 // attach doesn't hit the container mid-reload ("Can't reach the gateway").
@@ -70,6 +92,7 @@ export default function ChatView({
   const [filesOpen, setFilesOpen] = useState(false);
   const [mediaRefresh, setMediaRefresh] = useState(0);
   const [settling, setSettling] = useState(false);
+  const [replyTo, setReplyTo] = useState<ReplyTo | null>(null);
   const lastUploadAtRef = useRef(0);
 
   // The uploads panel is a permanent right column; remember whether it's open.
@@ -119,6 +142,7 @@ export default function ChatView({
     // in -- drop them when switching.
     setAttachments([]);
     setAttachError(null);
+    setReplyTo(null);
     setLoadingHistory(true);
 
     let cancelled = false;
@@ -203,16 +227,19 @@ export default function ChatView({
     const sid = sessionId; // the conversation this reply belongs to
 
     // The turn is text-only: attachments ride along as workspace path references
-    // the agent (a vision model / reader skill) can open. The visible message
-    // shows the same, so the user sees what was sent.
+    // the agent (a vision model / reader skill) can open, and a reply rides as a
+    // leading markdown blockquote. The visible message shows the same, so the
+    // user sees exactly what was sent and the quote persists on reload.
     const refs = attachments.map((a) => `[anexo: ${a.path}]`).join("\n");
-    const composed = refs ? (text ? `${text}\n\n${refs}` : refs) : text;
+    const quote = replyTo ? buildQuote(replyTo) : "";
+    const composed = [quote, text, refs].filter(Boolean).join("\n\n");
 
     // The new user message's index -- scroll its *top* into view once it (and
     // the assistant placeholder after it) render.
     setScrollToIndex(messages.length);
     setMessages((prev) => [...prev, { role: "user", content: composed }, { role: "assistant", content: "" }]);
     setInput("");
+    setReplyTo(null);
     setSending(true);
     setError(null);
 
@@ -317,6 +344,8 @@ export default function ChatView({
       attachError={attachError}
       onPickFiles={uploadFiles}
       onRemoveAttachment={removeAttachment}
+      replyTo={replyTo}
+      onCancelReply={() => setReplyTo(null)}
     />
   );
 
@@ -395,10 +424,20 @@ export default function ChatView({
                     className={bandGap({ changed })}
                   >
                     <div className={messageBand({ role: m.role })}>
-                      <CopyButton
-                        text={m.content}
-                        className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                      />
+                      {m.content.trim() !== "" && (
+                        <div className="absolute right-2 top-2 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                          <IconButton
+                            variant="ghost"
+                            size="sm"
+                            aria-label="Responder a esta mensagem"
+                            title="Responder"
+                            onClick={() => setReplyTo({ role: m.role, content: m.content })}
+                          >
+                            <Reply size={15} aria-hidden />
+                          </IconButton>
+                          <CopyButton text={m.content} />
+                        </div>
+                      )}
                       {text && <MessageContent content={text} />}
                       {refs.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-2">

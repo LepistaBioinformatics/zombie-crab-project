@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   Paperclip,
   Presentation,
+  Reply,
   Table2,
   X,
 } from "lucide-react";
@@ -16,7 +17,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { IconButton } from "@/components/ui/icon-button";
 import { Alert } from "@/components/ui/alert";
 import { Spinner } from "@/components/ui/spinner";
-import { MEDIA_ACCEPT, MEDIA_CATEGORIES, acceptFor, type Attachment } from "@/lib/media";
+import { MEDIA_ACCEPT, MEDIA_CATEGORIES, acceptFor, parseAnexos, type Attachment } from "@/lib/media";
+import type { ReplyTo } from "@/app/chat/chat-view";
 
 const MAX_HEIGHT = 200; // ~8 rows, then the field scrolls internally
 
@@ -40,6 +42,8 @@ interface ComposerProps {
   attachError: string | null;
   onPickFiles: (files: FileList) => void;
   onRemoveAttachment: (path: string) => void;
+  replyTo: ReplyTo | null;
+  onCancelReply: () => void;
 }
 
 // The signature element: a large, inviting chat box with the send action as a
@@ -57,6 +61,8 @@ export default function Composer({
   attachError,
   onPickFiles,
   onRemoveAttachment,
+  replyTo,
+  onCancelReply,
 }: ComposerProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -72,6 +78,15 @@ export default function Composer({
   useEffect(() => {
     if (!loadingHistory) ref.current?.focus();
   }, [sessionId, loadingHistory]);
+
+  // Picking a message to reply to drops the cursor straight into the field.
+  useEffect(() => {
+    if (replyTo) ref.current?.focus();
+  }, [replyTo]);
+
+  const replyPreview = replyTo
+    ? parseAnexos(replyTo.content).text.replace(/\s+/g, " ").trim()
+    : "";
 
   const canSend =
     (value.trim().length > 0 || attachments.length > 0) && !sending && !loadingHistory && !uploading;
@@ -90,6 +105,26 @@ export default function Composer({
       {attachError && (
         <div className="mb-2">
           <Alert severity="error">{attachError}</Alert>
+        </div>
+      )}
+
+      {replyTo && (
+        <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-brand bg-elevated px-3 py-1.5">
+          <Reply size={14} className="shrink-0 text-fg-muted" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-semibold text-fg">
+              Respondendo a {replyTo.role === "user" ? "você" : "agente"}
+            </div>
+            <div className="truncate text-xs text-fg-muted">{replyPreview || "(sem texto)"}</div>
+          </div>
+          <button
+            type="button"
+            aria-label="Cancelar resposta"
+            onClick={onCancelReply}
+            className="shrink-0 text-fg-muted transition-colors hover:text-fg"
+          >
+            <X size={14} aria-hidden />
+          </button>
         </div>
       )}
 
