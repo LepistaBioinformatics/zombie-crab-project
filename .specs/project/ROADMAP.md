@@ -123,3 +123,8 @@ Telegram / MS Teams channels.
 
 - Production hardening (TLS termination, secret rotation, Docker-socket privilege — see AD-009 R2)
 - Per-user (not just per-agent) lifecycle mode overrides
+- **conversation-tree-view** (PLANNED) — optional "Tree" view mode in the chat
+  sidebar: a vertical time-ordered spine where each conversation is a colored
+  lane and each message is a dot, reconciling the agent's continuous per-session
+  transcript with the web's recency-first list. Visualization only (no
+  `parent_id`/fork). See `.specs/features/conversation-tree-view/`.
