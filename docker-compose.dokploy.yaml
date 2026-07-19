@@ -1,0 +1,96 @@
+# =============================================================================
+# zombie-crab-project -- Dokploy / Traefik override (OPT-IN, not used by default)
+# =============================================================================
+# The base docker-compose.yaml stays the default mode: published host ports, no
+# Traefik, no external network. Nothing about local dev changes:
+#
+#     docker compose up -d                      # default -- exactly as before
+#
+# Enable Traefik ingress (Dokploy) by LAYERING this override on top of the base:
+#
+#     docker compose -f docker-compose.yaml -f docker-compose.dokploy.yaml up -d
+#
+# In Dokploy's "Compose" service, point the deploy at BOTH files (base first,
+# this one second) so the override wins. This is the real equivalent of a
+# "dokploy profile": opt-in, and the base file is left untouched.
+#
+# Per web-facing service, relative to the base, this override:
+#   - attaches the container to Dokploy's external `dokploy-network` (Traefik's
+#     network), in ADDITION to the stack-internal zombie_net;
+#   - adds Traefik router/service labels routing a public domain -> the
+#     container's internal port;
+#   - REMOVES the published host port via `ports: !reset []` so the only ingress
+#     is Traefik. `!reset` is REQUIRED: Compose CONCATENATES `ports` across
+#     files, so a plain `ports: []` would leave the base's published port in
+#     place. `!reset` needs Docker Compose >= v2.24.
+#
+# Domains, entrypoint and cert resolver are parametrized in .env (see the
+# "Dokploy / Traefik" section of .env.example). They are only read in this mode.
+#
+# NOT handled here -- mycelium's config is baked into its image, not env-driven:
+#   fungi/mycelium/config.standalone.toml still has
+#       domainUrl      = "http://localhost:8080"
+#       allowedOrigins = ["http://localhost:8080", "http://localhost:8081"]
+#   Behind real domains, magic-link URLs and the mycelium-webapp SPA's CORS will
+#   break until those point at https://${MYCELIUM_DOMAIN} /
+#   https://${MYCELIUM_WEBAPP_DOMAIN}. That's a separate change to the TOML (or a
+#   dokploy config variant swapped in via SETTINGS_PATH) -- see README.
+# =============================================================================
+
+networks:
+  # Dokploy creates and owns this; it must already exist on the host. Declared
+  # external so this override never tries to create it (and so the base file,
+  # used without this override, never references it at all).
+  dokploy-network:
+    external: true
+
+services:
+  crab-shell-proxy:
+    # Base publishes a temporary 127.0.0.1:18080 debug port. Drop it in Dokploy
+    # mode: the proxy is never a public ingress -- only mycelium-gateway is.
+    ports: !reset []
+
+  mycelium-gateway:
+    networks:
+      - zombie_net
+      - dokploy-network
+    ports: !reset []
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.zombie-mycelium.rule=Host(`${MYCELIUM_DOMAIN}`)
+      - traefik.http.routers.zombie-mycelium.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.zombie-mycelium.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.services.zombie-mycelium.loadbalancer.server.port=8080
+
+  chat-webapp:
+    networks:
+      - zombie_net
+      - dokploy-network
+    ports: !reset []
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.zombie-chat.rule=Host(`${CHAT_WEBAPP_DOMAIN}`)
+      - traefik.http.routers.zombie-chat.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.zombie-chat.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.services.zombie-chat.loadbalancer.server.port=3000
+
+  mycelium-webapp:
+    build:
+      args:
+        # Baked into the SPA at build time -- must be the PUBLIC mycelium URL in
+        # Dokploy mode, not localhost (this is a client-side SPA; the browser
+        # calls mycelium-gateway directly). Overrides the base build arg.
+        VITE_MYCELIUM_API_URL: https://${MYCELIUM_DOMAIN}
+    networks:
+      - zombie_net
+      - dokploy-network
+    ports: !reset []
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.zombie-webapp.rule=Host(`${MYCELIUM_WEBAPP_DOMAIN}`)
+      - traefik.http.routers.zombie-webapp.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.zombie-webapp.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.services.zombie-webapp.loadbalancer.server.port=80

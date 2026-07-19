@@ -133,7 +133,7 @@ services:
       context: ./fungi/mycelium
       dockerfile: Dockerfile.standalone
       args:
-        MYCELIUM_GIT_REF: ${MYCELIUM_GIT_REF:-d471dc7ab3330cf49a0050da8d157d80fc55252f}
+        MYCELIUM_GIT_REF: ${MYCELIUM_GIT_REF:-009c771770710ee5e42b119544bbada5953b5d56}
     restart: unless-stopped
     # Fixes L-002 (STATE.md): standalone mode wraps its auto-generated
     # secrets file (/data/.secrets/token_secret.secret) with a key derived
