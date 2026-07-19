@@ -527,4 +527,50 @@ gateway-native (not proxied) endpoint without checking it accepts HEAD first.
 
 ## Todos
 
-- [ ] None yet — feature spec in progress
+- [ ] **conversation-tree-view** — spec written (`.specs/features/conversation-tree-view/`).
+  **T0 premise gate: PASSED (2026-07-19).** picoclaw's `durable/<key>.jsonl` lines
+  carry `created_at` as RFC-3339/ISO-8601 UTC with nanosecond precision + `Z`
+  (e.g. `"2026-07-16T19:39:06.983127587Z"`), comparable across sessions and
+  JS-parseable. Spine implemented at **per-visit (burst)** granularity — nodes
+  group consecutive same-conversation messages (the initial per-message dot was
+  too verbose); per-message timestamps are still the data source. **Code
+  complete, pending user build/test + commit.** Changes:
+  `history.go`/`history_test.go` (surface `created_at`), BFF `history/route.ts`
+  type, new `app/chat/conversation-tree.tsx`, toggle+switch in
+  `history-sidebar.tsx`. Follow-ups (same session): lane recycling + golden-angle
+  colors (many-conversations scaling); nodes show the message content (not the
+  chat name); clicking a node scrolls to that message via a transient `msg`
+  fragment anchor (`fragment.ts` + `chat-view.tsx`). Perf fix: composer now owns
+  the draft text (`composer.tsx`), so typing no longer re-renders the message
+  list; `sendMessage` split into sync-accept + detached async turn. Live update:
+  `chat-view.tsx` fires `notifyConversationsUpdated()` on turn completion and the
+  tree force-refetches the active conversation (no spinner flash). Animations:
+  FLIP (Web Animations API) for entering nodes + reordering rows, reduced-motion
+  aware, nodes keyed by visit start. Enrichment: `TagChip`/`ConversationEditor`
+  extracted to `app/chat/conversation-enrichment.tsx` and reused by list + tree;
+  alias shows as primary name with auto title below (smaller); tree node keeps
+  message primary + `alias · title` identity line + tag chips; tag color drives
+  the tree lane/dot/rail color; alias/tags editable from the tree via `onApply`.
+  View mode now persisted in the URL fragment (`hv=tree`) instead of localStorage
+  (`setHistoryView` in `fragment.ts`). Tree resilience: falls back to `updatedAt`
+  ordering when a message has no `created_at` (older proxy build), so it never
+  renders empty. `lib/db.ts` now parses `DATABASE_URL` with the WHATWG URL API
+  and passes discrete pg fields (avoids the legacy `url.parse()` → DEP0169).
+  Enrichment editor "Done" now commits pending edits (alias change + a filled
+  tag, incl. color) before closing, instead of discarding them — saving no longer
+  requires also clicking the check/plus icons (`conversation-enrichment.tsx`).
+  Enrichment refinements: list shows title (message-derived) primary + alias
+  below (smaller); tags are "mini etiqueta" chips (icon + name + required value,
+  optional color tints border/fill/text); tag value is now required. Tree keeps
+  the message as primary, alias as the secondary line, and shows alias + tags
+  only on each conversation's most-recent visit; selecting/hovering a thread
+  fades the others and boosts the focused thread's rail (`hoveredConv` state).
+  Chat backdrop: currently TESTING a photo at `/public/chat-bg.jpg` (cover +
+  `bg-bg/65` scrim); prior was a theme-aware gradient
+  (bg easing into a 5% accent tint toward the bottom); replaced the earlier
+  inline-SVG horizon, which read as clutter through the semi-transparent message
+  bands. Historical note below still describes the SVG version.
+  Original SVG version: — a tiny inline-SVG far horizon
+  (low sun/moon + three receding ridges + haze) painted with theme CSS vars so it
+  adapts to light/dark from one asset; mounted behind the chat column
+  (`relative isolate overflow-hidden`, backdrop `-z-10`), decorative/low-contrast.
