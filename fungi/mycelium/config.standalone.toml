@@ -339,6 +339,20 @@ methods = ["GET"]
 
 [[picoclaw-alpha.path]]
 group = "protected"
+path = "/v1/admin/registered-models"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST", "DELETE"]
+
+[[picoclaw-alpha.path]]
+group = "protected"
+path = "/v1/admin/registered-models/apply"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[picoclaw-alpha.path]]
+group = "protected"
 path = "/v1/admin/shared-secrets"
 secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
@@ -492,6 +506,20 @@ path = "/v1/admin/model/users"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
+
+[[picoclaw-beta.path]]
+group = "protected"
+path = "/v1/admin/registered-models"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST", "DELETE"]
+
+[[picoclaw-beta.path]]
+group = "protected"
+path = "/v1/admin/registered-models/apply"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
 
 [[picoclaw-beta.path]]
 group = "protected"

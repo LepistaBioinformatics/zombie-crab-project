@@ -63,27 +63,39 @@ nothing written.
 
 ## Cascade & precedence (proxy `internal/docker/manager.go`)
 
-picoclaw discovers workspace skills at `workspace/skills/<name>/SKILL.md`; the
-managed skill already binds at `workspace/skills/shared-content:ro`. Admin skills
-are **additive per-skill RO binds** at `workspace/skills/<name>:ro`.
+**Verified picoclaw skill discovery** (`pkg/skills/loader.go`): three fixed roots
+scanned **one level** (`os.ReadDir(root)` → `<root>/<name>/SKILL.md`), priority
+**workspace > global > builtin**. `workspace = <ws>/skills`; `global =
+~/.picoclaw/skills` = `<mountDest>/skills` (normally empty per-user — the template
+seeds `workspace/skills`, not the global root). Docker binds are fixed at
+container **create**, and admin writes must NOT recreate (that truncates the live
+transcript — `RestartScope` deliberately does stop/start only).
 
-- In `create`, after the managed-skill mounts, compute the **effective skill
-  set** for the container's `(tenant, subscription)`:
-  1. list subscription-scope skills of `S`;
-  2. add tenant-scope skills of `T` whose name is **not** already provided by
-     subscription (subscription-over-tenant precedence, FR-8);
-  3. skip the reserved name `shared-content`.
-- Ensure each source dir exists + chowned (mirror the tenant/subs shared-files
-  loop), then append one bind per skill:
-  `<hostSharedSkillsDir>/<name>:<mountDest>/workspace/skills/<name>:ro`.
-- **Propagation (FR-10):** editing an existing mounted skill's files is live
-  (RO bind reflects host writes; picoclaw mtime-tracks). Adding or removing a
-  skill *name* changes the bind set, so create/delete calls invoke the existing
-  `RestartScope(scope)` to stop/start affected containers with the new binds —
-  the same mechanism shared-files writes already use. No image rebuild.
-- **Collision with a user's own skill of the same name:** the admin RO bind at
-  `workspace/skills/<name>` takes precedence (governance) — documented; the
-  reserved `shared-content` name is additionally protected.
+Therefore admin skills use an **effective merged directory mounted whole at the
+global root**, mirroring the secrets `EffectiveSecretsDir` discipline (whole-dir
+RO mount → new entries appear live on the next stop/start, no recreate):
+
+- `config.EffectiveSkillsDir(root, tenantID, subsAccID)` — one merged dir per
+  `(tenant, subscription)`, shared by all users of that subscription.
+- `syncEffectiveSkills(scope)` materializes it: clear + copy each skill of the
+  **effective set** into `<effectiveSkillsDir>/<name>/` — subscription-scope
+  skills override tenant-scope by name (`mergeSkillNames`), reserved
+  `shared-content` skipped — then `chownTree`. (Copy, not symlink: symlink
+  targets outside the bind are invisible in the container.)
+- In `create`, `syncEffectiveSkills` for the key's scope, then mount it whole
+  read-only at the global root: `<effectiveSkillsHost>:<mountDest>/skills:ro`.
+  This is a nested RO bind (inside the per-user `hostDir` mount), same shape as
+  the existing managed-skill / workspace binds.
+- **Propagation (FR-10):** on any skill create/edit/delete, the handler calls
+  `syncEffectiveSkills(scope)` (updates the mounted dir on disk) then
+  `RestartScope(scope)` (stop/start of running containers → picoclaw re-scans
+  the global root and picks up added/removed/edited skills). Stopped/scale-to-zero
+  containers pick up the change on their next start (the dir is already mounted).
+  **No recreate, no transcript loss** — the exact secrets discipline.
+- **Precedence:** subscription > tenant > (picoclaw builtin). The user's own
+  `workspace/skills` still wins over the global (admin) root per picoclaw's
+  root priority; `shared-content` (managed) stays in `workspace/skills` and is
+  never shadowed.
 
 ## HTTP API (proxy `internal/httpapi/admin.go` + `handlers.go`)
 
