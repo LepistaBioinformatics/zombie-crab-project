@@ -261,6 +261,27 @@ methods = ["GET"]
 
 [[picoclaw-alpha.path]]
 group = "protected"
+path = "/v1/admin/models"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[picoclaw-alpha.path]]
+group = "protected"
+path = "/v1/admin/model"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "PUT", "DELETE"]
+
+[[picoclaw-alpha.path]]
+group = "protected"
+path = "/v1/admin/model/users"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[picoclaw-alpha.path]]
+group = "protected"
 path = "/v1/admin/shared-secrets"
 secretName = "picoclaw-alpha-authorization-header"
 acceptInsecureRouting = true
@@ -383,6 +404,27 @@ methods = ["GET"]
 [[picoclaw-beta.path]]
 group = "protected"
 path = "/v1/admin/skills/archive"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[picoclaw-beta.path]]
+group = "protected"
+path = "/v1/admin/models"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[picoclaw-beta.path]]
+group = "protected"
+path = "/v1/admin/model"
+secretName = "picoclaw-beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "PUT", "DELETE"]
+
+[[picoclaw-beta.path]]
+group = "protected"
+path = "/v1/admin/model/users"
 secretName = "picoclaw-beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
