@@ -128,3 +128,13 @@ Telegram / MS Teams channels.
   lane and each message is a dot, reconciling the agent's continuous per-session
   transcript with the web's recency-first list. Visualization only (no
   `parent_id`/fork). See `.specs/features/conversation-tree-view/`.
+- **canvas-timeline-view** (SPEC READY) — an alternative, graphics-forward
+  "Canvas" mode (workspace-level `Traditional | Canvas` toggle, `view=canvas` in
+  the fragment) whose sole view is a left→right timeline: one lane per
+  conversation on a shared time axis, activity bursts as dots (same colors as the
+  tree), an aggregate "agent pulse" strip above, and a pixel-art grid backdrop —
+  conveying the agent's intelligence evolving over time. Preview-on-click with
+  Solo + hand-off to the traditional chat. Webapp-only (reuses `created_at` from
+  conversation-tree-view; no proxy change). Feel-first prototype validated
+  (Timeline chosen over Deck/Tree metaphors). See
+  `.specs/features/canvas-timeline-view/`.
