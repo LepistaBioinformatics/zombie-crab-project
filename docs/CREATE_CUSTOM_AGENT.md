@@ -83,6 +83,16 @@ workspace/skills/<skill-name>/SKILL.md
 > **Deploy tip:** prepare your templates **before** anyone uses the instance, so
 > everyone is cloned from the final version.
 
+> **Auto-bootstrap (safety net).** If an agent's `data/templates/<name>/` is
+> missing at first provision, the proxy materializes a **default picoclaw
+> template embedded in its binary** so provisioning never fails on a wiped or
+> unseeded `data/`. That default is the stock picoclaw persona — **not** your
+> custom one. So for a custom agent you still create the template below (steps
+> 4.1–4.3); the bootstrap only guarantees a working baseline when you don't. To
+> change the embedded default itself, edit
+> `crab/crab-shell-proxy/internal/docker/defaulttemplate/<harness>/` (today:
+> `picoclaw`) and rebuild the proxy.
+
 ---
 
 ## 4. Step-by-step: add a custom agent

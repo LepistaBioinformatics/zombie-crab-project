@@ -152,216 +152,255 @@ target = "stdout"
 
 [api.services]
 
-[[picoclaw-alpha]]
+[[alpha]]
 host = "crab-shell-proxy:8080"
 protocol = "http"
 healthCheckPath = "/healthz"
+discoverable = true
+serviceType = "rest-api"
+isContextApi = false
+openapiPath = "/doc/openapi.json"
+capabilities = ["chat"]
+description = "PicoClaw agent 'alpha' - an OpenAI-compatible personal chat agent. Each user gets an isolated container; send chat via POST /v1/chat/completions."
 
-[[picoclaw-alpha.secret]]
-name = "picoclaw-alpha-authorization-header"
+[[alpha.secret]]
+name = "alpha-authorization-header"
 authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_ALPHA_TOKEN" } }
 
-[[picoclaw-alpha.path]]
+[[alpha.path]]
 group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
 path = "/v1/chat/completions"
-secretName = "picoclaw-alpha-authorization-header"
+secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["POST"]
 
-[[picoclaw-alpha.path]]
+[[alpha.path]]
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/models"
-secretName = "picoclaw-alpha-authorization-header"
+secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
 
-[[picoclaw-alpha.path]]
+[[alpha.path]]
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/sessions/history"
-secretName = "picoclaw-alpha-authorization-header"
+secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
 
-[[picoclaw-alpha.path]]
+[[alpha.path]]
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/sessions/resolve"
-secretName = "picoclaw-alpha-authorization-header"
+secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
 
-[[picoclaw-alpha.path]]
+[[alpha.path]]
 group = "protected"
 path = "/v1/subscriptions"
-secretName = "picoclaw-alpha-authorization-header"
+secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
 
-[[picoclaw-alpha.path]]
+[[alpha.path]]
 group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
 path = "/v1/secrets"
-secretName = "picoclaw-alpha-authorization-header"
+secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST", "DELETE"]
 
-[[picoclaw-alpha.path]]
+[[alpha.path]]
 group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
 path = "/v1/media"
-secretName = "picoclaw-alpha-authorization-header"
+secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST", "DELETE"]
 
-[[picoclaw-alpha.path]]
+[[alpha.path]]
 group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
 path = "/v1/memory"
-secretName = "picoclaw-alpha-authorization-header"
+secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "PUT"]
 
-[[picoclaw-alpha.path]]
+[[alpha.path]]
+# All /v1/admin/* endpoints share group=protected + this secret; the
+# proxy enforces the exact path+method per route. Collapsed to one
+# wildcard (mycelium matches via the wildmatch crate).
 group = "protected"
-path = "/v1/admin/scopes"
-secretName = "picoclaw-alpha-authorization-header"
+path = "/v1/admin/*"
+secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
-methods = ["GET"]
+methods = ["GET", "POST", "PUT", "DELETE"]
 
-[[picoclaw-alpha.path]]
-group = "protected"
-path = "/v1/admin/shared"
-secretName = "picoclaw-alpha-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET", "POST", "DELETE"]
-
-[[picoclaw-alpha.path]]
-group = "protected"
-path = "/v1/admin/shared/content"
-secretName = "picoclaw-alpha-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET"]
-
-[[picoclaw-alpha.path]]
-group = "protected"
-path = "/v1/admin/shared-secrets"
-secretName = "picoclaw-alpha-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET", "POST", "DELETE"]
-
-[[picoclaw-alpha.path]]
-group = "protected"
-path = "/v1/admin/users"
-secretName = "picoclaw-alpha-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET"]
-
-[[picoclaw-alpha.path]]
-group = "protected"
-path = "/v1/admin/users/files"
-secretName = "picoclaw-alpha-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET", "DELETE"]
-
-[[picoclaw-beta]]
+[[beta]]
 host = "crab-shell-proxy:8080"
 protocol = "http"
 healthCheckPath = "/healthz"
+discoverable = true
+serviceType = "rest-api"
+isContextApi = false
+openapiPath = "/doc/openapi.json"
+capabilities = ["chat"]
+description = "PicoClaw agent 'beta' - an OpenAI-compatible personal chat agent. Each user gets an isolated container; send chat via POST /v1/chat/completions."
 
-[[picoclaw-beta.secret]]
-name = "picoclaw-beta-authorization-header"
+[[beta.secret]]
+name = "beta-authorization-header"
 authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_BETA_TOKEN" } }
 
-[[picoclaw-beta.path]]
+[[beta.path]]
 group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
 path = "/v1/chat/completions"
-secretName = "picoclaw-beta-authorization-header"
+secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["POST"]
 
-[[picoclaw-beta.path]]
+[[beta.path]]
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/models"
-secretName = "picoclaw-beta-authorization-header"
+secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
 
-[[picoclaw-beta.path]]
+[[beta.path]]
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/sessions/history"
-secretName = "picoclaw-beta-authorization-header"
+secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
 
-[[picoclaw-beta.path]]
+[[beta.path]]
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/sessions/resolve"
-secretName = "picoclaw-beta-authorization-header"
+secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
 
-[[picoclaw-beta.path]]
+[[beta.path]]
 group = "protected"
 path = "/v1/subscriptions"
-secretName = "picoclaw-beta-authorization-header"
+secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
 
-[[picoclaw-beta.path]]
+[[beta.path]]
 group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
 path = "/v1/secrets"
-secretName = "picoclaw-beta-authorization-header"
+secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST", "DELETE"]
 
-[[picoclaw-beta.path]]
+[[beta.path]]
 group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
 path = "/v1/media"
-secretName = "picoclaw-beta-authorization-header"
+secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST", "DELETE"]
 
-[[picoclaw-beta.path]]
+[[beta.path]]
 group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
 path = "/v1/memory"
-secretName = "picoclaw-beta-authorization-header"
+secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "PUT"]
 
-[[picoclaw-beta.path]]
+[[beta.path]]
+# All /v1/admin/* endpoints share group=protected + this secret; the
+# proxy enforces the exact path+method per route. Collapsed to one
+# wildcard (mycelium matches via the wildmatch crate).
 group = "protected"
-path = "/v1/admin/scopes"
-secretName = "picoclaw-beta-authorization-header"
+path = "/v1/admin/*"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST", "PUT", "DELETE"]
+
+# ------------------------------------------------------------------------------
+# hermes-glm: a Nous Research hermes-agent instance (harness = "hermes" in
+# crab-shell-proxy/config.yaml), routed to the same crab-shell-proxy downstream.
+# crab-shell-proxy tells it apart via x-mycelium-service-name = "hermes-glm" and
+# drives the container over its OpenAI-compatible API server (:8642) instead of
+# the Pico Protocol. Same auth/role contract as the picoclaw services above: the
+# "hermes-glm" guest-role is auto-declared here; granting it to an account still
+# needs the Staff -> tenant -> subscription -> guest-invite chain (M3).
+# ------------------------------------------------------------------------------
+
+[[hermes-glm]]
+host = "crab-shell-proxy:8080"
+protocol = "http"
+healthCheckPath = "/healthz"
+discoverable = true
+serviceType = "rest-api"
+isContextApi = false
+openapiPath = "/doc/openapi.json"
+capabilities = ["chat"]
+description = "Hermes-agent (Nous Research, GLM via z.ai) - an OpenAI-compatible personal chat agent. Each user gets an isolated container; send chat via POST /v1/chat/completions."
+
+[[hermes-glm.secret]]
+name = "hermes-glm-authorization-header"
+authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_HERMES_GLM_TOKEN" } }
+
+[[hermes-glm.path]]
+group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
+path = "/v1/chat/completions"
+secretName = "hermes-glm-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[hermes-glm.path]]
+group = { protectedByRoles = [{ name = "hermes-glm" }] }
+path = "/v1/models"
+secretName = "hermes-glm-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
 
-[[picoclaw-beta.path]]
+[[hermes-glm.path]]
+group = { protectedByRoles = [{ name = "hermes-glm" }] }
+path = "/v1/sessions/history"
+secretName = "hermes-glm-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[hermes-glm.path]]
+group = { protectedByRoles = [{ name = "hermes-glm" }] }
+path = "/v1/sessions/resolve"
+secretName = "hermes-glm-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[hermes-glm.path]]
 group = "protected"
-path = "/v1/admin/shared"
-secretName = "picoclaw-beta-authorization-header"
+path = "/v1/subscriptions"
+secretName = "hermes-glm-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[hermes-glm.path]]
+group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
+path = "/v1/secrets"
+secretName = "hermes-glm-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST", "DELETE"]
 
-[[picoclaw-beta.path]]
-group = "protected"
-path = "/v1/admin/shared/content"
-secretName = "picoclaw-beta-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET"]
-
-[[picoclaw-beta.path]]
-group = "protected"
-path = "/v1/admin/shared-secrets"
-secretName = "picoclaw-beta-authorization-header"
+[[hermes-glm.path]]
+group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
+path = "/v1/media"
+secretName = "hermes-glm-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST", "DELETE"]
 
-[[picoclaw-beta.path]]
-group = "protected"
-path = "/v1/admin/users"
-secretName = "picoclaw-beta-authorization-header"
+[[hermes-glm.path]]
+group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
+path = "/v1/memory"
+secretName = "hermes-glm-authorization-header"
 acceptInsecureRouting = true
-methods = ["GET"]
+methods = ["GET", "PUT"]
 
-[[picoclaw-beta.path]]
+[[hermes-glm.path]]
+# All /v1/admin/* endpoints share group=protected + this secret; the
+# proxy enforces the exact path+method per route. Collapsed to one
+# wildcard (mycelium matches via the wildmatch crate).
 group = "protected"
-path = "/v1/admin/users/files"
-secretName = "picoclaw-beta-authorization-header"
+path = "/v1/admin/*"
+secretName = "hermes-glm-authorization-header"
 acceptInsecureRouting = true
-methods = ["GET", "DELETE"]
+methods = ["GET", "POST", "PUT", "DELETE"]

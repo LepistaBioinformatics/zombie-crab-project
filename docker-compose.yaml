@@ -105,11 +105,17 @@ services:
       CRAB_WEBHOOK_SECRET: ${CRAB_WEBHOOK_SECRET}
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
       MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
+      # hermes-glm agent (harness: hermes): the same shared bearer mycelium
+      # injects and the proxy validates.
+      MYC_HERMES_GLM_TOKEN: ${MYC_HERMES_GLM_TOKEN}
       # Per-instance LLM API keys (referenced by config.yaml's per-agent
       # model.apiKeyEnv). Real values live only in .env (gitignored) or your
       # secrets manager -- never in config.yaml or the image.
       PICOCLAW_ALPHA_API_KEY: ${PICOCLAW_ALPHA_API_KEY}
       PICOCLAW_BETA_API_KEY: ${PICOCLAW_BETA_API_KEY}
+      # z.ai/GLM key for hermes-glm (config.yaml model.apiKeyEnv). The proxy
+      # injects it into the hermes container as GLM_API_KEY (model.keyEnvName).
+      PROXY_GLM_API_KEY: ${PROXY_GLM_API_KEY}
     # TEMPORARY (direct-to-proxy testing of tenant-scoped-workspaces): the proxy
     # normally publishes no host port (mycelium-gateway is the only entry). This
     # exposes it on :18080 so first calls can be driven directly with a
@@ -156,6 +162,7 @@ services:
       # only in .env (gitignored), never in the committed TOML.
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
       MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
+      MYC_HERMES_GLM_TOKEN: ${MYC_HERMES_GLM_TOKEN}
       MYC_STANDALONE_BOOTSTRAP_SECRET: ${MYC_STANDALONE_BOOTSTRAP_SECRET}
     volumes:
       - mycelium-data:/data

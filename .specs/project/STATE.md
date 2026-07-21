@@ -1,6 +1,6 @@
 # State
 
-**Last Updated:** 2026-07-16T00:00:00-03:00
+**Last Updated:** 2026-07-20T00:00:00-03:00
 **Current Work:** chat-webapp UI refactor (`chat-ui-material-refactor`) -- MUI+Emotion fully ripped
 out, replaced with Tailwind v4 + class-variance-authority; two-rail shell (nav drawer + conditional
 history drawer + chat view) on a single `/chat` route; workspaces deduped/grouped by tenant→account→
@@ -11,6 +11,30 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-011: picoclaw has NO file-based agent/subagent injection — agents are config-registered (2026-07-20)
+
+**Finding (verified against upstream `sipeed/picoclaw` source + docs):** In picoclaw, **skills**
+are discovered from directories — `~/.picoclaw/workspace/skills/<name>/SKILL.md` (workspace) →
+`~/.picoclaw/skills` (global) → builtin — so a skill is droppable as a read-only directory and fits
+the `admin-shared-content` cascade pattern exactly. **Agents/subagents are NOT files.** They are
+entities **registered via `config.json`** (the `agents` block: id/name/description, per-agent
+workspace, `agents.dispatch.rules`, and `spawn` permissions); a "subagent" is another configured
+agent a parent may `spawn` (`pkg/agent/discovery.go` `AgentRegistry`, `ListSpawnableAgents`). There
+is **no `.claude/agents/*.md` (Claude-Code-style) discovery directory** in picoclaw. In
+`crab-shell-proxy` each agent = its own per-user container.
+
+**Consequence:** "inject a harness-native agent via the admin screen, like files/secrets" does **not**
+map onto the read-only file-cascade. It would require per-tenant/subscription **merging of the
+picoclaw `agents` config** (+ workspace/routing/spawn provisioning) — a much larger feature that
+overlaps the proxy's existing `agent-customization`/`shared-workspaces` specs and the pending Go
+mycelium SDK dependency.
+
+**Decision:** The `admin-shared-skills` feature (2026-07-20) ships **skills only** at tenant/
+subscription scope (clean fit). **Admin-provisioned agents are explicitly deferred** to a separate
+future feature with its own design. Do not attempt to model agents as injectable markdown files.
+
+Sources: github.com/sipeed/picoclaw; deepwiki.com/sipeed/picoclaw/2.2-configuration-guide.
 
 ### AD-010: chat-webapp migrated MUI+Emotion → Tailwind v4 + cva; two-rail workspace shell (2026-07-16)
 
@@ -132,6 +156,15 @@ magic-link signin works again. The remaining M3 work (tenant -> subscription -> 
 invite -> `protectedByRoles` cutover) is unchanged, still not done.
 
 ---
+
+### L-ENV: `yarn build`/`next dev` blocked locally by root-owned `.next` (2026-07-20)
+The webapp's `.next/` holds files owned by `root` from a prior in-container build,
+so `yarn build` and `next dev` fail with `EACCES: unlink .next/server/...` and
+can't be removed without sudo. Use `npx tsc --noEmit` for the type-check gate and
+`yarn test` (vitest) for tests. `next lint` is also unconfigured (interactive
+prompt). Runtime/visual verification of webapp features therefore needs the full
+stack (docker-compose + magic-link) or a `.next` chown. Surfaced while
+implementing canvas-timeline-view.
 
 ### AD-007 (superseded by AD-008): Migrated mycelium-gateway to base mode (Postgres) to create the first Staff account (2026-07-13)
 
