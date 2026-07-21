@@ -85,6 +85,17 @@ workspace/skills/<nome-da-skill>/SKILL.md
 > **Dica de deploy:** prepare seus templates **antes** de alguém usar a
 > instância, para que todos sejam clonados da versão final.
 
+> **Auto-bootstrap (rede de segurança).** Se o `data/templates/<name>/` de um
+> agente estiver ausente no primeiro provisionamento, o proxy materializa um
+> **template picoclaw default embutido no binário**, para que o provisionamento
+> nunca falhe num `data/` apagado ou não-semeado. Esse default é a persona
+> picoclaw padrão — **não** a sua customizada. Então, para um agente customizado
+> você ainda cria o template abaixo (passos 4.1–4.3); o bootstrap só garante uma
+> baseline funcional quando você não o faz. Para alterar o próprio default
+> embutido, edite
+> `crab/crab-shell-proxy/internal/docker/defaulttemplate/<harness>/` (hoje:
+> `picoclaw`) e rebuilde o proxy.
+
 ---
 
 ## 4. Passo-a-passo: adicionar um agente customizado

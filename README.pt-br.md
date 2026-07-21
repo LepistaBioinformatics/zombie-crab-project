@@ -127,20 +127,26 @@ git clone --recurse-submodules https://github.com/LepistaBioinformatics/zombie-c
 cd zombie-crab-project
 ```
 
-**2. Semeie um template config-only por agente (não-interativo).** O PicoClaw
-gera um `config.json` default no primeiro boot num dir vazio e sai — sem prompts:
+**2. (Opcional) Pré-semeie um template por agente.** Você pode pular — o proxy
+faz **auto-bootstrap** de um template picoclaw default na primeira vez que um
+usuário conversa, caso `data/templates/<agente>/` não exista; então um checkout
+novo já funciona. Pré-semeie só quando quiser uma **persona/skills customizadas**
+desde o início:
 
 ```bash
 for a in alpha beta; do
-  mkdir -p "data/agents/templates/$a"
-  docker run --rm -v "$PWD/data/agents/templates/$a":/root/.picoclaw \
+  mkdir -p "data/templates/$a"
+  docker run --rm -v "$PWD/data/templates/$a":/root/.picoclaw \
     docker.io/sipeed/picoclaw:latest >/dev/null 2>&1 || true
 done
 ```
 
-O crab-shell-proxy clona esse template no dir de cada novo usuário e injeta o
-provider/model, um token de canal pico novo e a chave de API no
-provisionamento — então o template continua um scaffold cru e sem segredos.
+O crab-shell-proxy clona o template (o seu ou o default embutido) no dir de cada
+novo usuário e injeta o provider/model, um token de canal pico novo e a chave de
+API no provisionamento — então o template continua um scaffold cru e sem
+segredos. Veja [Criando um Agente Customizado](./docs/CREATE_CUSTOM_AGENT.pt-br.md)
+para moldar um template, e [Rodando e resetando do zero](#rodando-e-resetando-do-zero)
+para o comportamento de auto-recuperação.
 
 **3. Configure o `.env`.** Copie `.env.example` para `.env` e defina:
 
@@ -181,6 +187,44 @@ o cold-start do *seu próprio* container; o `docker ps` mostrará
 > (`http://localhost:${MYCELIUM_WEBAPP_PORT:-8081}`) — a UI de admin do próprio
 > Mycelium — via o fluxo Staff → tenant → subscription → guest-invite.
 
+## Rodando e resetando do zero
+
+O passo-a-passo acima sobe uma stack limpa. Para **resetar um ambiente
+existente do zero** — apagar todo agente por-usuário e todos os templates, e
+deixar a stack se reconstruir — derrube a stack, remova os containers que o
+proxy criou, apague o estado em disco e rebuilde:
+
+```bash
+docker compose down
+docker rm -f $(docker ps -aq --filter 'name=picoclaw') 2>/dev/null   # agentes criados fora do compose
+
+# o estado em disco pertence aos agentes (não-root) spawnados -> sudo
+sudo rm -rf data/templates data/tenants data/effective-secrets \
+            data/effective-skills data/user-secrets data/registered-models
+
+docker compose up -d --build   # --build é OBRIGATÓRIO: o template de fallback é embutido no binário do proxy
+```
+
+Depois logue e mande uma mensagem — o proxy re-provisiona seu usuário do zero. O
+volume do Postgres (contas/roles do Mycelium) é **separado** e não é apagado,
+então seu login sobrevive; adicione `-v` ao `docker compose down` só se quiser
+resetar contas também (aí você refaz o bootstrap de Staff).
+
+**Por que não é preciso recuperação manual:** o proxy faz **auto-bootstrap** de
+um `data/templates/<agente>/` ausente a partir de um template default **embutido
+no binário**, então um `data/` apagado se recupera sozinho no próximo chat — sem
+`picoclaw onboard`. O modelo e a chave por-agente são reaplicados do
+`config.yaml` + `.env` em todo provisionamento, então o agente também volta a
+responder na hora. Para customizar o default embutido, edite
+`crab/crab-shell-proxy/internal/docker/defaulttemplate/<harness>/` (hoje:
+`picoclaw`) e rebuilde.
+
+## Administração dia-a-dia
+
+Gerenciar modelos, skills compartilhadas, secrets compartilhados, arquivos,
+membros e branding é feito pela **área de admin do chat-webapp** — veja o
+[Guia do Administrador](./docs/ADMIN_GUIDE.pt-br.md).
+
 ## O que há neste repositório
 
 ```
@@ -194,15 +238,18 @@ fungi/                     # o lado mycelium (gateway + sua UI de admin)
     Dockerfile.standalone  # builda o mycelium-api do git upstream (sem fonte local)
     config.standalone.toml # rotas do gateway para picoclaw-alpha / picoclaw-beta
   mycelium-webapp/         # Dockerfile da UI de admin do Mycelium (do git upstream)
-docs/                      # guias de tarefas (ex.: criar um agente customizado)
-data/agents/               # templates por-agente + volumes por-usuário (gitignored)
+docs/                      # guias de tarefas (criar um agente customizado · guia de admin)
+data/                      # templates por-agente + volumes por-usuário + material compartilhado (gitignored)
+  templates/<agente>/      #   template clonado em cada novo usuário (auto-bootstrap se ausente)
+  tenants/…                #   volumes isolados por-(agente,usuário)
 ```
 
 O `crab-shell-proxy` é um submódulo com seu próprio
 [README](./crab/crab-shell-proxy/README.md) detalhando o modelo de isolamento.
 
-A pasta [`docs/`](./docs/) reúne guias para tarefas comuns — comece por
-[**Criando um Agente Customizado**](./docs/CREATE_CUSTOM_AGENT.pt-br.md).
+A pasta [`docs/`](./docs/) reúne guias para tarefas comuns —
+[**Criando um Agente Customizado**](./docs/CREATE_CUSTOM_AGENT.pt-br.md) e o
+[**Guia do Administrador**](./docs/ADMIN_GUIDE.pt-br.md) (modelos, skills, secrets, membros).
 
 ## Antes de levar isto para produção
 

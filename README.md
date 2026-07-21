@@ -126,21 +126,25 @@ git clone --recurse-submodules https://github.com/LepistaBioinformatics/zombie-c
 cd zombie-crab-project
 ```
 
-**2. Seed one config-only template per agent (non-interactive).** PicoClaw
-scaffolds a default `config.json` on first run in an empty dir and exits — no
-prompts:
+**2. (Optional) Pre-seed a template per agent.** You can skip this — the proxy
+**auto-bootstraps** a default picoclaw template the first time a user chats if
+`data/templates/<agent>/` is missing, so a fresh checkout works out of the box.
+Pre-seed only when you want a **custom persona/skills** from the start:
 
 ```bash
 for a in alpha beta; do
-  mkdir -p "data/agents/templates/$a"
-  docker run --rm -v "$PWD/data/agents/templates/$a":/root/.picoclaw \
+  mkdir -p "data/templates/$a"
+  docker run --rm -v "$PWD/data/templates/$a":/root/.picoclaw \
     docker.io/sipeed/picoclaw:latest >/dev/null 2>&1 || true
 done
 ```
 
-crab-shell-proxy clones this template into each new user's dir and injects the
-provider/model, a fresh pico-channel token, and the API key at provisioning
-time — so the template stays a bare, secret-free scaffold.
+crab-shell-proxy clones the template (yours or the embedded default) into each
+new user's dir and injects the provider/model, a fresh pico-channel token, and
+the API key at provisioning time — so the template stays a bare, secret-free
+scaffold. See [Creating a Custom Agent](./docs/CREATE_CUSTOM_AGENT.md) to shape
+a template, and [Running and resetting from scratch](#running-and-resetting-from-scratch)
+for the self-heal behavior.
 
 **3. Configure `.env`.** Copy `.env.example` to `.env` and set:
 
@@ -181,6 +185,44 @@ cold-starts *your own* container; `docker ps` will show
 > (`http://localhost:${MYCELIUM_WEBAPP_PORT:-8081}`) — Mycelium's own admin UI —
 > via the Staff → tenant → subscription → guest-invite flow.
 
+## Running and resetting from scratch
+
+The walkthrough above brings up a clean stack. To **reset an existing
+environment to zero** — wipe every per-user agent and all templates, and let the
+stack rebuild itself — stop the stack, remove the proxy-spawned containers, wipe
+the on-disk state, and rebuild:
+
+```bash
+docker compose down
+docker rm -f $(docker ps -aq --filter 'name=picoclaw') 2>/dev/null   # agents spawned outside compose
+
+# on-disk state is owned by the spawned (non-root) agents -> sudo
+sudo rm -rf data/templates data/tenants data/effective-secrets \
+            data/effective-skills data/user-secrets data/registered-models
+
+docker compose up -d --build   # --build is REQUIRED: the fallback template is baked into the proxy binary
+```
+
+Then sign in and send a message — the proxy re-provisions your user from
+scratch. The Postgres volume (Mycelium accounts/roles) is **separate** and is
+not wiped, so your login survives; add `-v` to `docker compose down` only if you
+also want to reset accounts (you'd then re-run the Staff bootstrap).
+
+**Why no manual recovery is needed:** the proxy **auto-bootstraps** a missing
+`data/templates/<agent>/` from a default template **embedded in its binary**, so
+a wiped `data/` self-heals on the next chat — no `picoclaw onboard` step. The
+per-agent model and key are re-applied from `config.yaml` + `.env` on every
+provision, so the agent also responds again immediately. To customize the
+embedded default, edit
+`crab/crab-shell-proxy/internal/docker/defaulttemplate/<harness>/` (today:
+`picoclaw`) and rebuild.
+
+## Day-2 administration
+
+Managing models, shared skills, shared secrets, files, members, and branding is
+done from the **chat-webapp admin area** — see the
+[Admin Guide](./docs/ADMIN_GUIDE.md).
+
 ## What's in this repo
 
 ```
@@ -194,15 +236,18 @@ fungi/                     # the mycelium side (gateway + its admin UI)
     Dockerfile.standalone  # builds mycelium-api from upstream git (no local source)
     config.standalone.toml # gateway routes for picoclaw-alpha / picoclaw-beta
   mycelium-webapp/         # Dockerfile for Mycelium's own admin UI (from upstream git)
-docs/                      # task guides (e.g. creating a custom agent)
-data/agents/               # per-agent templates + per-user volumes (gitignored)
+docs/                      # task guides (creating a custom agent · admin guide)
+data/                      # per-agent templates + per-user volumes + shared material (gitignored)
+  templates/<agent>/       #   template cloned into each new user (auto-bootstrapped if missing)
+  tenants/…                #   per-(agent,user) isolated volumes
 ```
 
 `crab-shell-proxy` is a submodule with its own
 [README](./crab/crab-shell-proxy/README.md) going deeper on the isolation model.
 
-The [`docs/`](./docs/) folder holds guides for common tasks — start with
-[**Creating a Custom Agent**](./docs/CREATE_CUSTOM_AGENT.md).
+The [`docs/`](./docs/) folder holds guides for common tasks —
+[**Creating a Custom Agent**](./docs/CREATE_CUSTOM_AGENT.md) and the
+[**Admin Guide**](./docs/ADMIN_GUIDE.md) (models, skills, secrets, members).
 
 ## Before you take this to production
 
