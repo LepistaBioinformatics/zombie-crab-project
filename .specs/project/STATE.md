@@ -157,6 +157,15 @@ invite -> `protectedByRoles` cutover) is unchanged, still not done.
 
 ---
 
+### L-ENV: `yarn build`/`next dev` blocked locally by root-owned `.next` (2026-07-20)
+The webapp's `.next/` holds files owned by `root` from a prior in-container build,
+so `yarn build` and `next dev` fail with `EACCES: unlink .next/server/...` and
+can't be removed without sudo. Use `npx tsc --noEmit` for the type-check gate and
+`yarn test` (vitest) for tests. `next lint` is also unconfigured (interactive
+prompt). Runtime/visual verification of webapp features therefore needs the full
+stack (docker-compose + magic-link) or a `.next` chown. Surfaced while
+implementing canvas-timeline-view.
+
 ### AD-007 (superseded by AD-008): Migrated mycelium-gateway to base mode (Postgres) to create the first Staff account (2026-07-13)
 
 **Decision:** Replaced `standalone` (SQLite) with `base` mode (Postgres, default `postgres-backend`
