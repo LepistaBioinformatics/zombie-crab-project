@@ -1,5 +1,18 @@
 # multi-harness-support Specification
 
+**Status (2026-07-21):** P1 "chat works with a Hermes-backed agent" slice **implemented** in
+`crab-shell-proxy` (working tree; not yet committed). Implementation design/tasks live in the
+submodule: `crab/crab-shell-proxy/.specs/features/multi-harness-support/{design.md,tasks.md}`.
+`go build`/`go vet` green; new hermes turner unit tests pass; the `internal/docker` chown tests
+fail only on a pre-existing sandbox `chown` permission limit (not a regression); live E2E is
+operator-gated.
+
+**Project changes since this spec was written:** the proxy advanced to model-registry /
+model-override / auto-bootstrap, and already scaffolded harness-awareness
+(`defaulttemplate/<harness>/`, `materializeDefaultTemplate(dst, harness, user)` with a "thread
+the harness once multi-harness lands" TODO) — the implementation builds on that seam. New config
+surface: `Agent.harness`, `ModelConfig.baseUrl` + `keyEnvName`, `Config.hermesImage`.
+
 ## Problem Statement
 
 `crab-shell-proxy` orchestrates one agent runtime — **picoclaw** — and its coupling is baked into
@@ -260,7 +273,17 @@ config + a small profile, so the seam proves general, not Hermes-specific.
 | MHS-20 | Edge: startup-deadline / single-flight / API_SERVER_KEY / state.db-corrupt / daemon-down | - | Pending |
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
-**Coverage:** 20 total, 0 mapped to tasks ⚠️ (spec phase)
+**Coverage (2026-07-21):** MHS-01,02,05,06,07,08,09,10,11,12,13,14,15 — **Implemented** in the
+submodule P1 slice (build/vet green; hermes turner unit-tested; picoclaw path exercised at the
+httpapi layer, manager-level assertions compile but don't execute in-sandbox due to the pre-existing
+`chown` limit; live E2E operator-gated). Deferred: MHS-16,17,18 (lifecycle + Hermes history),
+MHS-19 (further harnesses), MHS-20 edges partially (startup-deadline/single-flight reused from
+picoclaw; API_SERVER_KEY ≥8 satisfied by the 48-char generated key).
+
+**Known follow-up risk:** the Hermes model reaches its container via `agent.Model`
+(`baseUrl`/`keyEnvName` intact) on the P1 path. If a future Hermes model-override reconstructs a
+provider/name-only `ModelConfig`, it would drop `base_url`/`keyEnvName` and silently break — wire
+those through before enabling model-override for Hermes.
 
 ---
 
