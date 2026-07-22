@@ -1,73 +1,51 @@
 # =============================================================================
-# zombie-crab-project -- Dokploy / Traefik override (OPT-IN, not used by default)
+# zombie-crab-project -- SELF-CONTAINED compose for DOKPLOY (production/Traefik)
 # =============================================================================
-# The base docker-compose.yaml stays the default mode: published host ports, no
-# Traefik, no external network. Nothing about local dev changes:
+# A single, standalone file (base + prod + dokploy already merged in) meant to be
+# deployed by Dokploy directly -- NOT layered with -f. Point Dokploy's Compose
+# service at THIS repo (Git) so the source is present: mycelium-webapp is BUILT
+# here (its API URL is baked at build time from ${MYCELIUM_DOMAIN}) and
+# mycelium-gateway mounts ./deploy/dokploy/config.base.toml. Everything else runs
+# from published images. All values come from the environment -- set them in
+# Dokploy's Environment section (see deploy/dokploy/.env.example for the full list).
 #
-#     docker compose up -d                      # default -- exactly as before
+# Prerequisites (NOT solved by this file):
+#   - Dokploy must build from the cloned repo (the ./fungi/* build context and
+#     config mount are relative to this file). fungi/* live in THIS repo (not
+#     submodules); crab/* stay as published images, so submodules aren't needed.
+#   - Edit deploy/dokploy/config.base.toml (domainUrl / allowedOrigins /
+#     ►►► REPLACE lines) to your https://${MYCELIUM_DOMAIN} / *_DOMAIN origins.
+#   - CRAB_HOST_DATA_ROOT: set to an ABSOLUTE host path. crab-shell-proxy mounts
+#     the host Docker socket and spawns sibling picoclaw containers bind-mounting
+#     subdirs of this root, which must be pre-seeded with data/templates/<agent>.
+#   - dokploy-network is external (Dokploy owns it) and must already exist.
+#   - After the FIRST up (base/Postgres has no auto-migration): apply mycelium's
+#     postgres/sql/up.sql once against mycelium-postgres -- see README.
 #
-# Enable Traefik ingress (Dokploy) by LAYERING this override on top of the base:
-#
-#     docker compose -f docker-compose.yaml -f docker-compose.dokploy.yaml up -d
-#
-# In Dokploy's "Compose" service, point the deploy at BOTH files (base first,
-# this one second) so the override wins. This is the real equivalent of a
-# "dokploy profile": opt-in, and the base file is left untouched.
-#
-# Per web-facing service, relative to the base, this override:
-#   - attaches the container to Dokploy's external `dokploy-network` (Traefik's
-#     network), in ADDITION to the stack-internal zombie_net;
-#   - adds Traefik router/service labels routing a public domain -> the
-#     container's internal port;
-#   - REMOVES the published host port via `ports: !reset []` so the only ingress
-#     is Traefik. `!reset` is REQUIRED: Compose CONCATENATES `ports` across
-#     files, so a plain `ports: []` would leave the base's published port in
-#     place. `!reset` needs Docker Compose >= v2.24.
-#
-# Domains, entrypoint and cert resolver are parametrized in .env (see the
-# "Dokploy / Traefik" section of .env.example). They are only read in this mode.
-#
-# NOT handled here -- mycelium's config is baked into its image, not env-driven:
-#   fungi/mycelium/config.standalone.toml still has
-#       domainUrl      = "http://localhost:8080"
-#       allowedOrigins = ["http://localhost:8080", "http://localhost:8081"]
-#   Behind real domains, magic-link URLs and the mycelium-webapp SPA's CORS will
-#   break until those point at https://${MYCELIUM_DOMAIN} /
-#   https://${MYCELIUM_WEBAPP_DOMAIN}. That's a separate change to the TOML (or a
-#   dokploy config variant swapped in via SETTINGS_PATH) -- see README.
+# Local/dev and the layered workflow are unchanged: docker-compose.yaml (default)
+# and docker-compose.prod.yaml still exist and are used as before.
 # =============================================================================
-
+name: zombie-crab-project
 networks:
-  # Dokploy creates and owns this; it must already exist on the host. Declared
-  # external so this override never tries to create it (and so the base file,
-  # used without this override, never references it at all).
   dokploy-network:
     external: true
-
+    name: dokploy-network
+  zombie_net:
+    driver: bridge
+    name: zombie_net
 services:
-  crab-shell-proxy:
-    # Base publishes a temporary 127.0.0.1:18080 debug port. Drop it in Dokploy
-    # mode: the proxy is never a public ingress -- only mycelium-gateway is.
-    ports: !reset []
-
-  mycelium-gateway:
-    networks:
-      - zombie_net
-      - dokploy-network
-    ports: !reset []
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=dokploy-network
-      - traefik.http.routers.zombie-mycelium.rule=Host(`${MYCELIUM_DOMAIN}`)
-      - traefik.http.routers.zombie-mycelium.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
-      - traefik.http.routers.zombie-mycelium.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
-      - traefik.http.services.zombie-mycelium.loadbalancer.server.port=8080
-
   chat-webapp:
-    networks:
-      - zombie_net
-      - dokploy-network
-    ports: !reset []
+    depends_on:
+      chat-webapp-postgres:
+        condition: service_healthy
+        required: true
+      mycelium-gateway:
+        condition: service_healthy
+        required: true
+    environment:
+      DATABASE_URL: postgresql://${CHAT_WEBAPP_DB_USER:-chatwebapp}:${CHAT_WEBAPP_DB_PASSWORD:-chatwebapp}@chat-webapp-postgres:5432/${CHAT_WEBAPP_DB_NAME:-chatwebapp}
+      MYCELIUM_INTERNAL_URL: http://mycelium-gateway:8080
+    image: ghcr.io/lepistabioinformatics/crab-exoskeleton-webapp:${CHAT_WEBAPP_TAG:-latest}
     labels:
       - traefik.enable=true
       - traefik.docker.network=dokploy-network
@@ -75,18 +53,160 @@ services:
       - traefik.http.routers.zombie-chat.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
       - traefik.http.routers.zombie-chat.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
       - traefik.http.services.zombie-chat.loadbalancer.server.port=3000
-
+    networks:
+      dokploy-network: null
+      zombie_net: null
+    restart: unless-stopped
+  chat-webapp-postgres:
+    environment:
+      POSTGRES_DB: ${CHAT_WEBAPP_DB_NAME:-chatwebapp}
+      POSTGRES_PASSWORD: ${CHAT_WEBAPP_DB_PASSWORD:-chatwebapp}
+      POSTGRES_USER: ${CHAT_WEBAPP_DB_USER:-chatwebapp}
+    healthcheck:
+      interval: 5s
+      retries: 20
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${CHAT_WEBAPP_DB_USER:-chatwebapp}
+      timeout: 5s
+    image: postgres:16-alpine
+    networks:
+      zombie_net: null
+    restart: unless-stopped
+    volumes:
+      - source: chat-webapp-postgres-data
+        target: /var/lib/postgresql/data
+        type: volume
+        volume: {}
+  crab-shell-proxy:
+    environment:
+      CRAB_CONTAINER_DATA_ROOT: /data
+      CRAB_HOST_DATA_ROOT: ${CRAB_HOST_DATA_ROOT:-${PWD}/data}
+      CRAB_NETWORK: zombie_net
+      CRAB_WEBHOOK_SECRET: ${CRAB_WEBHOOK_SECRET}
+      MYC_HERMES_GLM_TOKEN: ${MYC_HERMES_GLM_TOKEN}
+      MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
+      MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
+      PICOCLAW_ALPHA_API_KEY: ${PICOCLAW_ALPHA_API_KEY}
+      PICOCLAW_BETA_API_KEY: ${PICOCLAW_BETA_API_KEY}
+      PROXY_GLM_API_KEY: ${PROXY_GLM_API_KEY}
+    healthcheck:
+      interval: 15s
+      retries: 10
+      start_period: 10s
+      test:
+        - CMD
+        - wget
+        - -q
+        - -O
+        - /dev/null
+        - http://127.0.0.1:8080/healthz
+      timeout: 5s
+    image: ghcr.io/lepistabioinformatics/crab-shell-proxy:${CRAB_SHELL_PROXY_TAG:-latest}
+    networks:
+      zombie_net: null
+    restart: unless-stopped
+    volumes:
+      - bind:
+          create_host_path: true
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        type: bind
+      - type: bind
+        source: ${CRAB_HOST_DATA_ROOT:-${PWD}/data}
+        target: /data
+        bind:
+          create_host_path: true
+      # Deploy-owned agent catalog, overriding the image's baked config.yaml so
+      # operators can customize agents (e.g. drop hermes-glm) without a rebuild.
+      - type: bind
+        source: ./deploy/dokploy/crab-shell-proxy.config.yaml
+        target: /etc/crab-shell-proxy/config.yaml
+        read_only: true
+  mycelium-gateway:
+    depends_on:
+      crab-shell-proxy:
+        condition: service_healthy
+        required: true
+      mycelium-postgres:
+        condition: service_healthy
+        required: true
+    environment:
+      - MYC_HERMES_GLM_TOKEN=${MYC_HERMES_GLM_TOKEN}
+      - MYC_PICOCLAW_ALPHA_TOKEN=${MYC_PICOCLAW_ALPHA_TOKEN}
+      - MYC_PICOCLAW_BETA_TOKEN=${MYC_PICOCLAW_BETA_TOKEN}
+      - MYC_STANDALONE_BOOTSTRAP_SECRET=${MYC_STANDALONE_BOOTSTRAP_SECRET}
+      - MYC_BASE_DATABASE_URL=postgres://${MYC_DB_USER:-mycelium}:${MYC_DB_PASSWORD}@mycelium-postgres:5432/${MYC_DB_NAME:-mycelium}
+      - MYC_BASE_HMAC_SECRET=${MYC_BASE_HMAC_SECRET}
+      - MYC_BASE_JWT_SECRET=${MYC_BASE_JWT_SECRET}
+      - MYC_BASE_TOKEN_SECRET=${MYC_BASE_TOKEN_SECRET}
+      - MYC_SMTP_HOST=${MYC_SMTP_HOST:-smtp.gmail.com}
+      - MYC_SMTP_PASSWORD=${MYC_SMTP_PASSWORD}
+      - MYC_SMTP_USERNAME=${MYC_SMTP_USERNAME}
+      - SETTINGS_PATH=/home/config.toml
+    healthcheck:
+      interval: 15s
+      retries: 10
+      start_period: 10s
+      test:
+        - CMD
+        - wget
+        - -q
+        - -O
+        - /dev/null
+        - http://127.0.0.1:8080/health
+      timeout: 5s
+    hostname: mycelium-gateway
+    image: ghcr.io/lepistabioinformatics/mycelium:${MYCELIUM_IMAGE_TAG:-9.0.0-rc.7}
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.zombie-mycelium.rule=Host(`${MYCELIUM_DOMAIN}`)
+      - traefik.http.routers.zombie-mycelium.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.zombie-mycelium.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.services.zombie-mycelium.loadbalancer.server.port=8080
+    networks:
+      dokploy-network: null
+      zombie_net: null
+    restart: unless-stopped
+    volumes:
+      - source: mycelium-data
+        target: /data
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: ./deploy/dokploy/config.base.toml
+        target: /home/config.toml
+        type: bind
+  mycelium-postgres:
+    environment:
+      POSTGRES_DB: ${MYC_DB_NAME:-mycelium}
+      POSTGRES_PASSWORD: ${MYC_DB_PASSWORD}
+      POSTGRES_USER: ${MYC_DB_USER:-mycelium}
+    healthcheck:
+      interval: 5s
+      retries: 20
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${MYC_DB_USER:-mycelium}
+      timeout: 5s
+    image: postgres:16-alpine
+    networks:
+      zombie_net: null
+    restart: unless-stopped
+    volumes:
+      - source: mycelium-postgres-data
+        target: /var/lib/postgresql/data
+        type: volume
+        volume: {}
   mycelium-webapp:
     build:
       args:
-        # Baked into the SPA at build time -- must be the PUBLIC mycelium URL in
-        # Dokploy mode, not localhost (this is a client-side SPA; the browser
-        # calls mycelium-gateway directly). Overrides the base build arg.
-        VITE_MYCELIUM_API_URL: https://${MYCELIUM_DOMAIN}
-    networks:
-      - zombie_net
-      - dokploy-network
-    ports: !reset []
+        - VITE_MYCELIUM_API_URL=https://${MYCELIUM_DOMAIN}
+      context: ./fungi/mycelium-webapp
+      dockerfile: Dockerfile
     labels:
       - traefik.enable=true
       - traefik.docker.network=dokploy-network
@@ -94,3 +214,14 @@ services:
       - traefik.http.routers.zombie-webapp.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
       - traefik.http.routers.zombie-webapp.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
       - traefik.http.services.zombie-webapp.loadbalancer.server.port=80
+    networks:
+      dokploy-network: null
+      zombie_net: null
+    restart: unless-stopped
+volumes:
+  chat-webapp-postgres-data:
+    name: zombie-crab-project_chat-webapp-postgres-data
+  mycelium-data:
+    name: zombie-crab-project_mycelium-data
+  mycelium-postgres-data:
+    name: zombie-crab-project_mycelium-postgres-data

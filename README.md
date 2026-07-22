@@ -146,7 +146,7 @@ scaffold. See [Creating a Custom Agent](./docs/CREATE_CUSTOM_AGENT.md) to shape
 a template, and [Running and resetting from scratch](#running-and-resetting-from-scratch)
 for the self-heal behavior.
 
-**3. Configure `.env`.** Copy `.env.example` to `.env` and set:
+**3. Configure `.env`.** Copy the matching `deploy/<mode>/.env.example` (standalone / prod / dokploy) to `.env` and set:
 
 - `MYC_PICOCLAW_ALPHA_TOKEN` / `MYC_PICOCLAW_BETA_TOKEN` — bearer tokens Mycelium
   injects and crab-shell-proxy validates per agent.
@@ -227,14 +227,13 @@ done from the **chat-webapp admin area** — see the
 
 ```
 docker-compose.yaml        # the whole stack (gateway + crab-shell-proxy + webapps + db)
-.env.example               # runtime knobs, per-instance bearer tokens & LLM keys
+deploy/                    # per-mode configs: .env examples + mycelium/proxy configs (standalone / prod / dokploy)
 crab/                      # the crab side (per-user isolation + its chat client)
   crab-shell-proxy/        # git submodule — the Go per-user isolation orchestrator
   crab-exoskeleton-webapp/ # git submodule — the Next.js chat client (BFF)
 fungi/                     # the mycelium side (gateway + its admin UI)
   mycelium/
     Dockerfile.standalone  # builds mycelium-api from upstream git (no local source)
-    config.standalone.toml # gateway routes for picoclaw-alpha / picoclaw-beta
   mycelium-webapp/         # Dockerfile for Mycelium's own admin UI (from upstream git)
 docs/                      # task guides (creating a custom agent · admin guide)
 data/                      # per-agent templates + per-user volumes + shared material (gitignored)

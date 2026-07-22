@@ -1,0 +1,98 @@
+# =============================================================================
+# crab-shell-proxy config for the DOKPLOY deploy (mounted, overrides the image's
+# baked /etc/crab-shell-proxy/config.yaml). Edit THIS file to customize the agent
+# catalog for your deployment. The upstream default's `hermes-glm` agent has been
+# REMOVED here (this deploy runs picoclaw only); add a hermes block back if you
+# want the hermes harness.
+#
+# Note: a hermes agent is also auto-disabled at startup when its token/provider
+# key are unset (see crab-shell-proxy internal/config.Load), so leaving one in
+# without its secrets is harmless too.
+#
+# Kept in sync with crab/crab-shell-proxy/config.yaml (the upstream default).
+# Machine-specific fields still come from env (CRAB_HOST_DATA_ROOT, CRAB_NETWORK).
+# =============================================================================
+
+# crab-shell-proxy configuration.
+#
+# Machine-specific fields (hostDataRoot, network) are normally supplied via env
+# (CRAB_HOST_DATA_ROOT, CRAB_NETWORK) from docker-compose so this file stays
+# portable — see the compose service definition. The values below are sane
+# fallbacks for a local `docker compose up` from the project root.
+
+listen: ":8080"
+
+# Absolute HOST path of the data root. This is the bind-mount SOURCE handed to
+# the Docker daemon for spawned picoclaw containers, so it must be a path the
+# daemon sees (host path), NOT a path inside this proxy. The tenant tree lives
+# under <root>/tenants/… and agent templates under <root>/templates/…. Override
+# with CRAB_HOST_DATA_ROOT (compose sets it to <project>/data).
+hostDataRoot: "/data"
+
+# Where that same directory is mounted INSIDE this proxy (for reading history
+# and seeding per-user config). Override with CRAB_CONTAINER_DATA_ROOT.
+containerDataRoot: "/data"
+
+# Docker network spawned containers join. The compose file pins this network's
+# real name to "zombie_net" (network `name:`), so it is stable regardless of the
+# compose project name. Override with CRAB_NETWORK.
+network: "zombie_net"
+
+picoclawImage: "docker.io/sipeed/picoclaw:latest"
+picoclawPort: 18790
+
+# Spawned picoclaw containers run as this non-root uid:gid (NOT root). The proxy
+# relocates the container HOME to picoclawHome, mounts the per-user data dir at
+# <picoclawHome>/.picoclaw, aligns the config workspace path, and chowns the
+# per-user dir to this uid so the non-root process can write it. Set
+# picoclawUser to "" to run as root instead. Override via CRAB_PICOCLAW_USER /
+# CRAB_PICOCLAW_HOME.
+picoclawUser: "1000:1000"
+picoclawHome: "/data"
+
+# Kept comfortably under mycelium's [api] gatewayTimeout (60s) so a cold start
+# never races the gateway's own 504.
+startupDeadline: 35s
+turnTimeout: 120s
+containerPrefix: "crabshell"
+
+# Shared secret authenticating the mycelium subscriptionAccount.created webhook
+# at POST /v1/accounts. Sourced from the environment so it never lives in this
+# file; register the same value with mycelium's webhook (Authorization: Bearer).
+webhookSecret: { env: "CRAB_WEBHOOK_SECRET" }
+
+agents:
+  alpha:
+    serviceName: "alpha" # matches x-mycelium-service-name mycelium injects
+    token: { env: "MYC_PICOCLAW_ALPHA_TOKEN" }
+    template: "alpha" # <containerDataRoot>/templates/alpha/{config.json,.security.yml}
+    # data now lives under <containerDataRoot>/tenants/<t>/subscriptions/<s>/agents/alpha/users/<u>
+    # "continuous" keeps the container running: picoclaw holds each direct session
+    # in an in-memory store (SQLite :memory:) and does NOT reload it on restart —
+    # so a scale-to-zero stop would reset the conversation and overwrite its
+    # transcript on the next turn. Staying up preserves history during use.
+    # (idleTimeout is ignored in continuous mode; kept for a quick switch back.)
+    mode: "continuous" # or "scale-to-zero"
+    idleTimeout: 15m
+    # Pin the picoclaw provider/model and take the API key from the environment.
+    # The proxy enables the pico channel, sets provider/model, and writes the key
+    # (read from apiKeyEnv) into each user's .security.yml at provisioning time,
+    # so the key lives only in the env — never in this file or a template.
+    # `name` must match a picoclaw model_list model_name (e.g. deepseek-chat,
+    # openrouter-auto, gpt-5.4, glm-4.7...). Each agent has its OWN apiKeyEnv, so
+    # instances use independent keys (and may use different providers/models).
+    model:
+      provider: "deepseek"
+      name: "deepseek-chat"
+      apiKeyEnv: "PICOCLAW_ALPHA_API_KEY"
+
+  beta:
+    serviceName: "beta"
+    token: { env: "MYC_PICOCLAW_BETA_TOKEN" }
+    template: "beta"
+    mode: "continuous" # keep alive so picoclaw's in-memory session isn't reset (see alpha)
+    idleTimeout: 15m
+    model:
+      provider: "deepseek"
+      name: "deepseek-chat"
+      apiKeyEnv: "PICOCLAW_BETA_API_KEY"

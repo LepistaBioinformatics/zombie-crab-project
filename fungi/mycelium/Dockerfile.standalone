@@ -76,12 +76,11 @@ COPY --from=builder /out/bin/myc-api /usr/local/bin/myc-api
 COPY --from=builder /src/templates /home/templates
 COPY --from=builder /src/ports/api/src/openapi/redoc.config.json /home/redoc.config.json
 
-# This project's own config (two picoclaw+proxy routes, see
-# ../docker-compose.yaml) -- not a file from the mycelium-monorepo repo. Its
-# per-instance secrets are resolved by myc-api itself at startup from env
-# vars (SecretResolver<HttpSecret>::Env), so no templating step is needed
-# here -- this file is copied as-is.
-COPY config.standalone.toml /home/config.toml
+# This project's own config (two picoclaw+proxy routes) is NOT baked here
+# anymore -- it is MOUNTED at runtime onto SETTINGS_PATH (/home/config.toml)
+# from deploy/standalone/config.standalone.toml by docker-compose.yaml, matching
+# how prod/dokploy mount their config. Per-instance secrets are resolved by
+# myc-api at startup from env vars (SecretResolver<HttpSecret>::Env).
 
 ENV UTOIPA_REDOC_CONFIG_FILE=/home/redoc.config.json
 ENV SETTINGS_PATH=/home/config.toml

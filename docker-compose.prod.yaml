@@ -4,7 +4,7 @@
 # Switches the stack from the local default (mycelium standalone/SQLite, every
 # service built from source) to production posture:
 #   - mycelium-gateway runs the OFFICIAL published image in base/Postgres mode
-#     (no local build), config mounted from fungi/mycelium/config.base.toml;
+#     (no local build), config mounted from deploy/prod/config.base.toml;
 #   - a dedicated mycelium-postgres service backs it;
 #   - crab-shell-proxy and chat-webapp run their OFFICIAL published GHCR images
 #     (built+pushed by each repo's .github/workflows/release-image.yml);
@@ -12,18 +12,18 @@
 #     baked at build time, so it can't be a generic prebuilt image -- see
 #     docker-compose.dokploy.yaml, which sets its VITE_MYCELIUM_API_URL).
 #
-# Bring it up (add the dokploy override too for Traefik ingress):
+# Bring it up (base + Postgres, no Traefik):
 #   docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d
-#   docker compose -f docker-compose.yaml -f docker-compose.prod.yaml \
-#                  -f docker-compose.dokploy.yaml up -d      # + Traefik
+# For Traefik ingress (Dokploy) use the SELF-CONTAINED docker-compose.dokploy.yaml
+# instead -- it already merges base + prod + dokploy into ONE file (see its header
+# and deploy/dokploy/.env.example). It is no longer a -f override layered on this file.
 #
 # One-time after the FIRST up (base/Postgres has no auto-migration, L-009):
 #   docker compose ... exec mycelium-postgres \
 #     psql -U "$MYC_DB_USER" -d "$MYC_DB_NAME" -f -   < postgres/sql/up.sql
 #   (or run psql from the host against the DB URL) -- see README production section.
 #
-# All values below come from .env (see its "Production (base/postgres mode)"
-# section). `build: !reset null` drops the base file's build so the image is
+# All values below come from .env -- see deploy/prod/.env.example. `build: !reset null` drops the base file's build so the image is
 # PULLED, never built (a plain `image:` alongside `build:` would still build if
 # the image were missing locally). `!reset` needs Docker Compose >= v2.24.
 # =============================================================================
@@ -73,7 +73,7 @@ services:
     volumes:
       # Mount the base-mode config over the image's default location. The base
       # file's mycelium-data:/data mount carries over (volumes concatenate).
-      - ./fungi/mycelium/config.base.toml:/home/config.toml:ro
+      - ./deploy/prod/config.base.toml:/home/config.toml:ro
     depends_on:
       mycelium-postgres:
         condition: service_healthy

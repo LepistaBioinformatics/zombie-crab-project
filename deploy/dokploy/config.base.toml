@@ -1,0 +1,315 @@
+# ------------------------------------------------------------------------------
+# BASE (POSTGRES) MODE CONFIGURATION -- zombie-crab-project / production
+#
+# Postgres-backed (mycelium's DEFAULT `postgres-backend` feature -- i.e. the
+# plain published image `ghcr.io/LepistaBioinformatics/mycelium`, NOT the
+# `--features standalone` build). Used ONLY in production, mounted into the
+# official image at /home/config.toml via docker-compose.prod.yaml (SETTINGS_PATH).
+# The default local stack still uses config.standalone.toml (SQLite, no external
+# deps) -- this file changes ONLY the infrastructure sections; the API-gateway
+# routing below is IDENTICAL to config.standalone.toml (crab-shell-proxy:8080,
+# protectedByRoles, the full alpha/beta route set).
+#
+# Differences vs. standalone, all infra:
+#   - vault disabled; core/jwt/hmac/token secrets resolved from env (base mode
+#     does NOT auto-generate them the way standalone does);
+#   - [diesel] Postgres instead of [sqlite];
+#   - [smtp] real transport (base mode has NO stub -- magic-link needs real
+#     delivery). Every [smtp] field is SecretResolver<String>, so all come from
+#     env (verified against adapters/notifier/src/models/smtp_config.rs);
+#   - [redis] section must EXIST (base wiring requires it) but no Redis container
+#     runs -- redis::Client::open() is connection-lazy, so the gateway boots and
+#     serves fine without one (STATE.md AD-005/L-009). Code paths that actually
+#     hit the shared cache/notifier would error on first use -- acceptable for
+#     this stack; revisit if you add a Redis container.
+#
+# ►►► REPLACE BEFORE DEPLOY (plain strings -- NOT env-resolvable, and this file
+#     is mounted so no rebuild is needed): `domainUrl`, `allowedOrigins`, and
+#     `noreplyEmail`. noreplyEmail MUST equal MYC_SMTP_USERNAME (your Gmail
+#     address) -- Gmail rejects a mismatched From. domainUrl/allowedOrigins must
+#     be your real public https:// origins (mycelium + mycelium-webapp).
+# ------------------------------------------------------------------------------
+
+vault = "disabled"
+
+# ------------------------------------------------------------------------------
+# CORE CONFIGURATIONS
+# ------------------------------------------------------------------------------
+
+[core.accountLifeCycle]
+domainName = "Zombie Crab"
+domainUrl = "https://mycelium.example.com"                    # ►►► REPLACE
+tokenExpiration = 3600                                                # 1 hour
+noreplyName = "Mycelium"
+noreplyEmail = "your-account@gmail.com"                       # ►►► REPLACE (== MYC_SMTP_USERNAME)
+supportName = "Mycelium"
+supportEmail = "your-account@gmail.com"                       # ►►► REPLACE
+locale = "en-us"
+tokenSecret = { env = "MYC_BASE_TOKEN_SECRET" }
+
+# Gates the one-time web Staff bootstrap flow (GET/POST /_adm/instance/bootstrap*).
+# Reuses the same env var the standalone stack already documents.
+staffBootstrapSecret = { env = "MYC_STANDALONE_BOOTSTRAP_SECRET" }
+
+hmacPrimaryVersion = 1
+
+[[core.accountLifeCycle.hmacSecrets]]
+version = 1
+secret = { env = "MYC_BASE_HMAC_SECRET" }
+
+[core.webhook]
+acceptInvalidCertificates = true
+consumeIntervalInSecs = 30
+consumeBatchSize = 25
+maxAttempts = 5
+
+# ------------------------------------------------------------------------------
+# POSTGRES DATABASE ADAPTER SETTINGS
+#
+# Schema is NOT auto-provisioned (diesel_postgres has no embedded migrations,
+# unlike SQLite) -- apply it once after first `up` (STATE.md L-009):
+#   psql "$MYC_BASE_DATABASE_URL" -f postgres/sql/up.sql -v db_password=...
+# See README's production section for the exact command.
+# ------------------------------------------------------------------------------
+
+[diesel]
+databaseUrl = { env = "MYC_BASE_DATABASE_URL" }
+
+# ------------------------------------------------------------------------------
+# SMTP -- base mode has no stub/file transport (that's a `standalone`-only Cargo
+# feature). host/username/password are SecretResolver<String> and resolve from
+# env; `port` is SecretResolver<u16> and is kept LITERAL (an env value is a
+# string and won't deserialize into u16 -- rc.7's own config.full.example.toml
+# uses a literal 465 too). Port 465 = implicit TLS, which is what mycelium's
+# SmtpTransport::relay() negotiates (this is why 465, not 587/STARTTLS -- see
+# STATE.md L-012). MYC_SMTP_USERNAME is the full Gmail address; MYC_SMTP_PASSWORD
+# is a Gmail App Password (requires 2FA), NOT the account password.
+# ------------------------------------------------------------------------------
+
+[smtp]
+host = { env = "MYC_SMTP_HOST" }
+port = 465
+username = { env = "MYC_SMTP_USERNAME" }
+password = { env = "MYC_SMTP_PASSWORD" }
+
+[queue]
+emailQueueName = "emails"
+consumeIntervalInSecs = 15
+
+# ------------------------------------------------------------------------------
+# REDIS -- required to exist, but no Redis container runs (see header note).
+# ------------------------------------------------------------------------------
+
+[redis]
+protocol = "redis"
+hostname = "mycelium-redis"
+password = "unused-no-redis-container-in-this-stack"
+
+# ------------------------------------------------------------------------------
+# AUTHENTICATION SETTINGS
+# ------------------------------------------------------------------------------
+
+[auth.internal.define]
+jwtExpiresIn = 43200                                                  # 12 hours
+tmpExpiresIn = 300                                                    # 5 minutes
+jwtSecret = { env = "MYC_BASE_JWT_SECRET" }
+
+# ------------------------------------------------------------------------------
+# API PORT SETTINGS
+# ------------------------------------------------------------------------------
+
+[api]
+serviceIp = "0.0.0.0"
+servicePort = 8080
+serviceWorkers = 1
+gatewayTimeout = 60
+
+# ►►► REPLACE with your real public origins. The mycelium-webapp SPA calls the
+# gateway directly from the browser, so its origin must be allowed. chat-webapp
+# is a server-side BFF and does NOT need to be listed.
+allowedOrigins = ["https://mycelium.example.com", "https://admin.example.com"]
+
+# TLS terminates at Traefik (docker-compose.dokploy.yaml); the gateway speaks
+# plain HTTP on the internal network.
+tls = "disabled"
+
+[api.cache]
+jwksTtl = 3600
+emailTtl = 120
+profileTtl = 120
+
+[api.logging]
+level = "warn,mycelium_base=info,myc_api=info,myc_config=info,myc_core=info,myc_http_tools=info,actix_web=info,myc_notifier=info,myc_diesel=info,myc_kv=info"
+format = "ansi"
+target = "stdout"
+
+# ==============================================================================
+# API GATEWAY ROUTE CONFIGURATION -- IDENTICAL to config.standalone.toml.
+# See that file's comment block (lines ~117-176) for the full routing, header
+# contract, and protectedByRoles rationale. Kept in sync verbatim: only the
+# infrastructure sections above differ between standalone and base mode.
+# ==============================================================================
+
+[api.services]
+
+[[alpha]]
+host = "crab-shell-proxy:8080"
+protocol = "http"
+healthCheckPath = "/healthz"
+discoverable = true
+serviceType = "rest-api"
+isContextApi = false
+openapiPath = "/doc/openapi.json"
+capabilities = ["chat"]
+description = "PicoClaw agent 'alpha' - an OpenAI-compatible personal chat agent. Each user gets an isolated container; send chat via POST /v1/chat/completions."
+
+[[alpha.secret]]
+name = "alpha-authorization-header"
+authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_ALPHA_TOKEN" } }
+
+[[alpha.path]]
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/chat/completions"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[alpha.path]]
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/models"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/sessions/history"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/sessions/resolve"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
+group = "protected"
+path = "/v1/subscriptions"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/secrets"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST", "DELETE"]
+
+[[alpha.path]]
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/media"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST", "DELETE"]
+
+[[alpha.path]]
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/memory"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "PUT"]
+
+[[alpha.path]]
+# All /v1/admin/* endpoints share group=protected + this secret; the
+# proxy enforces the exact path+method per route. Collapsed to one
+# wildcard (mycelium matches via the wildmatch crate).
+group = "protected"
+path = "/v1/admin/*"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST", "PUT", "DELETE"]
+
+[[beta]]
+host = "crab-shell-proxy:8080"
+protocol = "http"
+healthCheckPath = "/healthz"
+discoverable = true
+serviceType = "rest-api"
+isContextApi = false
+openapiPath = "/doc/openapi.json"
+capabilities = ["chat"]
+description = "PicoClaw agent 'beta' - an OpenAI-compatible personal chat agent. Each user gets an isolated container; send chat via POST /v1/chat/completions."
+
+[[beta.secret]]
+name = "beta-authorization-header"
+authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_PICOCLAW_BETA_TOKEN" } }
+
+[[beta.path]]
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/chat/completions"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[beta.path]]
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/models"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/sessions/history"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/sessions/resolve"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+group = "protected"
+path = "/v1/subscriptions"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/secrets"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST", "DELETE"]
+
+[[beta.path]]
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/media"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST", "DELETE"]
+
+[[beta.path]]
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/memory"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "PUT"]
+
+[[beta.path]]
+# All /v1/admin/* endpoints share group=protected + this secret; the
+# proxy enforces the exact path+method per route. Collapsed to one
+# wildcard (mycelium matches via the wildmatch crate).
+group = "protected"
+path = "/v1/admin/*"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST", "PUT", "DELETE"]

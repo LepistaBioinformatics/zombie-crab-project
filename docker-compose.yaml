@@ -36,7 +36,7 @@
 #                token: "<random-token>"
 #      (Only the nested `pico: settings: token:` form is honored by picoclaw --
 #      the flat form silently leaves the channel disabled, verified empirically.)
-#   2. cp .env.example .env && $EDITOR .env   # set MYC_PICOCLAW_*_TOKEN and
+#   2. cp deploy/standalone/.env.example .env && $EDITOR .env   # set MYC_PICOCLAW_*_TOKEN and
 #                                             # MYC_STANDALONE_BOOTSTRAP_SECRET
 #   3. docker compose up -d
 #   4. First Staff account (once): open
@@ -157,7 +157,7 @@ services:
     ports:
       - "${MYCELIUM_PORT:-8080}:8080"
     environment:
-      # fungi/mycelium/config.standalone.toml references all of these directly via
+      # deploy/standalone/config.standalone.toml references all of these directly via
       # its field-level `{ env = "..." }` secret resolver -- real values live
       # only in .env (gitignored), never in the committed TOML.
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
@@ -166,6 +166,7 @@ services:
       MYC_STANDALONE_BOOTSTRAP_SECRET: ${MYC_STANDALONE_BOOTSTRAP_SECRET}
     volumes:
       - mycelium-data:/data
+      - ./deploy/standalone/config.standalone.toml:/home/config.toml:ro
     depends_on:
       crab-shell-proxy:
         condition: service_healthy

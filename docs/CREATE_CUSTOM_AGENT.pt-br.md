@@ -167,7 +167,7 @@ agents:
 
 ### 4.5 Registre a rota no mycelium
 
-No `fungi/mycelium/config.standalone.toml`, copie o bloco de serviço `picoclaw-alpha`
+No `deploy/standalone/config.standalone.toml` (e o `deploy/<modo>/config.*.toml` correspondente), copie o bloco de serviço `picoclaw-alpha`
 existente e renomeie para `picoclaw-meuagente` (os chamadores acessam
 `/picoclaw-meuagente/...`). Mantenha o mesmo `token = { env = ... }`,
 `healthCheckPath` e as configs de `group`/role — só troque o nome.
@@ -186,8 +186,10 @@ no `.security.yml` de cada usuário.
 
 ### 4.7 Rebuild e restart
 
-`config.yaml` e `fungi/mycelium/config.standalone.toml` são **baked nas imagens** em
-tempo de build, então uma mudança de agente exige rebuild:
+`config.yaml` é **baked** na imagem do crab-shell-proxy (mudança do lado do proxy
+exige rebuild), enquanto o config do mycelium agora é **montado** de `deploy/<modo>/`
+(config.standalone.toml / config.base.toml), então uma mudança de rota lá só precisa
+de restart. O atalho seguro ainda é rebuildar:
 
 ```bash
 docker compose up -d --build crab-shell-proxy mycelium-gateway
@@ -206,7 +208,7 @@ depois não exige rebuild — mas lembre da regra do primeiro provisionamento
 - [ ] `data/templates/<nome>/workspace/{AGENT.md,SOUL.md,USER.md}` escritos
 - [ ] Opcional: `workspace/memory/` e `workspace/skills/<skill>/SKILL.md`
 - [ ] Entrada do agente adicionada em `crab/crab-shell-proxy/config.yaml` (`template:` aponta para `<nome>`)
-- [ ] Rota adicionada em `fungi/mycelium/config.standalone.toml` (`picoclaw-<nome>`)
+- [ ] Rota adicionada em `deploy/standalone/config.standalone.toml` (`picoclaw-<nome>`)
 - [ ] `.env` tem `MYC_PICOCLAW_<NOME>_TOKEN` e `PICOCLAW_<NOME>_API_KEY`
 - [ ] `docker compose up -d --build crab-shell-proxy mycelium-gateway`
 - [ ] Templates finalizados **antes** de os usuários começarem a conversar

@@ -1,2 +1,5 @@
 .env
 data/
+
+# Real deploy env files with secrets (deploy/<mode>/.env) — never commit
+deploy/**/.env

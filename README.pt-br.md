@@ -148,7 +148,7 @@ segredos. Veja [Criando um Agente Customizado](./docs/CREATE_CUSTOM_AGENT.pt-br.
 para moldar um template, e [Rodando e resetando do zero](#rodando-e-resetando-do-zero)
 para o comportamento de auto-recuperação.
 
-**3. Configure o `.env`.** Copie `.env.example` para `.env` e defina:
+**3. Configure o `.env`.** Copie o `deploy/<modo>/.env.example` correspondente (standalone / prod / dokploy) para `.env` e defina:
 
 - `MYC_PICOCLAW_ALPHA_TOKEN` / `MYC_PICOCLAW_BETA_TOKEN` — bearer tokens que o
   Mycelium injeta e o crab-shell-proxy valida por agente.
@@ -229,14 +229,13 @@ membros e branding é feito pela **área de admin do chat-webapp** — veja o
 
 ```
 docker-compose.yaml        # a stack inteira (gateway + crab-shell-proxy + webapps + db)
-.env.example               # knobs de runtime, bearer tokens e chaves LLM por-instância
+deploy/                    # configs por modo: exemplos de .env + configs do mycelium/proxy (standalone / prod / dokploy)
 crab/                      # o lado crab (isolamento por-usuário + seu cliente de chat)
   crab-shell-proxy/        # submódulo git — o orquestrador Go de isolamento por-usuário
   crab-exoskeleton-webapp/ # submódulo git — o cliente de chat Next.js (BFF)
 fungi/                     # o lado mycelium (gateway + sua UI de admin)
   mycelium/
     Dockerfile.standalone  # builda o mycelium-api do git upstream (sem fonte local)
-    config.standalone.toml # rotas do gateway para picoclaw-alpha / picoclaw-beta
   mycelium-webapp/         # Dockerfile da UI de admin do Mycelium (do git upstream)
 docs/                      # guias de tarefas (criar um agente customizado · guia de admin)
 data/                      # templates por-agente + volumes por-usuário + material compartilhado (gitignored)
