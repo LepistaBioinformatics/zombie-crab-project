@@ -4862,5 +4862,1462 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Phase C complete.** An existing deployment boots, imports its state, and no workspace's active model changes.
 
+---
+
+## Phase D — HTTP surface
+
+### Task 13: the wire types and the inventory endpoints
+
+**Files:**
+- Create: `PROXY/internal/registry/public.go`
+- Create: `PROXY/internal/registry/public_test.go`
+- Create: `PROXY/internal/httpapi/admin_models.go`
+- Create: `PROXY/internal/httpapi/admin_models_test.go`
+- Modify: `PARENT/.specs/features/model-registry-source-of-truth/design.md` (§2, per the design correction at the top of this plan)
+
+**Interfaces:**
+- Consumes: Phase A + `docker.SuggestionCatalog`, `(*Manager).ReapplyModelForModel`.
+- Produces:
+  - `registry.PublicModel` — every `Model` field except `APIKey`, plus `has_key bool`, `in_use_count int`
+  - `registry.Public(m Model, inUse int) PublicModel`
+  - handlers `handleAdminModelsList`, `handleAdminModelCreate`, `handleAdminModelUpdate`, `handleAdminModelDelete`, `handleAdminModelDeprecate`, `handleAdminModelsReorder`, `handleAdminModelUsage`, `handleAdminModelCatalog`
+  - `httpapi.registryErrStatus(err error) (int, any)` — maps registry errors to a status plus a body
+
+- [ ] **Step 1: Write the failing test for the wire type**
+
+Create `PROXY/internal/registry/public_test.go`:
+
+```go
+package registry
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestPublicModelCannotCarryAKey(t *testing.T) {
+	m := Model{
+		ModelName: "m", Provider: "openai", Model: "gpt-5.4",
+		APIBase: "https://api.openai.com/v1", APIKey: "sk-super-secret",
+		Status: StatusActive, Version: 3,
+		CreatedAt: time.Now(), UpdatedAt: time.Now(),
+	}
+
+	raw, err := json.Marshal(Public(m, 2))
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	// The wire type has no key field at all, so leaking one requires ADDING a
+	// field rather than forgetting to strip one.
+	if strings.Contains(string(raw), "sk-super-secret") || strings.Contains(string(raw), "api_key") {
+		t.Fatalf("PublicModel leaked the key: %s", raw)
+	}
+
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out["has_key"] != true {
+		t.Errorf("has_key = %#v, want true", out["has_key"])
+	}
+	if out["in_use_count"] != float64(2) {
+		t.Errorf("in_use_count = %#v, want 2", out["in_use_count"])
+	}
+	if out["model_name"] != "m" || out["version"] != float64(3) {
+		t.Errorf("public model = %#v", out)
+	}
+}
+
+func TestPublicModelReportsNoKeyWhenAbsent(t *testing.T) {
+	p := Public(Model{ModelName: "oauth", Provider: "antigravity", Model: "g", AuthMethod: "oauth"}, 0)
+	if p.HasKey {
+		t.Error("HasKey must be false when no key is stored")
+	}
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd PROXY && go test ./internal/registry/ -run TestPublicModel -v`
+Expected: FAIL — `undefined: Public`.
+
+- [ ] **Step 3: Write the wire type**
+
+Create `PROXY/internal/registry/public.go`:
+
+```go
+package registry
+
+import (
+	"encoding/json"
+	"time"
+)
+
+// PublicModel is the client-facing shape of a Model. It has NO key field, so a
+// handler cannot leak a credential by forgetting to strip one — leaking would
+// require adding a field here on purpose.
+type PublicModel struct {
+	ModelName  string          `json:"model_name"`
+	Provider   string          `json:"provider"`
+	Model      string          `json:"model"`
+	APIBase    string          `json:"api_base,omitempty"`
+	AuthMethod string          `json:"auth_method,omitempty"`
+	ExtraBody  json.RawMessage `json:"extra_body,omitempty"`
+
+	Status     Status   `json:"status"`
+	ReplacedBy string   `json:"replaced_by,omitempty"`
+	Fallbacks  []string `json:"fallbacks"`
+	Position   int      `json:"position"`
+
+	// HasKey reports whether a credential is stored, which is all a client needs
+	// to know to render the "key" badge.
+	HasKey bool `json:"has_key"`
+	// InUseCount drives the usage column and tells the admin up front why delete
+	// and disable are unavailable.
+	InUseCount int `json:"in_use_count"`
+
+	ImportedOrphan bool `json:"imported_orphan,omitempty"`
+
+	Version   uint64    `json:"version"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Public converts a stored record for the wire. Fallbacks is emitted even when
+// empty so a client can render the chain column without a null check.
+func Public(m Model, inUse int) PublicModel {
+	fallbacks := m.Fallbacks
+	if fallbacks == nil {
+		fallbacks = []string{}
+	}
+	return PublicModel{
+		ModelName: m.ModelName, Provider: m.Provider, Model: m.Model,
+		APIBase: m.APIBase, AuthMethod: m.AuthMethod, ExtraBody: m.ExtraBody,
+		Status: m.Status, ReplacedBy: m.ReplacedBy, Fallbacks: fallbacks,
+		Position: m.Position, HasKey: m.APIKey != "", InUseCount: inUse,
+		ImportedOrphan: m.ImportedOrphan,
+		Version:        m.Version, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt,
+	}
+}
+```
+
+- [ ] **Step 4: Run the wire-type tests**
+
+Run: `cd PROXY && go test ./internal/registry/ -run TestPublicModel -v`
+Expected: PASS — both.
+
+- [ ] **Step 5: Write the failing handler test**
+
+Create `PROXY/internal/httpapi/admin_models_test.go`. Read `PROXY/internal/httpapi/handlers_test.go` first and reuse its `Server` construction helper and profile-header fixtures — the names below assume a helper `newTestServer(t)` returning a `*Server` plus an admin and a non-admin profile header value. If those helpers are named differently, use the existing ones rather than adding parallel scaffolding.
+
+```go
+package httpapi
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestAdminModelsRequireProxyAdmin(t *testing.T) {
+	s, _, nonAdmin := newTestServer(t)
+
+	for _, tc := range []struct{ method, path, body string }{
+		{"GET", "/v1/admin/models", ""},
+		{"POST", "/v1/admin/models", `{"model_name":"m","provider":"openai","model":"gpt-5.4","api_base":"https://x","api_key":"sk"}`},
+		{"DELETE", "/v1/admin/models/m", ""},
+		{"PUT", "/v1/admin/models/order", `{"order":["m"]}`},
+		{"GET", "/v1/admin/model-catalog", ""},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set(profileHeaderName, nonAdmin)
+		req.Header.Set("Authorization", testAgentBearer)
+		req.Header.Set(serviceNameHeader, testServiceName)
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		// The inventory holds API keys with instance-wide blast radius, so the gate
+		// is proxy-admin and it lives here, not only in the webapp.
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("%s %s = %d, want 403", tc.method, tc.path, rec.Code)
+		}
+	}
+}
+
+func TestAdminModelCreateListRoundTripNeverReturnsTheKey(t *testing.T) {
+	s, admin, _ := newTestServer(t)
+
+	body := `{"model_name":"gpt-5.4","provider":"openai","model":"gpt-5.4",
+	  "api_base":"https://api.openai.com/v1","api_key":"sk-super-secret"}`
+	rec := doAdmin(t, s, admin, "POST", "/v1/admin/models", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("create = %d: %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "sk-super-secret") {
+		t.Fatalf("create response leaked the key: %s", rec.Body.String())
+	}
+
+	rec = doAdmin(t, s, admin, "GET", "/v1/admin/models", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list = %d: %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "sk-super-secret") {
+		t.Fatalf("list leaked the key: %s", rec.Body.String())
+	}
+	var listed struct {
+		Models []map[string]any `json:"models"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Models) != 1 || listed.Models[0]["has_key"] != true {
+		t.Errorf("listed = %#v, want one entry with has_key true", listed.Models)
+	}
+}
+
+func TestAdminModelCreateDuplicateIsConflict(t *testing.T) {
+	s, admin, _ := newTestServer(t)
+	body := `{"model_name":"dup","provider":"openai","model":"m","api_base":"https://x","api_key":"sk"}`
+	if rec := doAdmin(t, s, admin, "POST", "/v1/admin/models", body); rec.Code != http.StatusOK {
+		t.Fatalf("first create = %d", rec.Code)
+	}
+	rec := doAdmin(t, s, admin, "POST", "/v1/admin/models", body)
+	if rec.Code != http.StatusConflict {
+		t.Errorf("duplicate create = %d, want 409", rec.Code)
+	}
+}
+
+func TestAdminModelUpdateStaleVersionIsConflict(t *testing.T) {
+	s, admin, _ := newTestServer(t)
+	create := `{"model_name":"m","provider":"openai","model":"m","api_base":"https://x","api_key":"sk"}`
+	doAdmin(t, s, admin, "POST", "/v1/admin/models", create)
+
+	ok := doAdmin(t, s, admin, "PUT", "/v1/admin/models/m",
+		`{"version":1,"provider":"openai","model":"m","api_base":"https://y"}`)
+	if ok.Code != http.StatusOK {
+		t.Fatalf("update = %d: %s", ok.Code, ok.Body.String())
+	}
+	stale := doAdmin(t, s, admin, "PUT", "/v1/admin/models/m",
+		`{"version":1,"provider":"openai","model":"m","api_base":"https://z"}`)
+	if stale.Code != http.StatusConflict {
+		t.Errorf("stale update = %d, want 409", stale.Code)
+	}
+}
+
+func TestAdminModelUpdateOmittingTheKeyKeepsIt(t *testing.T) {
+	s, admin, _ := newTestServer(t)
+	doAdmin(t, s, admin, "POST", "/v1/admin/models",
+		`{"model_name":"m","provider":"openai","model":"m","api_base":"https://x","api_key":"sk-keep"}`)
+
+	doAdmin(t, s, admin, "PUT", "/v1/admin/models/m",
+		`{"version":1,"provider":"openai","model":"m","api_base":"https://y"}`)
+
+	rec := doAdmin(t, s, admin, "GET", "/v1/admin/models", "")
+	var listed struct {
+		Models []map[string]any `json:"models"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	// A client that never receives the key must be able to edit other fields
+	// without wiping it.
+	if listed.Models[0]["has_key"] != true {
+		t.Errorf("key lost on an update that omitted api_key: %#v", listed.Models[0])
+	}
+}
+
+func TestAdminModelDeleteInUseReturnsTheReferrers(t *testing.T) {
+	s, admin, _ := newTestServer(t)
+	doAdmin(t, s, admin, "POST", "/v1/admin/models",
+		`{"model_name":"fb","provider":"openai","model":"fb","api_base":"https://x","api_key":"sk"}`)
+	doAdmin(t, s, admin, "POST", "/v1/admin/models",
+		`{"model_name":"main","provider":"openai","model":"main","api_base":"https://x","api_key":"sk","fallbacks":["fb"]}`)
+
+	rec := doAdmin(t, s, admin, "DELETE", "/v1/admin/models/fb", "")
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("delete in use = %d, want 409: %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Error     string `json:"error"`
+		Referrers []struct {
+			Kind string `json:"kind"`
+			ID   string `json:"id"`
+		} `json:"referrers"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	// The rejection must name what to detach, or the admin has no next action.
+	if len(body.Referrers) == 0 || body.Referrers[0].Kind != "fallback" || body.Referrers[0].ID != "main" {
+		t.Errorf("referrers = %+v, want the fallback holder named", body.Referrers)
+	}
+}
+
+func TestAdminModelDeprecateRequiresAReplacement(t *testing.T) {
+	s, admin, _ := newTestServer(t)
+	doAdmin(t, s, admin, "POST", "/v1/admin/models",
+		`{"model_name":"old","provider":"openai","model":"old","api_base":"https://x","api_key":"sk"}`)
+
+	bad := doAdmin(t, s, admin, "POST", "/v1/admin/models/old/deprecate", `{"version":1}`)
+	if bad.Code != http.StatusBadRequest {
+		t.Errorf("deprecate without a replacement = %d, want 400", bad.Code)
+	}
+
+	doAdmin(t, s, admin, "POST", "/v1/admin/models",
+		`{"model_name":"new","provider":"openai","model":"new","api_base":"https://x","api_key":"sk"}`)
+	good := doAdmin(t, s, admin, "POST", "/v1/admin/models/old/deprecate",
+		`{"version":1,"replaced_by":"new"}`)
+	if good.Code != http.StatusOK {
+		t.Errorf("deprecate = %d: %s", good.Code, good.Body.String())
+	}
+}
+
+func TestAdminModelCatalogReturnsSuggestionsWithoutKeys(t *testing.T) {
+	s, admin, _ := newTestServer(t)
+	rec := doAdmin(t, s, admin, "GET", "/v1/admin/model-catalog", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("catalog = %d: %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "api_key") {
+		t.Errorf("catalog must never carry keys: %s", rec.Body.String())
+	}
+	var body struct {
+		Entries []map[string]any `json:"entries"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Entries) < 20 {
+		t.Errorf("catalog has %d entries, want the full set", len(body.Entries))
+	}
+	// model_name is the admin's choice and must be unique, so suggesting one would
+	// invite a duplicate.
+	if _, present := body.Entries[0]["model_name"]; present {
+		t.Errorf("catalog entry suggests a model_name: %#v", body.Entries[0])
+	}
+}
+
+// doAdmin issues an authenticated admin request and returns the recorder.
+func doAdmin(t *testing.T, s *Server, profile, method, path, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set(profileHeaderName, profile)
+	req.Header.Set("Authorization", testAgentBearer)
+	req.Header.Set(serviceNameHeader, testServiceName)
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	return rec
+}
+```
+
+- [ ] **Step 6: Run test to verify it fails**
+
+Run: `cd PROXY && go test ./internal/httpapi/ -run TestAdminModel -v`
+Expected: FAIL — build errors (the package does not compile yet after Phase B, plus the handlers are missing).
+
+- [ ] **Step 7: Write the handlers**
+
+Create `PROXY/internal/httpapi/admin_models.go`:
+
+```go
+package httpapi
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/docker"
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/registry"
+)
+
+// modelRequest is the create/update body. api_key is a POINTER so an update can
+// distinguish "leave the stored key alone" (absent) from "clear it" (empty
+// string) — a client never receives the key, so it must be able to edit other
+// fields without wiping it.
+type modelRequest struct {
+	ModelName  string          `json:"model_name"`
+	Provider   string          `json:"provider"`
+	Model      string          `json:"model"`
+	APIBase    string          `json:"api_base"`
+	APIKey     *string         `json:"api_key"`
+	AuthMethod string          `json:"auth_method"`
+	ExtraBody  json.RawMessage `json:"extra_body"`
+	Fallbacks  []string        `json:"fallbacks"`
+	Version    uint64          `json:"version"`
+}
+
+// registryErrStatus maps a registry error to an HTTP status and a body. An in-use
+// rejection carries the referrer list, because a bare 409 leaves the admin with
+// no next action.
+func registryErrStatus(err error) (int, any) {
+	var inUse *registry.InUseError
+	switch {
+	case errors.As(err, &inUse):
+		return http.StatusConflict, map[string]any{
+			"error":     inUse.Error(),
+			"referrers": inUse.Referrers,
+		}
+	case errors.Is(err, registry.ErrDuplicate):
+		return http.StatusConflict, errBody(err.Error())
+	case errors.Is(err, registry.ErrVersionConflict):
+		return http.StatusConflict, map[string]any{
+			"error":            err.Error(),
+			"version_conflict": true,
+		}
+	case errors.Is(err, registry.ErrNotFound):
+		return http.StatusNotFound, errBody(err.Error())
+	case errors.Is(err, registry.ErrInvalid):
+		return http.StatusBadRequest, errBody(err.Error())
+	case errors.Is(err, registry.ErrNoModelResolvable):
+		return http.StatusConflict, errBody(err.Error())
+	}
+	return http.StatusInternalServerError, errBody(err.Error())
+}
+
+// requireProxyAdmin resolves the caller and enforces the proxy-admin gate shared
+// by every inventory operation. The inventory holds API keys whose blast radius is
+// the whole instance, so a scope-level tier is not enough.
+func (s *Server) requireProxyAdmin(w http.ResponseWriter, r *http.Request) bool {
+	_, ident, ok := s.resolveSecretCaller(w, r)
+	if !ok {
+		return false
+	}
+	if !ident.Profile.HasAdminPrivileges() {
+		writeJSON(w, http.StatusForbidden,
+			errBody("admin privileges required to administer the model inventory"))
+		return false
+	}
+	return true
+}
+
+func (s *Server) handleAdminModelsList(w http.ResponseWriter, r *http.Request) {
+	if !s.requireProxyAdmin(w, r) {
+		return
+	}
+	models, err := s.Reg.ListModels()
+	if err != nil {
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	out := make([]registry.PublicModel, 0, len(models))
+	for _, m := range models {
+		refs, err := s.Reg.Referrers(m.ModelName)
+		if err != nil {
+			s.logf("admin models: referrers %q: %v", m.ModelName, err)
+		}
+		out = append(out, registry.Public(m, len(refs)))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"models": out})
+}
+
+func (s *Server) handleAdminModelCreate(w http.ResponseWriter, r *http.Request) {
+	if !s.requireProxyAdmin(w, r) {
+		return
+	}
+	var req modelRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid JSON body"))
+		return
+	}
+	m := registry.Model{
+		ModelName: req.ModelName, Provider: req.Provider, Model: req.Model,
+		APIBase: req.APIBase, AuthMethod: req.AuthMethod, ExtraBody: req.ExtraBody,
+		Fallbacks: req.Fallbacks, Status: registry.StatusActive,
+	}
+	if req.APIKey != nil {
+		m.APIKey = *req.APIKey
+	}
+	created, err := s.Reg.CreateModel(m)
+	if err != nil {
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"model": registry.Public(created, 0)})
+}
+
+func (s *Server) handleAdminModelUpdate(w http.ResponseWriter, r *http.Request) {
+	if !s.requireProxyAdmin(w, r) {
+		return
+	}
+	name := r.PathValue("name")
+	var req modelRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid JSON body"))
+		return
+	}
+	updated, err := s.Reg.UpdateModel(name, req.Version, func(cur *registry.Model) error {
+		cur.Provider = req.Provider
+		cur.Model = req.Model
+		cur.APIBase = req.APIBase
+		cur.AuthMethod = req.AuthMethod
+		cur.ExtraBody = req.ExtraBody
+		cur.Fallbacks = req.Fallbacks
+		// Absent api_key keeps the stored one; an explicit "" clears it.
+		if req.APIKey != nil {
+			cur.APIKey = *req.APIKey
+		}
+		return nil
+	})
+	if err != nil {
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	// A definition or key change must reach every workspace holding this model —
+	// as primary OR as a chain member. Reaching only primaries would leave the
+	// fallback holders on a stale credential.
+	if err := s.Mgr.ReapplyModelForModel(name); err != nil {
+		s.logf("admin models: reapply after updating %q: %v", name, err)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"model": registry.Public(updated, 0)})
+}
+
+func (s *Server) handleAdminModelDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requireProxyAdmin(w, r) {
+		return
+	}
+	if err := s.Reg.DeleteModel(r.PathValue("name")); err != nil {
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+type statusRequest struct {
+	Status     registry.Status `json:"status"`
+	ReplacedBy string          `json:"replaced_by"`
+	Version    uint64          `json:"version"`
+}
+
+func (s *Server) handleAdminModelStatus(w http.ResponseWriter, r *http.Request) {
+	if !s.requireProxyAdmin(w, r) {
+		return
+	}
+	var req statusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid JSON body"))
+		return
+	}
+	updated, err := s.Reg.SetStatus(r.PathValue("name"), req.Version, req.Status, req.ReplacedBy)
+	if err != nil {
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"model": registry.Public(updated, 0)})
+}
+
+func (s *Server) handleAdminModelDeprecate(w http.ResponseWriter, r *http.Request) {
+	if !s.requireProxyAdmin(w, r) {
+		return
+	}
+	var req statusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid JSON body"))
+		return
+	}
+	updated, err := s.Reg.Deprecate(r.PathValue("name"), req.Version, req.ReplacedBy)
+	if err != nil {
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	// Deliberately no re-apply: existing users keeping the model is the point.
+	writeJSON(w, http.StatusOK, map[string]any{"model": registry.Public(updated, 0)})
+}
+
+func (s *Server) handleAdminModelsReorder(w http.ResponseWriter, r *http.Request) {
+	if !s.requireProxyAdmin(w, r) {
+		return
+	}
+	var req struct {
+		Order []string `json:"order"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid JSON body"))
+		return
+	}
+	if err := s.Reg.SetPositions(req.Order); err != nil {
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	// Deliberately no re-apply and no restart: position is presentation only.
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (s *Server) handleAdminModelUsage(w http.ResponseWriter, r *http.Request) {
+	if !s.requireProxyAdmin(w, r) {
+		return
+	}
+	refs, err := s.Reg.Referrers(r.PathValue("name"))
+	if err != nil {
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	if refs == nil {
+		refs = []registry.Referrer{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"referrers": refs})
+}
+
+func (s *Server) handleAdminModelCatalog(w http.ResponseWriter, r *http.Request) {
+	if !s.requireProxyAdmin(w, r) {
+		return
+	}
+	entries, err := docker.SuggestionCatalog()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errBody(err.Error()))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
+}
+```
+
+- [ ] **Step 8: Add the `Reg` field to Server and register the routes**
+
+In `PROXY/internal/httpapi/handlers.go`, add to the `Server` struct:
+
+```go
+	// Reg is the model inventory. Handlers read and write it directly; Mgr is
+	// used only to make a change take effect on disk.
+	Reg *registry.Registry
+```
+
+Replace the old route block at lines 211-219 with:
+
+```go
+	mux.HandleFunc("GET /v1/admin/models", s.handleAdminModelsList)
+	mux.HandleFunc("POST /v1/admin/models", s.handleAdminModelCreate)
+	mux.HandleFunc("PUT /v1/admin/models/order", s.handleAdminModelsReorder)
+	mux.HandleFunc("PUT /v1/admin/models/{name}", s.handleAdminModelUpdate)
+	mux.HandleFunc("DELETE /v1/admin/models/{name}", s.handleAdminModelDelete)
+	mux.HandleFunc("PUT /v1/admin/models/{name}/status", s.handleAdminModelStatus)
+	mux.HandleFunc("POST /v1/admin/models/{name}/deprecate", s.handleAdminModelDeprecate)
+	mux.HandleFunc("GET /v1/admin/models/{name}/usage", s.handleAdminModelUsage)
+	mux.HandleFunc("GET /v1/admin/model-catalog", s.handleAdminModelCatalog)
+```
+
+`PUT /v1/admin/models/order` is registered **before** `PUT /v1/admin/models/{name}`; Go's mux prefers the more specific literal pattern, but keeping them adjacent and ordered makes the intent obvious to the next reader.
+
+Add the `registry` import to `handlers.go`, and pass `Reg: reg` wherever the `Server` is constructed in `PROXY/cmd/crab-shell-proxy/main.go`.
+
+- [ ] **Step 9: Run the handler tests**
+
+Run: `cd PROXY && go test ./internal/httpapi/ -run TestAdminModel -v`
+Expected: PASS — all eight tests. Remaining build errors in this package come from the old model-override handlers, which T14 removes.
+
+- [ ] **Step 10: Fix design.md §2 per the correction**
+
+In `PARENT/.specs/features/model-registry-source-of-truth/design.md` §2, replace the sentence
+
+> `APIKey` is tagged `json:"-"` so the wire type cannot leak it by omission (NFR-4); persistence uses a separate internal struct that includes it. The API response type adds `has_key bool` and `in_use_count int`, both computed.
+
+with
+
+> `Model.APIKey` is tagged `json:"api_key,omitempty"` for storage, and a separate `PublicModel` (`internal/registry/public.go`) has **no key field at all** — handlers only ever marshal `PublicModel`, so leaking a key requires adding a field rather than forgetting to strip one (NFR-4). `PublicModel` adds `has_key bool` and `in_use_count int`, both computed.
+
+- [ ] **Step 11: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+git add internal/registry/public.go internal/registry/public_test.go internal/httpapi/
+git commit -m "feat(httpapi): inventory endpoints behind the proxy-admin gate
+
+PublicModel has no key field at all, so leaking a credential requires adding a
+field rather than forgetting to strip one. api_key in the request body is a
+pointer so an update can leave the stored key alone — a client never receives it
+and must still be able to edit other fields.
+
+An in-use 409 carries the referrer list: a bare conflict leaves the admin with no
+next action. Updating a definition or key re-applies to chain holders too;
+reorder and deprecate deliberately re-apply to nothing.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 14: defaults and assignments, removal of the superseded routes
+
+**Files:**
+- Create: `PROXY/internal/httpapi/admin_model_scopes.go`
+- Create: `PROXY/internal/httpapi/admin_model_scopes_test.go`
+- Modify: `PROXY/internal/httpapi/admin.go` (delete the model-override handlers)
+- Modify: `PROXY/internal/httpapi/handlers.go` (trim the `Docker` interface)
+- Delete: `PROXY/internal/httpapi/admin_model_test.go`
+- Modify: `PROXY/internal/httpapi/openapi.json`
+
+**Interfaces:**
+- Consumes: T13.
+- Produces:
+  - `handleAdminModelDefaultGet` / `Set` / `Clear`
+  - `handleAdminModelAssignmentSet` / `Clear`
+  - `httpapi.scopeSelFromQuery(get func(string) string) (registry.ScopeSel, error)`
+- Removed from the `Docker` interface: `EffectiveModel`, `SetModelOverride`, `ClearModelOverride`. `ReapplyModelUser` loses its `agent config.Agent` parameter; `ReapplyModelForModel` is added.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `PROXY/internal/httpapi/admin_model_scopes_test.go`:
+
+```go
+package httpapi
+
+import (
+	"encoding/json"
+	"net/http"
+	"testing"
+)
+
+func TestModelDefaultGlobalAndAgentRequireProxyAdmin(t *testing.T) {
+	s, _, nonAdmin := newTestServer(t)
+
+	for _, path := range []string{
+		"/v1/admin/model-defaults?scope=global",
+		"/v1/admin/model-defaults?scope=agent",
+	} {
+		rec := doAdmin(t, s, nonAdmin, "PUT", path, `{"model_name":"m"}`)
+		// global and agent are instance-wide, and AuthorizeSharedScope has no level
+		// above tenant to express — so they take the proxy-admin gate.
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("PUT %s as non-admin = %d, want 403", path, rec.Code)
+		}
+	}
+}
+
+func TestModelDefaultTenantUsesTheSharedScopeGate(t *testing.T) {
+	s, admin, nonAdmin := newTestServer(t)
+	doAdmin(t, s, admin, "POST", "/v1/admin/models",
+		`{"model_name":"m","provider":"openai","model":"m","api_base":"https://x","api_key":"sk"}`)
+
+	deny := doAdmin(t, s, nonAdmin, "PUT",
+		"/v1/admin/model-defaults?scope=tenant&tenant_id="+testForeignTenantID, `{"model_name":"m"}`)
+	if deny.Code != http.StatusForbidden {
+		t.Errorf("tenant default for a foreign tenant = %d, want 403", deny.Code)
+	}
+
+	allow := doAdmin(t, s, admin, "PUT",
+		"/v1/admin/model-defaults?scope=tenant&tenant_id="+testTenantID, `{"model_name":"m"}`)
+	if allow.Code != http.StatusOK {
+		t.Errorf("tenant default for an owned tenant = %d: %s", allow.Code, allow.Body.String())
+	}
+}
+
+func TestModelDefaultRoundTripAndClear(t *testing.T) {
+	s, admin, _ := newTestServer(t)
+	doAdmin(t, s, admin, "POST", "/v1/admin/models",
+		`{"model_name":"m","provider":"openai","model":"m","api_base":"https://x","api_key":"sk"}`)
+
+	if rec := doAdmin(t, s, admin, "PUT", "/v1/admin/model-defaults?scope=global", `{"model_name":"m"}`); rec.Code != http.StatusOK {
+		t.Fatalf("set = %d: %s", rec.Code, rec.Body.String())
+	}
+	rec := doAdmin(t, s, admin, "GET", "/v1/admin/model-defaults?scope=global", "")
+	var body struct {
+		Default *struct {
+			ModelName string `json:"model_name"`
+		} `json:"default"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Default == nil || body.Default.ModelName != "m" {
+		t.Errorf("get = %s, want model m", rec.Body.String())
+	}
+
+	if rec := doAdmin(t, s, admin, "DELETE", "/v1/admin/model-defaults?scope=global", ""); rec.Code != http.StatusOK {
+		t.Fatalf("clear = %d", rec.Code)
+	}
+	rec = doAdmin(t, s, admin, "GET", "/v1/admin/model-defaults?scope=global", "")
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	// An absent default is a null, not a 404: "no default here" is a normal state
+	// the UI renders, not an error.
+	if body.Default != nil {
+		t.Errorf("cleared default = %s, want null", rec.Body.String())
+	}
+}
+
+func TestModelDefaultRejectsAnInactiveModel(t *testing.T) {
+	s, admin, _ := newTestServer(t)
+	doAdmin(t, s, admin, "POST", "/v1/admin/models",
+		`{"model_name":"m","provider":"openai","model":"m","api_base":"https://x","api_key":"sk"}`)
+	doAdmin(t, s, admin, "PUT", "/v1/admin/models/m/status", `{"version":1,"status":"disabled"}`)
+
+	rec := doAdmin(t, s, admin, "PUT", "/v1/admin/model-defaults?scope=global", `{"model_name":"m"}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("disabled model as a default = %d, want 400", rec.Code)
+	}
+}
+
+func TestModelAssignmentSetRequiresUserManagementAuthority(t *testing.T) {
+	s, admin, nonAdmin := newTestServer(t)
+	doAdmin(t, s, admin, "POST", "/v1/admin/models",
+		`{"model_name":"m","provider":"openai","model":"m","api_base":"https://x","api_key":"sk"}`)
+
+	body := `{"tenant_id":"` + testForeignTenantID + `","subs_acc_id":"` + testSubsAccID +
+		`","user_acc_id":"` + testUserAccID + `","model_name":"m"}`
+	rec := doAdmin(t, s, nonAdmin, "POST", "/v1/admin/model-assignments", body)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("assignment outside authority = %d, want 403", rec.Code)
+	}
+}
+
+func TestModelAssignmentSetUnknownModelIs400(t *testing.T) {
+	s, admin, _ := newTestServer(t)
+	body := `{"tenant_id":"` + testTenantID + `","subs_acc_id":"` + testSubsAccID +
+		`","user_acc_id":"` + testUserAccID + `","model_name":"ghost"}`
+	rec := doAdmin(t, s, admin, "POST", "/v1/admin/model-assignments", body)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("unknown model = %d, want 400", rec.Code)
+	}
+}
+```
+
+Read `PROXY/internal/httpapi/handlers_test.go` and `admin_model_test.go` for the existing fixture constants (`testTenantID`, `testSubsAccID`, `testUserAccID`, and whichever value stands for a tenant the caller does **not** administer). Reuse them; add `testForeignTenantID` only if no equivalent exists.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd PROXY && go test ./internal/httpapi/ -run 'TestModelDefault|TestModelAssignment' -v`
+Expected: FAIL — build errors plus missing handlers.
+
+- [ ] **Step 3: Write the handlers**
+
+Create `PROXY/internal/httpapi/admin_model_scopes.go`:
+
+```go
+package httpapi
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/google/uuid"
+
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/authz"
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/docker"
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/registry"
+)
+
+// scopeSelFromQuery parses ?scope=…&tenant_id=…&subs_acc_id=… into a ScopeSel.
+// The agent level takes the agent from the ROUTED service, not a parameter, so a
+// caller cannot address another agent's default through their own route.
+func scopeSelFromQuery(get func(string) string, routedAgent string) (registry.ScopeSel, error) {
+	switch scope := get("scope"); scope {
+	case "global":
+		return registry.ScopeSel{Level: registry.LevelGlobal}, nil
+	case "agent":
+		return registry.ScopeSel{Level: registry.LevelAgent, Agent: routedAgent}, nil
+	case "tenant":
+		return registry.ScopeSel{Level: registry.LevelTenant, TenantID: get("tenant_id")}, nil
+	case "subscription":
+		return registry.ScopeSel{
+			Level: registry.LevelSubscription, TenantID: get("tenant_id"), SubsAccID: get("subs_acc_id"),
+		}, nil
+	default:
+		return registry.ScopeSel{}, fmt.Errorf(`"scope" must be global, agent, tenant or subscription (got %q)`, scope)
+	}
+}
+
+// authorizeScopeDefault gates a scope-default operation. global and agent are
+// instance-wide, so they need proxy-admin: AuthorizeSharedScope has no level above
+// tenant to express, and letting a tenant admin set them would hand them the whole
+// instance.
+func (s *Server) authorizeScopeDefault(w http.ResponseWriter, r *http.Request) (registry.ScopeSel, bool) {
+	agent, ident, ok := s.resolveSecretCaller(w, r)
+	if !ok {
+		return registry.ScopeSel{}, false
+	}
+	sel, err := scopeSelFromQuery(r.URL.Query().Get, agent.Key)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
+		return registry.ScopeSel{}, false
+	}
+	switch sel.Level {
+	case registry.LevelGlobal, registry.LevelAgent:
+		if !ident.Profile.HasAdminPrivileges() {
+			writeJSON(w, http.StatusForbidden,
+				errBody("admin privileges required to set an instance-wide model default"))
+			return registry.ScopeSel{}, false
+		}
+	default:
+		if !authz.AuthorizeSharedScope(ident.Profile, string(sel.Level), sel.TenantID, sel.SubsAccID) {
+			writeJSON(w, http.StatusForbidden, errBody("not authorized to administer this scope"))
+			return registry.ScopeSel{}, false
+		}
+	}
+	return sel, true
+}
+
+func (s *Server) handleAdminModelDefaultGet(w http.ResponseWriter, r *http.Request) {
+	sel, ok := s.authorizeScopeDefault(w, r)
+	if !ok {
+		return
+	}
+	d, err := s.Reg.GetScopeDefault(sel)
+	if err != nil {
+		if errors.Is(err, registry.ErrNotFound) {
+			// Absent is a normal state the UI renders, not an error.
+			writeJSON(w, http.StatusOK, map[string]any{"default": nil})
+			return
+		}
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"default": d})
+}
+
+func (s *Server) handleAdminModelDefaultSet(w http.ResponseWriter, r *http.Request) {
+	sel, ok := s.authorizeScopeDefault(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		ModelName string `json:"model_name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid JSON body"))
+		return
+	}
+	if err := s.Reg.SetScopeDefault(sel, req.ModelName); err != nil {
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	s.reapplyForScope(sel)
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (s *Server) handleAdminModelDefaultClear(w http.ResponseWriter, r *http.Request) {
+	sel, ok := s.authorizeScopeDefault(w, r)
+	if !ok {
+		return
+	}
+	if err := s.Reg.ClearScopeDefault(sel); err != nil {
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	s.reapplyForScope(sel)
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+// reapplyForScope re-materializes the workspaces a scope-default change affects.
+// A global or agent change has no docker.Scope to express, so it is left to each
+// workspace's next start rather than sweeping the whole instance — a fleet-wide
+// restart is not something a single admin click should trigger.
+func (s *Server) reapplyForScope(sel registry.ScopeSel) {
+	var scope docker.Scope
+	switch sel.Level {
+	case registry.LevelTenant:
+		scope = docker.Scope{Kind: docker.ScopeTenant, TenantID: sel.TenantID}
+	case registry.LevelSubscription:
+		scope = docker.Scope{Kind: docker.ScopeSubscription, TenantID: sel.TenantID, SubsAccID: sel.SubsAccID}
+	default:
+		s.logf("model default %s changed: workspaces pick it up on their next start", sel.Level)
+		return
+	}
+	if err := s.Mgr.ReapplyModelScope(scope); err != nil {
+		s.logf("model default: reapply scope %+v: %v", scope, err)
+	}
+}
+
+type modelAssignmentRequest struct {
+	TenantID  string `json:"tenant_id"`
+	SubsAccID string `json:"subs_acc_id"`
+	UserAccID string `json:"user_acc_id"`
+	ModelName string `json:"model_name"`
+}
+
+// resolveAssignmentTarget parses and authorizes a per-user assignment, reusing the
+// same authority check every other per-user admin operation uses.
+func (s *Server) resolveAssignmentTarget(w http.ResponseWriter, r *http.Request) (docker.WorkspaceKey, modelAssignmentRequest, bool) {
+	agent, ident, ok := s.resolveSecretCaller(w, r)
+	if !ok {
+		return docker.WorkspaceKey{}, modelAssignmentRequest{}, false
+	}
+	var req modelAssignmentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody("invalid JSON body"))
+		return docker.WorkspaceKey{}, req, false
+	}
+	tenantID, err := uuid.Parse(req.TenantID)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody(`"tenant_id" is required and must be a UUID`))
+		return docker.WorkspaceKey{}, req, false
+	}
+	subsAccID, err := uuid.Parse(req.SubsAccID)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody(`"subs_acc_id" is required and must be a UUID`))
+		return docker.WorkspaceKey{}, req, false
+	}
+	userAccID, err := uuid.Parse(req.UserAccID)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errBody(`"user_acc_id" is required and must be a UUID`))
+		return docker.WorkspaceKey{}, req, false
+	}
+	if !authz.AuthorizeUserManagement(ident.Profile, tenantID.String(), subsAccID.String()) {
+		writeJSON(w, http.StatusForbidden, errBody("not authorized to manage this user"))
+		return docker.WorkspaceKey{}, req, false
+	}
+	return docker.WorkspaceKey{
+		TenantID: tenantID.String(), SubsAccID: subsAccID.String(),
+		Role: agent.Key, UserAccID: userAccID.String(),
+	}, req, true
+}
+
+func (s *Server) handleAdminModelAssignmentSet(w http.ResponseWriter, r *http.Request) {
+	key, req, ok := s.resolveAssignmentTarget(w, r)
+	if !ok {
+		return
+	}
+	m, err := s.Reg.GetModel(req.ModelName)
+	if err != nil {
+		if errors.Is(err, registry.ErrNotFound) {
+			writeJSON(w, http.StatusBadRequest, errBody("model "+req.ModelName+" is not in the inventory"))
+			return
+		}
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	if m.Status == registry.StatusDisabled {
+		writeJSON(w, http.StatusBadRequest,
+			errBody("model "+req.ModelName+" is disabled and cannot be assigned"))
+		return
+	}
+	if err := s.Mgr.SetModelAssignment(key, req.ModelName); err != nil {
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "model_name": req.ModelName})
+}
+
+func (s *Server) handleAdminModelAssignmentClear(w http.ResponseWriter, r *http.Request) {
+	key, _, ok := s.resolveAssignmentTarget(w, r)
+	if !ok {
+		return
+	}
+	if err := s.Mgr.ClearModelAssignment(key); err != nil {
+		status, body := registryErrStatus(err)
+		writeJSON(w, status, body)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+```
+
+- [ ] **Step 4: Add the two Manager methods the assignment handlers call**
+
+Append to `PROXY/internal/docker/model.go`:
+
+```go
+// SetModelAssignment pins one workspace to a model and re-materializes it. The
+// pin is EXPLICIT, which is what makes it survive later scope-default changes.
+func (m *Manager) SetModelAssignment(key WorkspaceKey, modelName string) error {
+	ref := m.workspaceRef(key)
+	if err := m.reg.PutAssignment(ref, registry.Assignment{
+		ModelName: modelName, Source: registry.SourceExplicit,
+	}); err != nil {
+		return err
+	}
+	return m.ReapplyModelUser(key)
+}
+
+// ClearModelAssignment drops a per-user pin so the workspace falls back to its
+// scope default, then re-materializes it. The assignment is re-created as
+// INHERITED by the re-materialization, which is how the inventory keeps knowing
+// what this workspace runs.
+func (m *Manager) ClearModelAssignment(key WorkspaceKey) error {
+	if err := m.reg.DeleteAssignment(m.workspaceRef(key)); err != nil {
+		return err
+	}
+	return m.ReapplyModelUser(key)
+}
+```
+
+Add the `registry` import to `model.go`.
+
+- [ ] **Step 5: Delete the superseded handlers and routes**
+
+In `PROXY/internal/httpapi/admin.go`, delete everything under the `// --- admin-model-override …` marker at line ~562 through the end of that feature's handlers: `resolveModelTarget`, `handleAdminModelsList` (the old `config.yaml` one), `handleAdminModelGet`, `handleAdminModelSet`, `handleAdminModelClear`, `handleAdminModelUsers`, and the `registeredModelRequest` / `applyRegisteredModelRequest` types plus the four `handleAdminRegisteredModel*` handlers.
+
+In `PROXY/internal/httpapi/handlers.go`, delete from the `Docker` interface:
+
+```go
+	EffectiveModel(agent config.Agent, target docker.ModelTarget) (*config.ModelConfig, string)
+	SetModelOverride(target docker.ModelTarget, sel docker.ModelSel) error
+	ClearModelOverride(target docker.ModelTarget) error
+```
+
+and change
+
+```go
+	ReapplyModelUser(key docker.WorkspaceKey, agent config.Agent) error
+```
+
+to
+
+```go
+	ReapplyModelUser(key docker.WorkspaceKey) error
+	// ReapplyModelForModel re-materializes every workspace whose materialized set
+	// contains the model — primaries AND chain holders.
+	ReapplyModelForModel(modelName string) error
+	// SetModelAssignment pins one workspace to a model; ClearModelAssignment drops
+	// the pin so the scope default applies again.
+	SetModelAssignment(key docker.WorkspaceKey, modelName string) error
+	ClearModelAssignment(key docker.WorkspaceKey) error
+```
+
+Register the new routes next to the T13 block:
+
+```go
+	mux.HandleFunc("GET /v1/admin/model-defaults", s.handleAdminModelDefaultGet)
+	mux.HandleFunc("PUT /v1/admin/model-defaults", s.handleAdminModelDefaultSet)
+	mux.HandleFunc("DELETE /v1/admin/model-defaults", s.handleAdminModelDefaultClear)
+	mux.HandleFunc("POST /v1/admin/model-assignments", s.handleAdminModelAssignmentSet)
+	mux.HandleFunc("DELETE /v1/admin/model-assignments", s.handleAdminModelAssignmentClear)
+```
+
+Delete the obsolete test file:
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+git rm internal/httpapi/admin_model_test.go
+```
+
+- [ ] **Step 6: Update the fake Docker in the httpapi tests**
+
+`PROXY/internal/httpapi/handlers_test.go` has a fake satisfying `Docker`. Remove the three deleted methods from it, change `ReapplyModelUser` to the one-argument form, and add:
+
+```go
+func (f *fakeDocker) ReapplyModelForModel(modelName string) error { return nil }
+func (f *fakeDocker) SetModelAssignment(key docker.WorkspaceKey, modelName string) error {
+	return f.reg.PutAssignment(registry.WorkspaceRef{
+		TenantID: key.TenantID, SubsAccID: key.SubsAccID, Agent: key.Role, UserAccID: key.UserAccID,
+	}, registry.Assignment{ModelName: modelName, Source: registry.SourceExplicit})
+}
+func (f *fakeDocker) ClearModelAssignment(key docker.WorkspaceKey) error {
+	return f.reg.DeleteAssignment(registry.WorkspaceRef{
+		TenantID: key.TenantID, SubsAccID: key.SubsAccID, Agent: key.Role, UserAccID: key.UserAccID,
+	})
+}
+```
+
+Give the fake a `reg *registry.Registry` field and have `newTestServer` open a registry in `t.TempDir()`, assign it to both `Server.Reg` and the fake, and close it via `t.Cleanup`. Use the same shape as `testRegistry` in `internal/registry/registry_test.go` but with `nil` for `now`.
+
+- [ ] **Step 7: Update openapi.json**
+
+In `PROXY/internal/httpapi/openapi.json`, remove the `/v1/admin/registered-models`, `/v1/admin/registered-models/apply`, `/v1/admin/model` and `/v1/admin/model/users` path entries, and add entries for the nine T13 routes plus the five above. Mirror the existing file's style: each path gets a `summary`, the security scheme the neighbouring admin paths use, and response codes 200/400/403/404/409 as applicable. No request or response schema may include an `api_key` **response** property; the create/update **request** bodies do include `api_key` (write-only) — mark them `"writeOnly": true`.
+
+- [ ] **Step 8: Run the whole suite**
+
+Run: `cd PROXY && go build ./... && go vet ./... && go test ./... 2>&1 | tail -30`
+Expected: PASS across every package. This is the first point since T10 that the whole module compiles.
+
+- [ ] **Step 9: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+git add -A internal/httpapi/
+git commit -m "feat(httpapi): scope defaults and per-user assignments; drop the old model routes
+
+global and agent defaults take the proxy-admin gate because they are
+instance-wide and AuthorizeSharedScope has no level above tenant to express;
+tenant and subscription keep the shared-scope check, and per-user assignment
+keeps the user-management check.
+
+The agent level takes its agent from the ROUTED service rather than a parameter,
+so a caller cannot address another agent's default through their own route. A
+global or agent change is left to each workspace's next start: a fleet-wide
+restart is not something one admin click should trigger.
+
+Removes /v1/admin/registered-models*, /v1/admin/model and /v1/admin/model/users,
+and trims the Docker interface accordingly. Nothing called them — the
+admin-model-override UI its FR-6 specified was never built.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 15: repoint the native model-secret slot at the inventory
+
+**Files:**
+- Modify: `PROXY/internal/docker/secrets.go:168-200` (`validateNativeSlot`)
+- Modify: `PROXY/internal/docker/secrets_test.go`
+- Modify: `PROXY/internal/docker/manager.go:546` (`workspaceSecurityPath`, if it exists only for this validation)
+
+**Interfaces:**
+- Consumes: T01–T14.
+- Produces: `validateNativeSlot` gains a `models modelNameChecker` parameter; `type modelNameChecker interface { GetModel(string) (registry.Model, error) }`.
+
+- [ ] **Step 1: Write the failing test**
+
+Add to `PROXY/internal/docker/secrets_test.go`:
+
+```go
+func TestValidateNativeSlotChecksModelsAgainstTheInventory(t *testing.T) {
+	at := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
+	reg, err := registry.Open(filepath.Join(t.TempDir(), "r.db"), func() time.Time { return at })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reg.Close()
+	if _, err := reg.CreateModel(registry.Model{
+		ModelName: "known", Provider: "openai", Model: "known",
+		APIBase: "https://x", APIKey: "sk", Status: registry.StatusActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// A model in the inventory is accepted, so a selected model never fails
+	// validation.
+	if err := validateNativeSlot(reg, "model_list.known.api_keys"); err != nil {
+		t.Errorf("known model rejected: %v", err)
+	}
+	// One that is not is rejected: the inventory is the only place a model exists,
+	// so accepting an unknown name would key a credential nothing reads.
+	if err := validateNativeSlot(reg, "model_list.ghost.api_keys"); !errors.Is(err, ErrUnknownNativeSlot) {
+		t.Errorf("unknown model = %v, want ErrUnknownNativeSlot", err)
+	}
+	// The web family is unchanged.
+	if err := validateNativeSlot(reg, "web.brave"); err != nil {
+		t.Errorf("web.brave rejected: %v", err)
+	}
+	if err := validateNativeSlot(reg, "web.nonsense"); !errors.Is(err, ErrUnknownNativeSlot) {
+		t.Errorf("unknown web provider = %v, want ErrUnknownNativeSlot", err)
+	}
+	// The proxy<->picoclaw channel token must stay unreachable.
+	if err := validateNativeSlot(reg, "channel_list.pico.settings.token"); !errors.Is(err, ErrUnknownNativeSlot) {
+		t.Errorf("pico token slot = %v, want ErrUnknownNativeSlot", err)
+	}
+}
+```
+
+Add `"errors"`, `"path/filepath"`, `"time"` and the `registry` import to the file if absent.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd PROXY && go test ./internal/docker/ -run TestValidateNativeSlot -v`
+Expected: FAIL — `too many arguments in call to validateNativeSlot`.
+
+- [ ] **Step 3: Rewrite validateNativeSlot**
+
+Replace `validateNativeSlot` in `PROXY/internal/docker/secrets.go` with:
+
+```go
+// modelNameChecker is the slice of the registry this validation needs. Taking an
+// interface keeps secrets.go testable without a Manager and documents that the
+// only question being asked is "does this model exist".
+type modelNameChecker interface {
+	GetModel(name string) (registry.Model, error)
+}
+
+// validateNativeSlot accepts only two families: web.<provider> from the fixed
+// enum, and model_list.<model>.api_keys where the model exists in the INVENTORY.
+// Everything else — notably channel_list.pico.settings.token, the
+// proxy<->picoclaw auth token — is rejected so a user can never overwrite it.
+//
+// The model check reads the inventory rather than a template's .security.yml: the
+// inventory is now the only place a model exists, so a name it does not know would
+// key a credential nothing reads. A model registered through the admin UI
+// therefore always passes, and a typo never does.
+//
+// A slot that passes becomes a scope-level OVERLAY over the inventory's own key:
+// applyNativeSecrets runs after materialization, so a scope admin can supply their
+// own credential for a registered model. That is a layered override with defined
+// precedence, not a second writer.
+func validateNativeSlot(models modelNameChecker, slot string) error {
+	parts := strings.Split(slot, ".")
+	switch {
+	case len(parts) == 2 && parts[0] == "web":
+		if webProviders[parts[1]] {
+			return nil
+		}
+		return fmt.Errorf("%w: unknown web provider %q", ErrUnknownNativeSlot, parts[1])
+	case len(parts) == 3 && parts[0] == "model_list" && parts[2] == "api_keys":
+		if _, err := models.GetModel(parts[1]); err != nil {
+			return fmt.Errorf("%w: model %q is not in the model inventory", ErrUnknownNativeSlot, parts[1])
+		}
+		return nil
+	}
+	return fmt.Errorf("%w: %q", ErrUnknownNativeSlot, slot)
+}
+```
+
+Add the `registry` import to `secrets.go`.
+
+- [ ] **Step 4: Update the two call sites**
+
+The call at `PROXY/internal/docker/secrets.go:81` is inside a function reached from a `Manager` method. Thread the checker through: change the enclosing `upsertSecret`/`setSecret` function to take a `models modelNameChecker` first parameter, pass `m.reg` from the `Manager` method that calls it, and replace
+
+```go
+		if err := validateNativeSlot(secPath, name); err != nil {
+```
+
+with
+
+```go
+		if err := validateNativeSlot(models, name); err != nil {
+```
+
+Run `cd PROXY && go build ./internal/docker/ 2>&1 | head -20` and thread the parameter through each reported call site until it compiles. Then delete `workspaceSecurityPath` (`manager.go:546`) if the compiler reports it as unused — its only purpose was this validation.
+
+- [ ] **Step 5: Run the suite**
+
+Run: `cd PROXY && go build ./... && go vet ./... && go test ./...`
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+git add internal/docker/
+git commit -m "feat(docker): native model-secret slots validate against the inventory
+
+The slot used to be checked against a template's .security.yml. The inventory is
+now the only place a model exists, so a name it does not know would key a
+credential nothing reads. A model registered through the admin UI always passes
+and a typo never does.
+
+A passing slot remains a scope-level OVERLAY over the inventory key —
+applyNativeSecrets runs after materialization — so a scope admin can still supply
+their own credential for a registered model. Layered override with defined
+precedence, not a second writer.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Phase E — Gateway
+
+### Task 16: register the new admin paths in the mycelium allowlist
+
+**Files:**
+- Modify: `PARENT/fungi/mycelium/config.base.toml`
+- Modify: `PARENT/fungi/mycelium/config.standalone.toml`
+
+**Interfaces:**
+- Consumes: T13, T14 route paths.
+- Produces: nothing in code — this is deploy-blocking configuration.
+
+- [ ] **Step 1: Inspect the existing block to copy its exact shape**
+
+Run:
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project
+grep -n "registered-models" -B 2 -A 6 fungi/mycelium/config.base.toml
+```
+
+Expected: two `[[picoclaw-alpha.path]]` blocks and two `[[picoclaw-beta.path]]` blocks, each with `group`, `path`, `secretName`, `acceptInsecureRouting` and `methods`.
+
+- [ ] **Step 2: Replace them, for both services, in both files**
+
+For each of `picoclaw-alpha` and `picoclaw-beta`, in **both** `config.base.toml` and `config.standalone.toml`: delete the `registered-models`, `registered-models/apply`, `/v1/admin/model` and `/v1/admin/model/users` path blocks, and add (substituting the service name in `secretName`):
+
+```toml
+[[picoclaw-alpha.path]]
+group = "protected"
+path = "/v1/admin/models"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST"]
+
+[[picoclaw-alpha.path]]
+group = "protected"
+path = "/v1/admin/models/order"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["PUT"]
+
+[[picoclaw-alpha.path]]
+group = "protected"
+path = "/v1/admin/model-catalog"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[picoclaw-alpha.path]]
+group = "protected"
+path = "/v1/admin/model-defaults"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "PUT", "DELETE"]
+
+[[picoclaw-alpha.path]]
+group = "protected"
+path = "/v1/admin/model-assignments"
+secretName = "picoclaw-alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST", "DELETE"]
+```
+
+- [ ] **Step 3: Determine how the gateway matches the per-model paths**
+
+`PUT /v1/admin/models/{name}`, `DELETE /v1/admin/models/{name}`, `PUT /v1/admin/models/{name}/status`, `POST /v1/admin/models/{name}/deprecate` and `GET /v1/admin/models/{name}/usage` carry a variable segment. Check whether the existing config uses prefix matching:
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project
+grep -n "path = " fungi/mycelium/config.base.toml | head -40
+```
+
+If any existing entry covers sub-paths (e.g. a `/v1/admin/shared-skills` entry serving `/v1/admin/shared-skills/<name>`), then `path = "/v1/admin/models"` already covers the variable-segment routes and Step 2 is sufficient — record that in the commit message.
+
+If matching is exact, add one block per literal shape the UI calls, using a placeholder segment consistent with whatever the existing config does for `shared-skills`. If nothing in the file demonstrates a variable segment, **stop and ask the user** rather than guessing: an unroutable admin path fails as "Request path does not match any service", which looks like a proxy bug and would be diagnosed in the wrong repo.
+
+- [ ] **Step 4: Verify both files still parse**
+
+Run:
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project
+python3 -c "import tomllib,sys
+for p in ['fungi/mycelium/config.base.toml','fungi/mycelium/config.standalone.toml']:
+    tomllib.load(open(p,'rb')); print(p,'ok')"
+```
+
+Expected: `ok` for both.
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project
+git add fungi/mycelium/config.base.toml fungi/mycelium/config.standalone.toml
+git commit -m "feat(gateway): allow the model inventory admin paths
+
+Registers /v1/admin/models*, /v1/admin/model-catalog, /v1/admin/model-defaults
+and /v1/admin/model-assignments for both picoclaw services, and drops the
+superseded registered-models and model-override entries.
+
+Deploy-blocking and requires a gateway reload: without it the gateway answers
+'Request path does not match any service', which reads as a proxy bug and gets
+diagnosed in the wrong repo. Precedent: c89570c.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+**Phases D and E complete.** The proxy compiles, its whole suite passes, and the new admin surface is reachable through the gateway.
+
+
 
 
