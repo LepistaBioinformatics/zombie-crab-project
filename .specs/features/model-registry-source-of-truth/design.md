@@ -99,9 +99,11 @@ type ScopeDefault struct {
 }
 ```
 
-`APIKey` is tagged `json:"-"` so the wire type cannot leak it by omission
-(NFR-4); persistence uses a separate internal struct that includes it. The API
-response type adds `has_key bool` and `in_use_count int`, both computed.
+`Model.APIKey` is tagged `json:"api_key,omitempty"` for storage, and a separate
+`PublicModel` (`internal/registry/public.go`) has **no key field at all** —
+handlers only ever marshal `PublicModel`, so leaking a key requires adding a
+field rather than forgetting to strip one (NFR-4). `PublicModel` adds
+`has_key bool` and `in_use_count int`, both computed.
 
 ## 3. Resolution
 
