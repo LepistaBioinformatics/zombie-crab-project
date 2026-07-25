@@ -11,7 +11,16 @@
 ## Global Constraints
 
 - Go module is `github.com/LepistaBioinformatics/crab-shell-proxy`, Go 1.23. `CGO_ENABLED=0` (`Dockerfile:15`) — no cgo-linked dependency is permitted.
-- The Docker build **is** the test gate (`Dockerfile:22-23`): `go mod tidy && go vet ./... && go test ./...` must pass or no image is produced.
+- The Docker build **is** the test gate (`Dockerfile:22-23`): `go mod tidy && go vet ./... && go test ./...` must pass or no image is produced. **The build runs as root; a dev host does not.** Eight `internal/docker` tests call `chownTree` to a different user and therefore fail locally with `chown …: operation not permitted`. They are pre-existing and unrelated to this feature:
+
+  ```
+  TestContinuousDoesNotArmIdle          TestEnsureRunningSingleFlight
+  TestCreateAddsReadOnlySecretsBind     TestReconcileEnsuresContinuousWorkspaces
+  TestEnsureRunningColdStart            TestRestartWorkspaceRestartsAndRearms
+  TestEnsureRunningReusesRunning        TestScaleToZeroIdleStop
+  ```
+
+  **The local gate is therefore:** `go build ./... && go vet ./... && go test ./...` with *only* those eight failing, *only* with `operation not permitted`. Every other package must be `ok`. Any additional failure, or any of those eight failing for a different reason, is a real regression. New tests must avoid the trap the way the existing ones do — construct the `Manager` with `PicoclawUser: ""`, which makes `chownTree` a no-op.
 - No API response may ever contain a model `api_key`. Reads report `has_key bool` only.
 - Materialized `config.json` `model_list` entries carry **no `api_key` field** — picoclaw ignores it in schema V2+ and the shipped template is `"version": 3`. Keys go to `.security.yml` at `model_list.<model_name>.api_keys` as an array, always.
 - Re-materialization is stop/start only, never recreate — a recreate loses the transcript.
