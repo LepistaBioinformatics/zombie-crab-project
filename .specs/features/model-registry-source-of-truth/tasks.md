@@ -2391,5 +2391,1420 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-**Phase A complete.** `internal/registry` is self-contained and fully tested; nothing wires it yet, so the proxy still behaves exactly as before. Phases B–F follow in the sections appended below.
+**Phase A complete.** `internal/registry` is self-contained and fully tested; nothing wires it yet, so the proxy still behaves exactly as before.
+
+---
+
+## Phase B — Materialization
+
+### Task 07: `materializeModels` — config.json without keys, .security.yml with keys and pruning
+
+**Files:**
+- Create: `PROXY/internal/docker/materialize.go`
+- Create: `PROXY/internal/docker/materialize_test.go`
+
+**Interfaces:**
+- Consumes: `registry.Resolution`, `registry.Model`; existing `readSecurityConfig`, `writeSecurityConfig` (`internal/docker/secrets.go:281,300`), `chownTree` (`internal/docker/provision.go:212`).
+- Produces:
+  - `docker.materializeModels(configPath, secPath string, res registry.Resolution) error`
+  - `docker.modelListEntry(m registry.Model) map[string]any`
+  - `docker.pruneSecurityModelList(sec map[string]any, keep []string)`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `PROXY/internal/docker/materialize_test.go`:
+
+```go
+package docker
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/registry"
+)
+
+// seedWorkspaceFiles writes a minimal provisioned workspace: a config.json with
+// an empty model_list (the new template shape) and a .security.yml holding the
+// pico channel token plus a stale model key from a previous model.
+func seedWorkspaceFiles(t *testing.T) (dir, configPath, secPath string) {
+	t.Helper()
+	dir = t.TempDir()
+	configPath = filepath.Join(dir, "config.json")
+	secPath = filepath.Join(dir, ".security.yml")
+
+	cfg := map[string]any{
+		"version":      3,
+		"channel_list": map[string]any{"pico": map[string]any{"enabled": false}},
+		"agents":       map[string]any{"defaults": map[string]any{"provider": "", "model_name": ""}},
+		"model_list":   []any{},
+	}
+	raw, _ := json.MarshalIndent(cfg, "", "  ")
+	if err := os.WriteFile(configPath, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sec := "channel_list:\n  pico:\n    settings:\n      token: pico-seed\n" +
+		"model_list:\n  retired-model:\n    api_keys:\n    - sk-old\n" +
+		"web:\n  brave:\n    api_keys:\n    - brave-key\n"
+	if err := os.WriteFile(secPath, []byte(sec), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return dir, configPath, secPath
+}
+
+func testResolution() registry.Resolution {
+	return registry.Resolution{
+		Primary: registry.Model{
+			ModelName: "main", Provider: "openai", Model: "gpt-5.4",
+			APIBase: "https://api.openai.com/v1", APIKey: "sk-main", Status: registry.StatusActive,
+			Fallbacks: []string{"backup"},
+		},
+		Chain: []registry.Model{{
+			ModelName: "backup", Provider: "anthropic", Model: "claude-sonnet-4-6",
+			APIBase: "https://api.anthropic.com/v1", APIKey: "sk-backup", Status: registry.StatusActive,
+		}},
+	}
+}
+
+func readConfig(t *testing.T, path string) map[string]any {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
+func TestMaterializeWritesModelListWithoutAnyAPIKey(t *testing.T) {
+	_, configPath, secPath := seedWorkspaceFiles(t)
+
+	if err := materializeModels(configPath, secPath, testResolution()); err != nil {
+		t.Fatalf("materializeModels: %v", err)
+	}
+
+	cfg := readConfig(t, configPath)
+	list, ok := cfg["model_list"].([]any)
+	if !ok || len(list) != 2 {
+		t.Fatalf("model_list = %#v, want 2 entries", cfg["model_list"])
+	}
+	for i, item := range list {
+		entry := item.(map[string]any)
+		// picoclaw removed api_key (singular) from config.json in schema V2+ and
+		// ignores it; the template is version 3. A key here is dead weight that
+		// also leaks the secret into a file with looser handling than .security.yml.
+		if _, present := entry["api_key"]; present {
+			t.Errorf("model_list[%d] carries api_key: %#v", i, entry)
+		}
+		if entry["enabled"] != true {
+			t.Errorf("model_list[%d].enabled = %#v, want true", i, entry["enabled"])
+		}
+	}
+	first := list[0].(map[string]any)
+	if first["model_name"] != "main" || first["provider"] != "openai" || first["api_base"] != "https://api.openai.com/v1" {
+		t.Errorf("primary entry = %#v", first)
+	}
+}
+
+func TestMaterializeSetsDefaultsAndFallbackOrder(t *testing.T) {
+	_, configPath, secPath := seedWorkspaceFiles(t)
+
+	if err := materializeModels(configPath, secPath, testResolution()); err != nil {
+		t.Fatalf("materializeModels: %v", err)
+	}
+
+	cfg := readConfig(t, configPath)
+	defaults := cfg["agents"].(map[string]any)["defaults"].(map[string]any)
+	if defaults["provider"] != "openai" || defaults["model_name"] != "main" {
+		t.Errorf("defaults = %#v", defaults)
+	}
+	fb, ok := defaults["model_fallbacks"].([]any)
+	if !ok || len(fb) != 1 || fb[0] != "backup" {
+		t.Errorf("model_fallbacks = %#v, want [backup]", defaults["model_fallbacks"])
+	}
+	// The pico channel must be enabled or the proxy cannot reach picoclaw at all.
+	pico := cfg["channel_list"].(map[string]any)["pico"].(map[string]any)
+	if pico["enabled"] != true {
+		t.Errorf("channel_list.pico.enabled = %#v, want true", pico["enabled"])
+	}
+}
+
+func TestMaterializeWritesKeysToSecurityAndPrunesStaleOnes(t *testing.T) {
+	_, configPath, secPath := seedWorkspaceFiles(t)
+
+	if err := materializeModels(configPath, secPath, testResolution()); err != nil {
+		t.Fatalf("materializeModels: %v", err)
+	}
+
+	sec, err := readSecurityConfig(secPath)
+	if err != nil {
+		t.Fatalf("readSecurityConfig: %v", err)
+	}
+	ml, ok := sec["model_list"].(map[string]any)
+	if !ok {
+		t.Fatalf("model_list = %#v", sec["model_list"])
+	}
+	for name, wantKey := range map[string]string{"main": "sk-main", "backup": "sk-backup"} {
+		entry, ok := ml[name].(map[string]any)
+		if !ok {
+			t.Fatalf("model_list.%s = %#v", name, ml[name])
+		}
+		keys, ok := entry["api_keys"].([]any)
+		if !ok || len(keys) != 1 || keys[0] != wantKey {
+			t.Errorf("model_list.%s.api_keys = %#v, want [%s]", name, entry["api_keys"], wantKey)
+		}
+	}
+	// config.json's model_list is replaced wholesale while this file is
+	// read-modify-write, so without pruning every model a workspace ever used
+	// keeps its key here forever and the two files drift permanently.
+	if _, present := ml["retired-model"]; present {
+		t.Errorf("stale model key was not pruned: %#v", ml)
+	}
+	// Pruning must not reach past model_list.
+	tok := sec["channel_list"].(map[string]any)["pico"].(map[string]any)["settings"].(map[string]any)["token"]
+	if tok != "pico-seed" {
+		t.Errorf("pico token = %#v, want pico-seed preserved", tok)
+	}
+	if _, present := sec["web"]; !present {
+		t.Error("web.* family was removed; pruning must be scoped to model_list")
+	}
+}
+
+func TestMaterializeIsIdempotent(t *testing.T) {
+	_, configPath, secPath := seedWorkspaceFiles(t)
+	res := testResolution()
+
+	if err := materializeModels(configPath, secPath, res); err != nil {
+		t.Fatalf("first: %v", err)
+	}
+	firstCfg, _ := os.ReadFile(configPath)
+	firstSec, _ := os.ReadFile(secPath)
+
+	if err := materializeModels(configPath, secPath, res); err != nil {
+		t.Fatalf("second: %v", err)
+	}
+	secondCfg, _ := os.ReadFile(configPath)
+	secondSec, _ := os.ReadFile(secPath)
+
+	if string(firstCfg) != string(secondCfg) {
+		t.Error("config.json changed on a repeat materialization")
+	}
+	if string(firstSec) != string(secondSec) {
+		t.Error(".security.yml changed on a repeat materialization")
+	}
+}
+
+func TestMaterializeCarriesOptionalFieldsOnlyWhenSet(t *testing.T) {
+	_, configPath, secPath := seedWorkspaceFiles(t)
+	res := registry.Resolution{Primary: registry.Model{
+		ModelName: "oauth-model", Provider: "antigravity", Model: "gemini-3-flash",
+		AuthMethod: "oauth", APIKey: "", Status: registry.StatusActive,
+		ExtraBody: json.RawMessage(`{"reasoning_split":true}`),
+	}}
+
+	if err := materializeModels(configPath, secPath, res); err != nil {
+		t.Fatalf("materializeModels: %v", err)
+	}
+
+	entry := readConfig(t, configPath)["model_list"].([]any)[0].(map[string]any)
+	if entry["auth_method"] != "oauth" {
+		t.Errorf("auth_method = %#v, want oauth", entry["auth_method"])
+	}
+	if _, present := entry["api_base"]; present {
+		t.Errorf("api_base must be omitted when empty: %#v", entry)
+	}
+	eb, ok := entry["extra_body"].(map[string]any)
+	if !ok || eb["reasoning_split"] != true {
+		t.Errorf("extra_body = %#v", entry["extra_body"])
+	}
+	// A model with no key must not write an empty api_keys array, which picoclaw
+	// would read as a configured-but-blank credential.
+	sec, _ := readSecurityConfig(secPath)
+	if ml, ok := sec["model_list"].(map[string]any); ok {
+		if _, present := ml["oauth-model"]; present {
+			t.Errorf("keyless model got a .security.yml entry: %#v", ml)
+		}
+	}
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd PROXY && go test ./internal/docker/ -run TestMaterialize -v`
+Expected: FAIL — `undefined: materializeModels`.
+
+- [ ] **Step 3: Write the implementation**
+
+Create `PROXY/internal/docker/materialize.go`:
+
+```go
+package docker
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/registry"
+)
+
+// materializeModels writes a resolved model set into one workspace. It replaces
+// applyModel's model handling and is the ONLY writer of a workspace's model
+// configuration.
+//
+// config.json gets full model_list entries WITHOUT api_key: picoclaw removed
+// api_key (singular) from config.json in schema V2+ and ignores it, and the
+// shipped template is "version": 3. Keys go to .security.yml, which is the only
+// sink that works — the containers receive no key environment variable
+// (manager.go: Env is PICOCLAW_GATEWAY_HOST and HOME only).
+func materializeModels(configPath, secPath string, res registry.Resolution) error {
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("read config.json: %w", err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return fmt.Errorf("parse config.json: %w", err)
+	}
+
+	// The pico channel is how the proxy reaches picoclaw at all; a workspace with
+	// it disabled is unreachable regardless of its model.
+	if cl, ok := cfg["channel_list"].(map[string]any); ok {
+		if pico, ok := cl["pico"].(map[string]any); ok {
+			pico["enabled"] = true
+		}
+	}
+
+	models := append([]registry.Model{res.Primary}, res.Chain...)
+	list := make([]any, 0, len(models))
+	for _, m := range models {
+		list = append(list, modelListEntry(m))
+	}
+	cfg["model_list"] = list
+
+	if agents, ok := cfg["agents"].(map[string]any); ok {
+		if defaults, ok := agents["defaults"].(map[string]any); ok {
+			defaults["provider"] = res.Primary.Provider
+			defaults["model_name"] = res.Primary.ModelName
+			if names := res.ChainNames(); len(names) > 0 {
+				fb := make([]any, 0, len(names))
+				for _, n := range names {
+					fb = append(fb, n)
+				}
+				defaults["model_fallbacks"] = fb
+			} else {
+				// Clear a stale chain rather than leaving one behind: the primary
+				// may have had fallbacks and no longer does.
+				delete(defaults, "model_fallbacks")
+			}
+		}
+	}
+
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(configPath, out, 0o600); err != nil {
+		return fmt.Errorf("write config.json: %w", err)
+	}
+
+	sec, err := readSecurityConfig(secPath)
+	if err != nil {
+		return fmt.Errorf("read .security.yml: %w", err)
+	}
+	keep := make([]string, 0, len(models))
+	for _, m := range models {
+		if m.APIKey == "" {
+			// No key to write. An empty api_keys array would read as a
+			// configured-but-blank credential, which fails less clearly than an
+			// absent entry (oauth models legitimately have no key).
+			continue
+		}
+		setModelListEntry(sec, m.ModelName, m.APIKey)
+		keep = append(keep, m.ModelName)
+	}
+	pruneSecurityModelList(sec, keep)
+	if err := writeSecurityConfig(secPath, sec, ""); err != nil {
+		return fmt.Errorf("write .security.yml: %w", err)
+	}
+	return nil
+}
+
+// modelListEntry renders one picoclaw model_list entry. Optional fields are
+// omitted when unset so the file stays close to what an operator would hand-write.
+func modelListEntry(m registry.Model) map[string]any {
+	entry := map[string]any{
+		"model_name": m.ModelName,
+		"provider":   m.Provider,
+		"model":      m.Model,
+		"enabled":    true,
+	}
+	if m.APIBase != "" {
+		entry["api_base"] = m.APIBase
+	}
+	if m.AuthMethod != "" {
+		entry["auth_method"] = m.AuthMethod
+	}
+	if len(m.ExtraBody) > 0 {
+		var eb any
+		if err := json.Unmarshal(m.ExtraBody, &eb); err == nil {
+			entry["extra_body"] = eb
+		}
+	}
+	return entry
+}
+
+// pruneSecurityModelList drops model_list entries outside keep, and removes the
+// section entirely when nothing is left. Scoped strictly to model_list: the pico
+// channel token, the web.* families and native-secret overlay slots are the
+// user's or the admin's data and are not this function's business.
+func pruneSecurityModelList(sec map[string]any, keep []string) {
+	ml, ok := sec["model_list"].(map[string]any)
+	if !ok {
+		return
+	}
+	wanted := make(map[string]bool, len(keep))
+	for _, name := range keep {
+		wanted[name] = true
+	}
+	for name := range ml {
+		if !wanted[name] {
+			delete(ml, name)
+		}
+	}
+	if len(ml) == 0 {
+		delete(sec, "model_list")
+	}
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `cd PROXY && go test ./internal/docker/ -run TestMaterialize -v`
+Expected: PASS — all six tests.
+
+- [ ] **Step 5: Run the whole package to confirm nothing regressed**
+
+Run: `cd PROXY && go test ./internal/docker/`
+Expected: PASS (the old `registered_models_test.go` and `provision_test.go` still pass — they are removed in T10).
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+git add internal/docker/materialize.go internal/docker/materialize_test.go
+git commit -m "feat(docker): materializeModels — keys only in .security.yml, with pruning
+
+config.json model_list entries carry no api_key: picoclaw ignores it in schema
+V2+ and the template is version 3. .security.yml is the only sink that works —
+the containers receive no key env var, so nothing would mask a broken write.
+
+Pruning is not optional: config.json's model_list is replaced wholesale while
+.security.yml is read-modify-write, so without it every model a workspace ever
+used keeps its key there forever and the two files drift permanently.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 08: registry wiring into the Manager, provision refusal, empty template
+
+**Files:**
+- Modify: `PROXY/internal/docker/manager.go` (Manager struct, `NewManager`)
+- Modify: `PROXY/internal/docker/provision.go:36-63` (provision signature and model application)
+- Modify: `PROXY/internal/docker/defaulttemplate/picoclaw/config.json`
+- Modify: `PROXY/cmd/crab-shell-proxy/main.go:44`
+- Create: `PROXY/internal/docker/provision_model_test.go`
+
+**Interfaces:**
+- Consumes: T07 `materializeModels`; `registry.Registry`, `registry.Resolution`, `registry.WorkspaceRef`, `registry.ErrNoModelResolvable`, `registry.Assignment`, `registry.SourceExplicit`/`SourceInherited`.
+- Produces:
+  - `docker.Manager` gains an unexported `reg *registry.Registry` field
+  - `docker.NewManager(cfg *config.Config, dkr Docker, health HealthChecker, reg *registry.Registry, logf func(string, ...any)) *Manager` — **signature change**, `reg` inserted before `logf`
+  - `(*Manager).workspaceRef(key WorkspaceKey) registry.WorkspaceRef`
+  - `(*Manager).resolveAndMaterialize(key WorkspaceKey, userDir string) error`
+  - `docker.ErrNoModel = registry.ErrNoModelResolvable` re-export for the HTTP layer
+
+- [ ] **Step 1: Write the failing test**
+
+Create `PROXY/internal/docker/provision_model_test.go`:
+
+```go
+package docker
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/config"
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/registry"
+)
+
+func testManagerWithRegistry(t *testing.T) (*Manager, *registry.Registry, string) {
+	t.Helper()
+	root := t.TempDir()
+	at := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
+	reg, err := registry.Open(filepath.Join(root, "model-registry.db"), func() time.Time { return at })
+	if err != nil {
+		t.Fatalf("registry.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+	m := &Manager{
+		cfg:  &config.Config{ContainerDataRoot: root, PicoclawUser: ""},
+		reg:  reg,
+		logf: func(string, ...any) {},
+	}
+	return m, reg, root
+}
+
+func seedProvisionedWorkspace(t *testing.T, root string, key WorkspaceKey) string {
+	t.Helper()
+	userDir := config.UserWorkspace(root, key.TenantID, key.SubsAccID, key.Role, key.UserAccID)
+	if err := os.MkdirAll(userDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"version":3,"channel_list":{"pico":{"enabled":false}},` +
+		`"agents":{"defaults":{"provider":"","model_name":""}},"model_list":[]}`
+	if err := os.WriteFile(filepath.Join(userDir, "config.json"), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sec := "channel_list:\n  pico:\n    settings:\n      token: pico-seed\n"
+	if err := os.WriteFile(filepath.Join(userDir, ".security.yml"), []byte(sec), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return userDir
+}
+
+func TestResolveAndMaterializeRefusesWhenNoModelResolves(t *testing.T) {
+	m, _, root := testManagerWithRegistry(t)
+	key := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "u1"}
+	userDir := seedProvisionedWorkspace(t, root, key)
+
+	err := m.resolveAndMaterialize(key, userDir)
+	// picoclaw fails at startup when agents.defaults.model_name names a model
+	// absent from model_list, so provisioning without one would produce a
+	// permanently unbootable workspace. Refusing loudly is the only safe answer.
+	if !errors.Is(err, registry.ErrNoModelResolvable) {
+		t.Fatalf("want ErrNoModelResolvable, got %v", err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(userDir, "config.json"))
+	if string(raw) == "" {
+		t.Fatal("config.json was emptied by a refused materialization")
+	}
+	if got := string(raw); got != `{"version":3,"channel_list":{"pico":{"enabled":false}},`+
+		`"agents":{"defaults":{"provider":"","model_name":""}},"model_list":[]}` {
+		t.Errorf("refused materialization still wrote config.json:\n%s", got)
+	}
+}
+
+func TestResolveAndMaterializeRecordsAnInheritedAssignment(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+	key := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "u1"}
+	userDir := seedProvisionedWorkspace(t, root, key)
+
+	if _, err := reg.CreateModel(registry.Model{
+		ModelName: "m", Provider: "openai", Model: "gpt-5.4",
+		APIBase: "https://api.openai.com/v1", APIKey: "sk-m", Status: registry.StatusActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.SetScopeDefault(registry.ScopeSel{Level: registry.LevelTenant, TenantID: "t1"}, "m"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.resolveAndMaterialize(key, userDir); err != nil {
+		t.Fatalf("resolveAndMaterialize: %v", err)
+	}
+
+	a, err := reg.GetAssignment(m.workspaceRef(key))
+	if err != nil {
+		t.Fatalf("GetAssignment: %v", err)
+	}
+	if a.ModelName != "m" {
+		t.Errorf("assignment model = %q, want m", a.ModelName)
+	}
+	// Source must be inherited: nothing pinned this user, the tenant default did.
+	// Recording it as explicit would freeze the workspace against future scope
+	// changes.
+	if a.Source != registry.SourceInherited {
+		t.Errorf("Source = %q, want inherited", a.Source)
+	}
+}
+
+func TestResolveAndMaterializePreservesAnExplicitAssignmentSource(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+	key := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "u1"}
+	userDir := seedProvisionedWorkspace(t, root, key)
+
+	for _, n := range []string{"pinned", "scoped"} {
+		if _, err := reg.CreateModel(registry.Model{
+			ModelName: n, Provider: "openai", Model: n,
+			APIBase: "https://api.openai.com/v1", APIKey: "sk-" + n, Status: registry.StatusActive,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := reg.SetScopeDefault(registry.ScopeSel{Level: registry.LevelTenant, TenantID: "t1"}, "scoped"); err != nil {
+		t.Fatal(err)
+	}
+	ref := m.workspaceRef(key)
+	if err := reg.PutAssignment(ref, registry.Assignment{ModelName: "pinned", Source: registry.SourceExplicit}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.resolveAndMaterialize(key, userDir); err != nil {
+		t.Fatalf("resolveAndMaterialize: %v", err)
+	}
+
+	a, _ := reg.GetAssignment(ref)
+	if a.ModelName != "pinned" || a.Source != registry.SourceExplicit {
+		t.Errorf("assignment = %+v, want pinned/explicit — re-materializing must not demote a pin", a)
+	}
+}
+
+func TestResolveAndMaterializeRecordsTheChain(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+	key := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "u1"}
+	userDir := seedProvisionedWorkspace(t, root, key)
+
+	if _, err := reg.CreateModel(registry.Model{
+		ModelName: "fb", Provider: "anthropic", Model: "claude-sonnet-4-6",
+		APIBase: "https://api.anthropic.com/v1", APIKey: "sk-fb", Status: registry.StatusActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reg.CreateModel(registry.Model{
+		ModelName: "main", Provider: "openai", Model: "gpt-5.4",
+		APIBase: "https://api.openai.com/v1", APIKey: "sk-main", Status: registry.StatusActive,
+		Fallbacks: []string{"fb"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.SetScopeDefault(registry.ScopeSel{Level: registry.LevelGlobal}, "main"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.resolveAndMaterialize(key, userDir); err != nil {
+		t.Fatalf("resolveAndMaterialize: %v", err)
+	}
+
+	a, _ := reg.GetAssignment(m.workspaceRef(key))
+	if len(a.Chain) != 1 || a.Chain[0] != "fb" {
+		t.Errorf("Chain = %v, want [fb] so a key edit reaches this workspace", a.Chain)
+	}
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd PROXY && go test ./internal/docker/ -run TestResolveAndMaterialize -v`
+Expected: FAIL — `unknown field reg in struct literal`, `m.resolveAndMaterialize undefined`.
+
+- [ ] **Step 3: Add the registry field and the two methods**
+
+In `PROXY/internal/docker/manager.go`, add to the `Manager` struct (after the `health` field, line ~80):
+
+```go
+	// reg is the model inventory: the single source of truth for which model a
+	// workspace uses. Nothing else in this package may decide that.
+	reg *registry.Registry
+```
+
+Change `NewManager` (line ~93) to:
+
+```go
+// NewManager builds a Manager. If health is nil, an HTTP /health poller is used.
+// reg is required: without the inventory there is no way to resolve a model, and
+// a workspace provisioned without one cannot boot.
+func NewManager(cfg *config.Config, dkr Docker, health HealthChecker, reg *registry.Registry, logf func(string, ...any)) *Manager {
+	if health == nil {
+		health = httpHealth
+	}
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+	return &Manager{cfg: cfg, docker: dkr, health: health, reg: reg, logf: logf, keys: map[string]*keyState{}}
+}
+```
+
+Add the `registry` import to `manager.go`'s import block:
+
+```go
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/registry"
+```
+
+Create the two methods at the end of `PROXY/internal/docker/materialize.go`:
+
+```go
+// ErrNoModel is the package-level alias the HTTP layer matches on, so handlers
+// do not need to import registry just to classify one error.
+var ErrNoModel = registry.ErrNoModelResolvable
+
+// workspaceRef converts a WorkspaceKey into the registry's own ref. The registry
+// cannot import this package (it would be a cycle), so the conversion lives here.
+func (m *Manager) workspaceRef(key WorkspaceKey) registry.WorkspaceRef {
+	return registry.WorkspaceRef{
+		TenantID:  key.TenantID,
+		SubsAccID: key.SubsAccID,
+		Agent:     key.Role,
+		UserAccID: key.UserAccID,
+	}
+}
+
+// resolveAndMaterialize resolves the workspace's model and writes it. It is the
+// single entry point every provision and every re-apply goes through.
+//
+// A workspace with no resolvable model is REFUSED, not defaulted: picoclaw fails
+// at startup when agents.defaults.model_name names a model absent from
+// model_list, so a silent default would produce a permanently unbootable
+// container. Nothing is written on refusal.
+func (m *Manager) resolveAndMaterialize(key WorkspaceKey, userDir string) error {
+	ref := m.workspaceRef(key)
+	res, err := m.reg.Resolve(ref)
+	if err != nil {
+		return err
+	}
+	for _, name := range res.Skipped {
+		m.logf("materialize %s: fallback %q is not active, skipped", ref.Key(), name)
+	}
+
+	configPath := filepath.Join(userDir, "config.json")
+	secPath := filepath.Join(userDir, ".security.yml")
+	if err := materializeModels(configPath, secPath, res); err != nil {
+		return err
+	}
+
+	// An existing EXPLICIT pin keeps its source: re-materializing must not demote
+	// a deliberate per-user choice into an inherited one, which would let the next
+	// scope-default change silently override it.
+	source := registry.SourceInherited
+	if prev, err := m.reg.GetAssignment(ref); err == nil && prev.Source == registry.SourceExplicit {
+		source = registry.SourceExplicit
+	}
+	if err := m.reg.PutAssignment(ref, registry.Assignment{
+		ModelName: res.Primary.ModelName,
+		Chain:     res.ChainNames(),
+		Source:    source,
+	}); err != nil {
+		return fmt.Errorf("record assignment: %w", err)
+	}
+	return chownTree(userDir, m.cfg.PicoclawUser)
+}
+```
+
+Add `"path/filepath"` to `materialize.go`'s import block.
+
+- [ ] **Step 4: Run the new tests**
+
+Run: `cd PROXY && go test ./internal/docker/ -run TestResolveAndMaterialize -v`
+Expected: PASS — all four tests.
+
+- [ ] **Step 5: Wire the registry in main and fix the NewManager call**
+
+In `PROXY/cmd/crab-shell-proxy/main.go`, before line 44, open the registry and pass it:
+
+```go
+	regPath := filepath.Join(cfg.ContainerDataRoot, "model-registry.db")
+	reg, err := registry.Open(regPath, nil)
+	if err != nil {
+		logger.Fatalf("open model registry: %v", err)
+	}
+	defer func() { _ = reg.Close() }()
+
+	mgr := docker.NewManager(cfg, dkr, nil, reg, logger.Printf)
+```
+
+Add the imports `"path/filepath"` and `"github.com/LepistaBioinformatics/crab-shell-proxy/internal/registry"` to `main.go`.
+
+- [ ] **Step 6: Empty the embedded template's model list**
+
+In `PROXY/internal/docker/defaulttemplate/picoclaw/config.json`, replace the entire `"model_list": [ … 30 entries … ]` array (lines 263-448) with:
+
+```json
+  "model_list": [],
+```
+
+and in the same file set `agents.defaults.provider` and `agents.defaults.model_name` to `""` (they already are — verify, do not change if so).
+
+The 30 entries are not lost: T09 moves them to an embedded read-only suggestion catalog.
+
+- [ ] **Step 7: Verify the whole module still builds and the suite passes**
+
+Run: `cd PROXY && go build ./... && go vet ./... && go test ./...`
+Expected: PASS. If `provision_test.go` fails because `applyModel` still expects the template to declare a model, that is the T10 cutover — note the failing test name and continue; do not weaken the assertion here.
+
+- [ ] **Step 8: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+git add internal/docker/manager.go internal/docker/materialize.go internal/docker/provision_model_test.go \
+        internal/docker/defaulttemplate/picoclaw/config.json cmd/crab-shell-proxy/main.go
+git commit -m "feat(docker): wire the registry into Manager; refuse to provision without a model
+
+resolveAndMaterialize is the single entry point every provision and re-apply
+goes through. A workspace with no resolvable model is refused rather than
+defaulted: picoclaw fails at startup when agents.defaults.model_name names a
+model absent from model_list, so a silent default produces a permanently
+unbootable container.
+
+Re-materializing preserves an EXPLICIT assignment's source, so a deliberate
+per-user pin is not demoted to inherited and then silently overridden by the
+next scope-default change.
+
+The embedded template ships model_list: [] — the 30 entries become a read-only
+suggestion catalog in the next commit.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 09: the embedded suggestion catalog
+
+**Files:**
+- Create: `PROXY/internal/docker/model-catalog.json`
+- Create: `PROXY/internal/docker/model_catalog.go`
+- Create: `PROXY/internal/docker/model_catalog_test.go`
+
+**Interfaces:**
+- Consumes: nothing from earlier tasks.
+- Produces:
+  - `docker.CatalogEntry{Provider, Model, APIBase, AuthMethod string; ExtraBody json.RawMessage}`
+  - `docker.SuggestionCatalog() ([]CatalogEntry, error)`
+
+- [ ] **Step 1: Extract the catalog from the template's git history**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+git show HEAD~1:internal/docker/defaulttemplate/picoclaw/config.json \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps([{k:v for k,v in e.items() if k!="model_name"} for e in d["model_list"]], indent=2))' \
+  > internal/docker/model-catalog.json
+head -12 internal/docker/model-catalog.json
+```
+
+Expected: a JSON array whose first element is `{"provider": "zhipu", "model": "glm-4.7", "api_base": "https://open.bigmodel.cn/api/paas/v4"}`. `model_name` is dropped on purpose — it is the admin's choice and must be unique in the inventory, so suggesting one would invite a duplicate.
+
+- [ ] **Step 2: Write the failing test**
+
+Create `PROXY/internal/docker/model_catalog_test.go`:
+
+```go
+package docker
+
+import "testing"
+
+func TestSuggestionCatalogParsesAndCarriesNoKeys(t *testing.T) {
+	entries, err := SuggestionCatalog()
+	if err != nil {
+		t.Fatalf("SuggestionCatalog: %v", err)
+	}
+	if len(entries) < 20 {
+		t.Fatalf("catalog has %d entries, want the full set (~30)", len(entries))
+	}
+	for i, e := range entries {
+		if e.Provider == "" || e.Model == "" {
+			t.Errorf("entry %d incomplete: %+v", i, e)
+		}
+		// Either an api_base or an auth_method must be present, or the entry
+		// cannot prefill anything usable.
+		if e.APIBase == "" && e.AuthMethod == "" {
+			t.Errorf("entry %d has neither api_base nor auth_method: %+v", i, e)
+		}
+	}
+}
+
+func TestSuggestionCatalogIncludesKnownProviders(t *testing.T) {
+	entries, err := SuggestionCatalog()
+	if err != nil {
+		t.Fatalf("SuggestionCatalog: %v", err)
+	}
+	want := map[string]bool{"openai": false, "anthropic": false, "zhipu": false, "ollama": false}
+	for _, e := range entries {
+		if _, tracked := want[e.Provider]; tracked {
+			want[e.Provider] = true
+		}
+	}
+	for p, found := range want {
+		if !found {
+			t.Errorf("catalog is missing provider %q", p)
+		}
+	}
+}
+```
+
+- [ ] **Step 3: Run test to verify it fails**
+
+Run: `cd PROXY && go test ./internal/docker/ -run TestSuggestionCatalog -v`
+Expected: FAIL — `undefined: SuggestionCatalog`.
+
+- [ ] **Step 4: Write the implementation**
+
+Create `PROXY/internal/docker/model_catalog.go`:
+
+```go
+package docker
+
+import (
+	"embed"
+	"encoding/json"
+	"fmt"
+	"sync"
+)
+
+//go:embed model-catalog.json
+var catalogFS embed.FS
+
+// CatalogEntry is one suggested model definition. It never carries a key or a
+// model_name: the key is the admin's secret and the name is the admin's choice,
+// which must be unique in the inventory.
+type CatalogEntry struct {
+	Provider   string          `json:"provider"`
+	Model      string          `json:"model"`
+	APIBase    string          `json:"api_base,omitempty"`
+	AuthMethod string          `json:"auth_method,omitempty"`
+	ExtraBody  json.RawMessage `json:"extra_body,omitempty"`
+}
+
+var (
+	catalogOnce sync.Once
+	catalog     []CatalogEntry
+	catalogErr  error
+)
+
+// SuggestionCatalog returns the embedded read-only catalog used to prefill the
+// admin's register form, replacing the five free-text inputs that made typos the
+// normal failure mode. It is never copied into a workspace — a workspace's
+// model_list comes only from the inventory.
+func SuggestionCatalog() ([]CatalogEntry, error) {
+	catalogOnce.Do(func() {
+		raw, err := catalogFS.ReadFile("model-catalog.json")
+		if err != nil {
+			catalogErr = fmt.Errorf("read embedded model catalog: %w", err)
+			return
+		}
+		if err := json.Unmarshal(raw, &catalog); err != nil {
+			catalogErr = fmt.Errorf("parse embedded model catalog: %w", err)
+		}
+	})
+	return catalog, catalogErr
+}
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+Run: `cd PROXY && go test ./internal/docker/ -run TestSuggestionCatalog -v`
+Expected: PASS — both tests.
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+git add internal/docker/model-catalog.json internal/docker/model_catalog.go internal/docker/model_catalog_test.go
+git commit -m "feat(docker): embedded read-only model suggestion catalog
+
+The 30 entries that used to ship in the template become prefill suggestions for
+the admin register form. model_name is deliberately dropped: it is the admin's
+choice and must be unique in the inventory, so suggesting one would invite a
+duplicate. Never copied into a workspace.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 10: cut over — delete the two old systems, rebuild the re-apply paths
+
+**Files:**
+- Modify: `PROXY/internal/docker/provision.go` (`provision` signature, remove `applyModel`)
+- Modify: `PROXY/internal/docker/manager.go` (the `provision`/`provisionHermes` call site, ~line 177-196)
+- Rewrite: `PROXY/internal/docker/model.go` (keep only the re-apply entry points)
+- Delete: `PROXY/internal/docker/registered_models.go`, `PROXY/internal/docker/registered_models_test.go`
+- Modify: `PROXY/internal/docker/provision_test.go` (the `applyModel` test)
+- Create: `PROXY/internal/docker/reapply_test.go`
+
+**Interfaces:**
+- Consumes: T07–T09.
+- Produces:
+  - `(*Manager).ReapplyModelScope(scope Scope) error` — unchanged signature, registry-backed
+  - `(*Manager).ReapplyModelUser(key WorkspaceKey) error` — **signature change**: the `agent config.Agent` parameter is gone (the registry needs no agent config)
+  - `(*Manager).ReapplyModelForModel(modelName string) error` — new; re-materializes every workspace whose set contains the model
+  - `(*Manager).reapplyWorkspace(key WorkspaceKey) error`
+- Removed: `resolveModel`, `reapplyModel`, `getModelOverride`, `setModelOverride`, `clearModelOverride`, `EffectiveModel`, `SetModelOverride`, `ClearModelOverride`, `ModelSel`, `ModelTarget`, `modelOverridePath`, `setModelListEntry` callers outside `materialize.go`, `applyModel`, and every `RegisteredModel*` symbol.
+
+- [ ] **Step 1: Write the failing test**
+
+Create `PROXY/internal/docker/reapply_test.go`:
+
+```go
+package docker
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/registry"
+)
+
+func TestReapplyModelForModelTouchesOnlyWorkspacesHoldingIt(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+	// A no-op docker so the restart pass at the end of a re-apply is inert.
+	m.docker = noopDocker{}
+
+	for _, n := range []string{"fb", "other"} {
+		if _, err := reg.CreateModel(registry.Model{
+			ModelName: n, Provider: "openai", Model: n,
+			APIBase: "https://api.openai.com/v1", APIKey: "sk-" + n, Status: registry.StatusActive,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := reg.CreateModel(registry.Model{
+		ModelName: "main", Provider: "openai", Model: "main",
+		APIBase: "https://api.openai.com/v1", APIKey: "sk-main", Status: registry.StatusActive,
+		Fallbacks: []string{"fb"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	holder := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "holder"}
+	bystander := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "bystander"}
+	holderDir := seedProvisionedWorkspace(t, root, holder)
+	bystanderDir := seedProvisionedWorkspace(t, root, bystander)
+
+	if err := reg.PutAssignment(m.workspaceRef(holder), registry.Assignment{
+		ModelName: "main", Chain: []string{"fb"}, Source: registry.SourceExplicit,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.PutAssignment(m.workspaceRef(bystander), registry.Assignment{
+		ModelName: "other", Source: registry.SourceExplicit,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	beforeBystander, _ := os.ReadFile(filepath.Join(bystanderDir, "config.json"))
+
+	// Editing fb's key must reach the holder even though fb is only its FALLBACK.
+	if err := m.ReapplyModelForModel("fb"); err != nil {
+		t.Fatalf("ReapplyModelForModel: %v", err)
+	}
+
+	sec, err := readSecurityConfig(filepath.Join(holderDir, ".security.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ml := sec["model_list"].(map[string]any)
+	if _, ok := ml["fb"]; !ok {
+		t.Errorf("holder did not get fb's key: %#v", ml)
+	}
+
+	afterBystander, _ := os.ReadFile(filepath.Join(bystanderDir, "config.json"))
+	if string(beforeBystander) != string(afterBystander) {
+		t.Error("a workspace that does not hold the model was re-materialized")
+	}
+}
+
+func TestReapplyModelUserRewritesFromTheRegistry(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+	m.docker = noopDocker{}
+
+	if _, err := reg.CreateModel(registry.Model{
+		ModelName: "chosen", Provider: "anthropic", Model: "claude-sonnet-4-6",
+		APIBase: "https://api.anthropic.com/v1", APIKey: "sk-chosen", Status: registry.StatusActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	key := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "u1"}
+	userDir := seedProvisionedWorkspace(t, root, key)
+	if err := reg.PutAssignment(m.workspaceRef(key), registry.Assignment{
+		ModelName: "chosen", Source: registry.SourceExplicit,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.ReapplyModelUser(key); err != nil {
+		t.Fatalf("ReapplyModelUser: %v", err)
+	}
+
+	raw, _ := os.ReadFile(filepath.Join(userDir, "config.json"))
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	defaults := cfg["agents"].(map[string]any)["defaults"].(map[string]any)
+	if defaults["model_name"] != "chosen" {
+		t.Errorf("model_name = %#v, want chosen", defaults["model_name"])
+	}
+}
+
+func TestReapplySkipsAnUnprovisionedWorkspace(t *testing.T) {
+	m, reg, _ := testManagerWithRegistry(t)
+	m.docker = noopDocker{}
+
+	if _, err := reg.CreateModel(registry.Model{
+		ModelName: "m", Provider: "openai", Model: "m",
+		APIBase: "https://api.openai.com/v1", APIKey: "sk-m", Status: registry.StatusActive,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	key := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "ghost"}
+	if err := reg.PutAssignment(m.workspaceRef(key), registry.Assignment{
+		ModelName: "m", Source: registry.SourceExplicit,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// No config.json on disk: the workspace was never provisioned, so there is
+	// nothing to rewrite. Resolution already applies at its first provision.
+	if err := m.reapplyWorkspace(key); err != nil {
+		t.Fatalf("reapplyWorkspace on an unprovisioned workspace should be a no-op, got %v", err)
+	}
+}
+```
+
+- [ ] **Step 2: Add the no-op Docker test double**
+
+Append to `PROXY/internal/docker/reapply_test.go`:
+
+```go
+// noopDocker satisfies the Docker interface so a re-apply's trailing restart pass
+// is inert in a unit test. Only the methods the restart path touches need real
+// behaviour; the rest return zero values.
+type noopDocker struct{}
+
+func (noopDocker) List(ctx context.Context, label string) ([]Summary, error) { return nil, nil }
+func (noopDocker) Create(ctx context.Context, spec CreateSpec) (string, error) { return "", nil }
+func (noopDocker) Start(ctx context.Context, name string) error                { return nil }
+func (noopDocker) Stop(ctx context.Context, name string) error                 { return nil }
+func (noopDocker) Remove(ctx context.Context, name string) error               { return nil }
+func (noopDocker) Inspect(ctx context.Context, name string) (Summary, error)   { return Summary{}, nil }
+```
+
+Add `"context"` to the file's imports.
+
+Run `cd PROXY && grep -n "type Docker interface" -A 25 internal/docker/client.go` and adjust the double so it matches the interface exactly — add any missing method returning zero values, and delete any method the interface does not declare.
+
+- [ ] **Step 3: Run test to verify it fails**
+
+Run: `cd PROXY && go test ./internal/docker/ -run TestReapply -v`
+Expected: FAIL — `m.ReapplyModelForModel undefined`, and `ReapplyModelUser` still wants an `agent` argument.
+
+- [ ] **Step 4: Rewrite model.go**
+
+Replace the entire contents of `PROXY/internal/docker/model.go` with:
+
+```go
+package docker
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/config"
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/identity"
+)
+
+// This file holds the re-apply entry points only. Model RESOLUTION lives in
+// internal/registry and nowhere else: the previous version of this file resolved
+// models from config.yaml while registered_models.go resolved them from disk, and
+// neither knew about the other — so a scope re-apply silently overwrote a per-user
+// assignment with no error and no way to recover the lost choice.
+
+// ReapplyModelScope re-materializes every established workspace under scope, then
+// restarts the running ones so picoclaw reloads. A workspace that was never
+// provisioned is skipped: resolution already applies at its first provision.
+//
+// Per-workspace failures are logged and skipped rather than returned, so one bad
+// workspace does not block the pass for the others (mirroring RestartScope's own
+// best-effort contract).
+func (m *Manager) ReapplyModelScope(scope Scope) error {
+	keys, err := m.scopeWorkspaceKeys(scope)
+	if err != nil {
+		return err
+	}
+	for _, key := range keys {
+		if err := m.reapplyWorkspace(key); err != nil {
+			m.logf("reapply model scope: workspace %+v: %v", key, err)
+		}
+	}
+	return m.RestartScope(scope)
+}
+
+// ReapplyModelUser re-materializes one workspace and restarts it if running
+// (RestartWorkspace is a no-op when it is not — the next cold start picks up what
+// is already on disk).
+func (m *Manager) ReapplyModelUser(key WorkspaceKey) error {
+	if err := m.reapplyWorkspace(key); err != nil {
+		return err
+	}
+	return m.RestartWorkspace(key)
+}
+
+// ReapplyModelForModel re-materializes every workspace whose materialized set
+// contains modelName — as primary OR as a chain member — and restarts them.
+//
+// The chain half is load-bearing: an api_base or key edit that reached only
+// primaries would leave every workspace holding the model as a fallback on a
+// stale or revoked credential, which is exactly the failure fallback exists to
+// prevent.
+func (m *Manager) ReapplyModelForModel(modelName string) error {
+	refs, err := m.reg.WorkspacesUsing(modelName)
+	if err != nil {
+		return err
+	}
+	for _, ref := range refs {
+		key := WorkspaceKey{
+			TenantID: ref.TenantID, SubsAccID: ref.SubsAccID,
+			Role: ref.Agent, UserAccID: ref.UserAccID,
+		}
+		if err := m.reapplyWorkspace(key); err != nil {
+			m.logf("reapply model %q: workspace %+v: %v", modelName, key, err)
+			continue
+		}
+		if err := m.RestartWorkspace(key); err != nil {
+			m.logf("reapply model %q: restart %+v: %v", modelName, key, err)
+		}
+	}
+	return nil
+}
+
+// reapplyWorkspace re-materializes one ALREADY-PROVISIONED workspace. A missing
+// config.json means it has never been provisioned, which is a no-op rather than
+// an error.
+func (m *Manager) reapplyWorkspace(key WorkspaceKey) error {
+	userDir := config.UserWorkspace(m.cfg.ContainerDataRoot, key.TenantID, key.SubsAccID, key.Role, key.UserAccID)
+	if _, err := os.Stat(filepath.Join(userDir, "config.json")); err != nil {
+		return nil
+	}
+	return m.resolveAndMaterialize(key, userDir)
+}
+
+// scopeWorkspaceKeys enumerates every discovered WorkspaceKey under scope:
+// ListSubscriptionUsers for a single subscription, or the
+// tenants/<t>/subscriptions/*/agents/*/users/* glob for a whole tenant.
+func (m *Manager) scopeWorkspaceKeys(scope Scope) ([]WorkspaceKey, error) {
+	if scope.Kind == ScopeSubscription {
+		users, err := m.ListSubscriptionUsers(scope.TenantID, scope.SubsAccID)
+		if err != nil {
+			return nil, err
+		}
+		keys := make([]WorkspaceKey, 0, len(users))
+		for _, u := range users {
+			keys = append(keys, WorkspaceKey{TenantID: scope.TenantID, SubsAccID: scope.SubsAccID, Role: u.Role, UserAccID: u.AccID})
+		}
+		return keys, nil
+	}
+	pattern := filepath.Join(m.cfg.ContainerDataRoot, "tenants", identity.SanitizeID(scope.TenantID),
+		"subscriptions", "*", "agents", "*", "users", "*")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, err
+	}
+	var keys []WorkspaceKey
+	for _, uw := range matches {
+		fi, statErr := os.Stat(uw)
+		if statErr != nil || !fi.IsDir() {
+			continue
+		}
+		rel, err := filepath.Rel(m.cfg.ContainerDataRoot, uw)
+		if err != nil {
+			continue
+		}
+		// rel = tenants/<t>/subscriptions/<s>/agents/<role>/users/<u>
+		parts := strings.Split(rel, string(os.PathSeparator))
+		if len(parts) != 8 {
+			continue
+		}
+		keys = append(keys, WorkspaceKey{TenantID: parts[1], SubsAccID: parts[3], Role: parts[5], UserAccID: parts[7]})
+	}
+	return keys, nil
+}
+
+// setModelListEntry upserts model_list[name] = {api_keys: [apiKey]} into the
+// parsed .security.yml, creating model_list only if absent and leaving every
+// sibling key untouched. materializeModels is its only caller.
+func setModelListEntry(sec map[string]any, name, apiKey string) {
+	ml, ok := sec["model_list"].(map[string]any)
+	if !ok {
+		ml = map[string]any{}
+		sec["model_list"] = ml
+	}
+	ml[name] = map[string]any{"api_keys": []string{apiKey}}
+}
+```
+
+- [ ] **Step 5: Delete the registered-models store**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+git rm internal/docker/registered_models.go internal/docker/registered_models_test.go
+```
+
+- [ ] **Step 6: Replace applyModel in provision.go**
+
+In `PROXY/internal/docker/provision.go`, delete the whole `applyModel` function (lines ~99-152, from its doc comment through its closing brace).
+
+Change `provision`'s signature (line ~36) from
+
+```go
+func provision(userDir, templateDir, secretsDir, home, user string, model *config.ModelConfig, key WorkspaceKey, ownerEmail string) (picoToken string, err error) {
+```
+
+to
+
+```go
+// provision seeds a workspace from templateDir. The MODEL is not a parameter:
+// the caller materializes it from the inventory after seeding, because that is
+// the only place a model may come from.
+func provision(userDir, templateDir, secretsDir, home, user string, key WorkspaceKey, ownerEmail string) (picoToken string, err error) {
+```
+
+Inside it, replace the `applyModel` block (lines ~59-63)
+
+```go
+			if err := applyModel(configPath, secPath, model); err != nil {
+				return "", fmt.Errorf("apply model config: %w", err)
+			}
+		}
+```
+
+with
+
+```go
+			// The pico channel token is generated here; the model is materialized
+			// by the caller from the inventory. Splitting these is what lets the
+			// model come from exactly one place.
+			if err := seedPicoToken(secPath); err != nil {
+				return "", fmt.Errorf("seed pico token: %w", err)
+			}
+		}
+```
+
+and add, next to `randomToken` in the same file:
+
+```go
+// seedPicoToken writes a fresh proxy<->picoclaw channel token into a new
+// workspace's .security.yml, preserving anything the template already put there.
+func seedPicoToken(secPath string) error {
+	token, err := randomToken()
+	if err != nil {
+		return err
+	}
+	sec, err := readSecurityConfig(secPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		sec = map[string]any{}
+	}
+	cl := childMap(sec, "channel_list")
+	pico := childMap(cl, "pico")
+	settings := childMap(pico, "settings")
+	settings["token"] = token
+	return writeSecurityConfig(secPath, sec, "")
+}
+```
+
+(`childMap` already exists in `internal/docker/secrets.go`.)
+
+- [ ] **Step 7: Update the provision call site in manager.go**
+
+At `PROXY/internal/docker/manager.go` around line 177-196, the picoclaw branch changes from
+
+```go
+		authToken, err = provision(userDir, templateDir, effDir, m.cfg.PicoclawHome, m.cfg.PicoclawUser, model, key, ownerEmail)
+```
+
+to
+
+```go
+		authToken, err = provision(userDir, templateDir, effDir, m.cfg.PicoclawHome, m.cfg.PicoclawUser, key, ownerEmail)
+		if err == nil {
+			// Materialize AFTER seeding, so the template's (now empty) model_list
+			// is replaced by the inventory's answer. A workspace with no
+			// resolvable model fails here, before any container exists.
+			err = m.resolveAndMaterialize(key, userDir)
+		}
+```
+
+Leave the hermes branch untouched: hermes keeps reading `config.yaml`'s `agent.Model` this cycle (out of scope), so the `model` variable that branch uses stays.
+
+- [ ] **Step 8: Fix the old applyModel test**
+
+In `PROXY/internal/docker/provision_test.go`, the test at line ~53 calls `applyModel`. Replace that test function entirely with one that exercises the surviving behaviour:
+
+```go
+func TestSeedPicoTokenPreservesTemplateContentAndGeneratesAToken(t *testing.T) {
+	dir := t.TempDir()
+	secPath := filepath.Join(dir, ".security.yml")
+	if err := os.WriteFile(secPath, []byte("web:\n  brave:\n    api_keys:\n    - seeded\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := seedPicoToken(secPath); err != nil {
+		t.Fatalf("seedPicoToken: %v", err)
+	}
+
+	sec, err := readSecurityConfig(secPath)
+	if err != nil {
+		t.Fatalf("readSecurityConfig: %v", err)
+	}
+	tok, _ := sec["channel_list"].(map[string]any)["pico"].(map[string]any)["settings"].(map[string]any)["token"].(string)
+	if !strings.HasPrefix(tok, "pico-") {
+		t.Errorf("token = %q, want a pico- prefixed random token", tok)
+	}
+	// Only the nested pico.settings.token form is honored by picoclaw (the flat
+	// form silently leaves the channel disabled), and the template's own keys
+	// must survive.
+	if _, ok := sec["web"]; !ok {
+		t.Error("template content was clobbered")
+	}
+}
+```
+
+Ensure `provision_test.go` imports `"strings"`; drop any import it no longer uses.
+
+- [ ] **Step 9: Run the package tests**
+
+Run: `cd PROXY && go test ./internal/docker/ -v 2>&1 | tail -40`
+Expected: PASS. Compile errors will point at remaining `applyModel` / `RegisteredModel` / `ModelSel` references — remove each one; they are all superseded. `internal/httpapi` will still fail to build; that is T13/T14.
+
+- [ ] **Step 10: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+git add -A internal/docker/ cmd/
+git commit -m "refactor(docker): delete the two competing model systems
+
+resolveModel/reapplyModel (config.yaml cascade) and registered_models.go (disk
+catalog) both wrote agents.defaults without knowing about each other, so a scope
+re-apply silently overwrote a per-user assignment — unrecoverably, since the
+assignment was never persisted anywhere but the file it clobbered. Both are gone;
+internal/registry is the only resolver.
+
+ReapplyModelForModel re-materializes chain holders too. An edit that reached only
+primaries would leave every fallback holder on a stale credential, which is the
+failure fallback exists to prevent.
+
+provision no longer takes a model: it seeds the workspace and the caller
+materializes from the inventory, so a model comes from exactly one place.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+**Phase B complete.** Workspaces are written from the inventory and the old systems are gone. `internal/httpapi` does not compile yet — Phase D fixes it. Phase C is next.
+
 
