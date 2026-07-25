@@ -3414,6 +3414,66 @@ func TestReapplyModelForModelTouchesOnlyWorkspacesHoldingIt(t *testing.T) {
 	}
 }
 
+func TestReapplyModelScopeLeavesAPinnedWorkspaceCompletelyAlone(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+	var restarted []string
+	m.docker = noopDocker{}
+	m.logf = func(string, ...any) {}
+
+	for _, n := range []string{"pinned", "scoped"} {
+		if _, err := reg.CreateModel(registry.Model{
+			ModelName: n, Provider: "openai", Model: n,
+			APIBase: "https://api.openai.com/v1", APIKey: "sk-" + n, Status: registry.StatusActive,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := reg.SetScopeDefault(registry.ScopeSel{
+		Level: registry.LevelSubscription, TenantID: "t1", SubsAccID: "s1",
+	}, "scoped"); err != nil {
+		t.Fatal(err)
+	}
+
+	pinned := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "pinned"}
+	drifter := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "drifter"}
+	pinnedDir := seedProvisionedWorkspace(t, root, pinned)
+	seedProvisionedWorkspace(t, root, drifter)
+	if err := reg.PutAssignment(m.workspaceRef(pinned), registry.Assignment{
+		ModelName: "pinned", Source: registry.SourceExplicit,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.PutAssignment(m.workspaceRef(drifter), registry.Assignment{
+		ModelName: "scoped", Source: registry.SourceInherited,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(filepath.Join(pinnedDir, "config.json"))
+	rec := &recordingDocker{}
+	m.docker = rec
+
+	if err := m.ReapplyModelScope(Scope{Kind: ScopeSubscription, TenantID: "t1", SubsAccID: "s1"}); err != nil {
+		t.Fatalf("ReapplyModelScope: %v", err)
+	}
+
+	after, _ := os.ReadFile(filepath.Join(pinnedDir, "config.json"))
+	if string(before) != string(after) {
+		t.Error("a pinned workspace was re-materialized by a scope-default change")
+	}
+	// A no-op rewrite is invisible, but a restart is not: bouncing someone's agent
+	// because a sibling's default changed is what "untouched" forbids.
+	pinnedName := m.containerName(pinned)
+	for _, n := range rec.stopped {
+		if n == pinnedName {
+			t.Errorf("pinned workspace %q was restarted; stopped = %v", pinnedName, rec.stopped)
+		}
+	}
+	restarted = rec.stopped
+	if len(restarted) == 0 {
+		t.Log("no container was running, so no restart was expected — the file assertion above is the real check")
+	}
+}
+
 func TestReapplyModelUserRewritesFromTheRegistry(t *testing.T) {
 	m, reg, root := testManagerWithRegistry(t)
 	m.docker = noopDocker{}
@@ -3488,11 +3548,26 @@ func (noopDocker) Start(ctx context.Context, name string) error                {
 func (noopDocker) Stop(ctx context.Context, name string) error                 { return nil }
 func (noopDocker) Remove(ctx context.Context, name string) error               { return nil }
 func (noopDocker) Inspect(ctx context.Context, name string) (Summary, error)   { return Summary{}, nil }
+
+// recordingDocker is noopDocker plus a record of which containers were stopped, so
+// a test can assert that a workspace was NOT restarted. A silent no-op rewrite is
+// invisible in the files; a spurious restart is only visible here.
+type recordingDocker struct {
+	noopDocker
+	stopped []string
+}
+
+func (r *recordingDocker) Stop(ctx context.Context, name string) error {
+	r.stopped = append(r.stopped, name)
+	return nil
+}
 ```
 
 Add `"context"` to the file's imports.
 
-Run `cd PROXY && grep -n "type Docker interface" -A 25 internal/docker/client.go` and adjust the double so it matches the interface exactly — add any missing method returning zero values, and delete any method the interface does not declare.
+Run `cd PROXY && grep -n "type Docker interface" -A 25 internal/docker/client.go` and adjust `noopDocker` so it matches the interface exactly — add any missing method returning zero values, and delete any method the interface does not declare. `recordingDocker` embeds it, so only `Stop` needs overriding.
+
+Also find the container-name helper the Manager uses (`cd PROXY && grep -n "func (m \*Manager) containerName\|func containerName" internal/docker/*.go`) and, if its name differs from `containerName(key)`, use the real one in the pinned-workspace assertion. If the Manager derives the name inline rather than through a helper, extract one — a test that cannot name a container cannot assert that it was left alone.
 
 - [ ] **Step 3: Run test to verify it fails**
 
@@ -3521,24 +3596,38 @@ import (
 // neither knew about the other — so a scope re-apply silently overwrote a per-user
 // assignment with no error and no way to recover the lost choice.
 
-// ReapplyModelScope re-materializes every established workspace under scope, then
-// restarts the running ones so picoclaw reloads. A workspace that was never
-// provisioned is skipped: resolution already applies at its first provision.
+// ReapplyModelScope re-materializes the established workspaces under scope that a
+// scope-default change actually affects, and restarts only those.
+//
+// A workspace with an EXPLICIT per-user pin is skipped entirely: its resolution did
+// not change, so re-materializing would be a no-op — but restarting it would not.
+// Bouncing someone's agent because a sibling's default changed is exactly what
+// "workspaces with an explicit assignment are untouched" forbids. A workspace whose
+// pinned MODEL changed is handled by ReapplyModelForModel, not by this path.
+//
+// A workspace that was never provisioned is skipped too: resolution already applies
+// at its first provision.
 //
 // Per-workspace failures are logged and skipped rather than returned, so one bad
-// workspace does not block the pass for the others (mirroring RestartScope's own
-// best-effort contract).
+// workspace does not block the pass for the others.
 func (m *Manager) ReapplyModelScope(scope Scope) error {
 	keys, err := m.scopeWorkspaceKeys(scope)
 	if err != nil {
 		return err
 	}
 	for _, key := range keys {
+		if a, err := m.reg.GetAssignment(m.workspaceRef(key)); err == nil && a.Source == registry.SourceExplicit {
+			continue
+		}
 		if err := m.reapplyWorkspace(key); err != nil {
 			m.logf("reapply model scope: workspace %+v: %v", key, err)
+			continue
+		}
+		if err := m.RestartWorkspace(key); err != nil {
+			m.logf("reapply model scope: restart %+v: %v", key, err)
 		}
 	}
-	return m.RestartScope(scope)
+	return nil
 }
 
 // ReapplyModelUser re-materializes one workspace and restarts it if running
@@ -7570,8 +7659,13 @@ export default function ModelRegistryPanel({
     const to = index + delta;
     if (to < 0 || to >= next.length) return;
     [next[index], next[to]] = [next[to], next[index]];
+    // Send BOTH groups: SetPositions renumbers 1..N over exactly the names it
+    // receives, so sending only the active ones would leave inactive models holding
+    // stale positions that collide with active ones — and a reactivated model would
+    // no longer land back in its old place.
+    const order = [...next, ...inactive].map((m) => m.model_name);
     void run(async () => {
-      await reorderModels(routed, next.map((m) => m.model_name));
+      await reorderModels(routed, order);
       await refresh();
     });
   }
@@ -7993,12 +8087,25 @@ export default function ModelDefaultsPanel({
 
   const assignable = models.filter((m) => m.status !== "disabled");
 
+  // Which cascade level the default control addresses. global and agent are
+  // instance-wide (the proxy gates them at proxy-admin); tenant and subscription
+  // follow the scope tree on the left. Without this selector there is no way to set
+  // an instance-wide default at all, and a fresh install with no scope default
+  // refuses to provision every new workspace.
+  const [level, setLevel] = useState<DefaultScope["kind"]>(
+    scope.kind === "subscription" ? "subscription" : "tenant",
+  );
+
   const defaultScope: DefaultScope | null =
-    scope.kind === "subscription" && scope.subsAccId
-      ? { kind: "subscription", tenantId: scope.tenantId, subsAccId: scope.subsAccId }
-      : scope.kind === "tenant"
-        ? { kind: "tenant", tenantId: scope.tenantId }
-        : null;
+    level === "global"
+      ? { kind: "global" }
+      : level === "agent"
+        ? { kind: "agent" }
+        : level === "subscription" && scope.kind === "subscription" && scope.subsAccId
+          ? { kind: "subscription", tenantId: scope.tenantId, subsAccId: scope.subsAccId }
+          : level === "tenant" && scope.tenantId
+            ? { kind: "tenant", tenantId: scope.tenantId }
+            : null;
 
   // One serialized dependency instead of picking fields off a union: the scope's
   // identity IS its serialization, and casting to read optional fields would be a
@@ -8055,10 +8162,25 @@ export default function ModelDefaultsPanel({
 
       <div className="flex flex-col gap-2">
         <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
-          Default for this scope
+          Default model
         </span>
+        <label className="flex items-center gap-2">
+          <span className="text-xs text-fg-muted">Level</span>
+          <select className={selectClass} value={level} disabled={busy}
+            onChange={(e) => setLevel(e.target.value as DefaultScope["kind"])}>
+            <option value="global">global (whole instance)</option>
+            <option value="agent">agent (this agent, all tenants)</option>
+            <option value="tenant">tenant</option>
+            <option value="subscription">subscription</option>
+          </select>
+        </label>
+        <p className="text-[11px] text-fg-muted">
+          Resolution order, most specific first: per-user pin → subscription → tenant → agent → global.
+        </p>
         {!defaultScope ? (
-          <p className="py-2 text-sm text-fg-muted">Select a tenant or subscription on the left.</p>
+          <p className="py-2 text-sm text-fg-muted">
+            Select a {level} on the left to set its default.
+          </p>
         ) : !loaded ? (
           <div className="flex justify-center py-3">
             <Spinner size={18} />
@@ -8095,7 +8217,10 @@ export default function ModelDefaultsPanel({
           </div>
         )}
         <p className="text-[11px] text-fg-muted">
-          New workspaces under this scope land on this model. A per-user pin below overrides it.
+          New workspaces at this level land on this model unless a more specific level or a per-user
+          pin overrides it. Setting a <span className="font-mono">global</span> or{" "}
+          <span className="font-mono">agent</span> default requires instance-admin privileges, and takes
+          effect on each workspace&apos;s next start rather than restarting the fleet.
         </p>
       </div>
 

@@ -130,7 +130,12 @@ Four further defects in the same area, all verified:
   with an explicit error rather than producing a workspace picoclaw cannot boot.
 - **FR-19** Re-materialization triggers are defined exhaustively:
   - changing a **scope default** re-materializes every established workspace that
-    resolves through it (i.e. without a more specific override) — **eager**;
+    resolves through it (i.e. without a more specific override) — **eager**. A
+    workspace with an explicit per-user pin is skipped **entirely**, not merely
+    re-materialized to the same bytes: a no-op rewrite is invisible but a restart is
+    not, and bouncing someone's agent because a sibling's default changed is what
+    AC-7 forbids. A `global` or `agent` change has no scope to sweep and is left to
+    each workspace's next start;
   - changing a **per-user assignment** re-materializes that workspace — **eager**;
   - editing a **model's definition or key** re-materializes every established
     workspace whose materialized set contains it — that is, where it is the
@@ -265,8 +270,8 @@ Four further defects in the same area, all verified:
   deprecated model SHALL keep it.
 - **AC-7** WHEN a subscription default changes THEN every established workspace
   under it without an explicit per-user assignment SHALL be re-materialized and
-  the running ones restarted, AND workspaces with an explicit assignment SHALL be
-  untouched.
+  the running ones restarted, AND a workspace with an explicit assignment SHALL be
+  neither re-materialized **nor restarted**.
 - **AC-8** WHEN both a per-user assignment and a subscription default apply to a
   workspace THEN the per-user assignment SHALL win.
 - **AC-9** WHEN a workspace provisions and no model resolves at any cascade level

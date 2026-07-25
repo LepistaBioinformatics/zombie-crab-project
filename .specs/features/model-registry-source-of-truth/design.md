@@ -142,13 +142,18 @@ only** and filtered to `active` models — a non-active entry is skipped and log
 (AC-15b) rather than failing the resolution. `position` is presentation only
 (CTX-MR-09): it orders the active list in the UI and nothing else reads it.
 
+A reorder therefore submits **every** model's name, active and inactive alike:
+`SetPositions` renumbers `1..N` over exactly what it receives, so submitting only
+the active group would leave inactive models holding stale positions that collide
+with active ones — and a reactivated model would no longer land back in its place.
+
 ### Re-materialization triggers
 
 Per FR-19, all eager, all stop/start:
 
 | Change | Affected workspaces |
 |---|---|
-| scope default | those resolving through it (no more specific override) |
+| scope default | those resolving through it. A workspace with an explicit pin is skipped **entirely** — not re-materialized to the same bytes and then restarted anyway. `global`/`agent` have no scope to sweep and are left to the next start |
 | per-user assignment | that workspace |
 | model definition or key | those whose `Assignment` names it as primary **or** in `chain` |
 | a model's `fallbacks` | those whose `Assignment` names it as primary |
