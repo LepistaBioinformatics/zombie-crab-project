@@ -370,9 +370,66 @@ interpolated `className` strings, matching the codebase's convention.
 
 ## 12. Open items for the user
 
+### BLOCKING — 1. Does chain membership count as a reference?
+
+CTX-MR-09 makes the chain "every active model, in `position` order", so every
+active model is materialized into **every** workspace: a `config.json`
+`model_list` entry, a `.security.yml` key, and a slot in
+`agents.defaults.model_fallbacks`. But `Assignment` records only the **primary**,
+so `referrers` (§4) counts primaries, scope defaults and `replaced_by` — and
+misses chain membership entirely. Two consequences:
+
+- A model that is `active` but primary nowhere has **zero referrers**, so I2
+  permits deleting it. Nothing re-materializes, because FR-19's eager trigger is
+  the same assignments lookup. Every workspace keeps a `model_list` entry and a
+  `model_fallbacks` reference to a model that no longer exists. FR-25's drift
+  check compares only the *active* model, so it does not notice either.
+- Editing that model's key propagates nowhere, for the same reason. Fallback
+  silently keeps a stale or revoked credential — the failure mode fallback exists
+  to prevent.
+
+Counting chain membership as a reference does not fix it either: every active
+model would then be referenced by every workspace, so nothing could ever be
+deleted, and disabling first carries the same precondition. Deadlock.
+
+The deeper point this exposes: with chain = all active models, **any** change to
+the active set or to any active model's credentials is a fleet-wide change. That
+cost is larger than CTX-MR-09 represented, and it is the real trade-off — not key
+spread.
+
+Three exits:
+
+- **(a) Per-model explicit `fallbacks` list** — the option CTX-MR-09 deferred.
+  Chain membership becomes a declared, countable reference; I2/I3 work with no
+  deadlock; blast radius and key spread are both bounded by who declares the
+  model; it is picoclaw's own field shape (`ModelConfig.Fallbacks`). Cost: the
+  admin declares a fallback list per model instead of one global order — which is
+  **not** the single reorderable list the user asked for.
+- **(b) Keep chain = all active, split the precondition** — delete blocks on
+  primary-use ∪ scope-default ∪ `replaced_by`; disable blocks on primary-use only
+  and eagerly re-materializes every workspace to drop the model. Preserves the
+  single global order, but makes delete and disable fleet-wide restarts, which
+  sits badly beside FR-19's decision that a reorder must not restart the fleet.
+- **(c) Store the full materialized set in `Assignment`** — `referrers`
+  distinguishes primary use (blocks delete/disable) from chain use (does not
+  block, but marks those workspaces stale). Delete/disable of a non-primary
+  active model is allowed and enqueues the same lazy re-materialization a reorder
+  does; FR-25's drift check is extended to the whole materialized set so
+  staleness is visible and countable. Preserves the single global order and avoids
+  fleet restarts, at the cost of an explicit stale window during which a
+  workspace's fallback list names a deleted model.
+
+Recommendation: **(a)** if bounded blast radius matters more than the exact UI
+shape; **(c)** if the single reorderable list is non-negotiable. (b) is dominated
+by (c).
+
+This decision changes `Assignment`'s shape and the wording of FR-5, FR-6 and
+FR-19 — it must be settled before tasks are written.
+
+### 2. Non-blocking
+
 1. Confirm CTX-MR-12 (keep the native `model_list.*.api_keys` slot as a scope
    override) versus dropping it for strict single-sourcing.
-2. Confirm CTX-MR-09's key-spread trade-off versus per-model fallback lists.
-3. Confirm that removing `config.yaml`'s `agent.Model` from the runtime path is
+2. Confirm that removing `config.yaml`'s `agent.Model` from the runtime path is
    acceptable for operators who configure models that way today — after
    migration it becomes a seed, and further edits to it have no effect.

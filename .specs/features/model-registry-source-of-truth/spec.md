@@ -112,6 +112,12 @@ Four further defects in the same area, all verified:
   so the pico channel token and all sibling keys survive.
 - **FR-17** Materialization records or updates the workspace's assignment
   (FR-10).
+- **FR-17b** Materialization **prunes** `.security.yml`: a `model_list.<name>`
+  entry for a model no longer in the workspace's materialized set is removed.
+  Without this the two files drift permanently — `config.json`'s `model_list` is
+  replaced wholesale while `.security.yml` is read-modify-write, so every model a
+  workspace ever used keeps its key there forever. Pruning must not touch the
+  pico channel token, the `web.*` families, or any native-secret overlay slot.
 - **FR-18** When no model resolves at any cascade level, provisioning is refused
   with an explicit error rather than producing a workspace picoclaw cannot boot.
 - **FR-19** Re-materialization triggers are defined exhaustively:
@@ -185,6 +191,17 @@ Four further defects in the same area, all verified:
   the model against the inventory instead of a template `.security.yml`. Its
   overlay precedence over the inventory key is documented (CTX-MR-12).
 
+### Gateway routing
+
+- **FR-33** The mycelium gateway path allowlist
+  (`fungi/mycelium/config.base.toml` and `config.standalone.toml` in the parent
+  repo) registers every new admin route for each picoclaw service, and drops the
+  superseded `/v1/admin/registered-models`, `/v1/admin/registered-models/apply`,
+  `/v1/admin/model` and `/v1/admin/model/users` entries. Without this the gateway
+  answers "Request path does not match any service" and the feature is
+  unreachable, so this is deploy-blocking and requires a gateway reload
+  (precedent: parent commit `c89570c`).
+
 ## Non-functional
 
 - **NFR-1** Storage is a pure-Go embedded database — the proxy builds with
@@ -216,7 +233,9 @@ Four further defects in the same area, all verified:
   THEN the system SHALL reject it with 409 and write nothing.
 - **AC-2** WHEN an admin applies a model to a user and inspects that workspace
   THEN `config.json`'s `model_list` entry SHALL contain no `api_key` field AND
-  `.security.yml` SHALL contain `model_list.<model_name>.api_keys` with the key.
+  `.security.yml` SHALL contain `model_list.<model_name>.api_keys` with the key
+  AND SHALL contain no `model_list` entry for any model outside the workspace's
+  materialized set, AND the pico channel token SHALL be unchanged.
 - **AC-3** WHEN an admin deletes a model that any workspace or scope default
   references THEN the system SHALL respond 409 naming the referrers and write
   nothing.
@@ -271,6 +290,7 @@ Four further defects in the same area, all verified:
 |---|---|
 | `crab-shell-proxy` | `.specs/features/model-registry-source-of-truth/` — storage, resolver, materialization, migration, HTTP |
 | `crab-exoskeleton-webapp` | `.specs/features/model-registry-source-of-truth/` — BFF routes, admin panel |
+| parent (this repo) | `fungi/mycelium/config.{base,standalone}.toml` — gateway path allowlist (FR-33), plus submodule pointer bumps |
 
 ## Status
 
