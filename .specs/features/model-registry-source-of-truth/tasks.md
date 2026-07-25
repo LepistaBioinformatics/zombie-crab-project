@@ -6675,15 +6675,19 @@ export interface ModelDraft {
   fallbacks: string[];
 }
 
-export const emptyDraft: ModelDraft = {
-  model_name: "",
-  provider: "",
-  model: "",
-  api_base: "",
-  auth_method: "",
-  api_key: "",
-  fallbacks: [],
-};
+// A factory, not a shared const: a shared object would hand every draft the SAME
+// fallbacks array, so editing one form's chain would mutate the template.
+export function emptyDraft(): ModelDraft {
+  return {
+    model_name: "",
+    provider: "",
+    model: "",
+    api_base: "",
+    auth_method: "",
+    api_key: "",
+    fallbacks: [],
+  };
+}
 
 // splitInventory groups the listing the way the panel renders it. The active group
 // is ordered by position, which is PRESENTATION ONLY — it is not the fallback
@@ -6714,7 +6718,7 @@ export function inactiveReason(m: InventoryModel): string {
 
 export function draftFromCatalog(entry: CatalogEntry): ModelDraft {
   return {
-    ...emptyDraft,
+    ...emptyDraft(),
     provider: entry.provider,
     model: entry.model,
     api_base: entry.api_base ?? "",
@@ -7375,6 +7379,32 @@ describe("ModelRow", () => {
     );
     expect(html).toContain("imported");
   });
+
+  it("renders as an <li> so the caller's <ul> stays valid markup", () => {
+    const html = renderToStaticMarkup(<ModelRow model={model()} busy={false} {...handlers} />);
+    expect(html.startsWith("<li")).toBe(true);
+  });
+
+  it("shows reorder arrows only when a move handler is supplied", () => {
+    const without = renderToStaticMarkup(<ModelRow model={model()} busy={false} {...handlers} />);
+    expect(without).not.toContain("Move gpt-5.4 up");
+
+    const withMove = renderToStaticMarkup(
+      <ModelRow model={model()} busy={false} {...handlers} onMoveUp={noop} onMoveDown={noop} />,
+    );
+    expect(withMove).toContain("Move gpt-5.4 up");
+    expect(withMove).toContain("Move gpt-5.4 down");
+  });
+
+  it("disables the up arrow at the top of the list", () => {
+    // onMoveUp absent means "already first" — the arrow renders but cannot fire, so
+    // the row does not need to know its own index.
+    const html = renderToStaticMarkup(
+      <ModelRow model={model()} busy={false} {...handlers} onMoveDown={noop} />,
+    );
+    expect(html).toContain("Move gpt-5.4 up");
+    expect(html).toMatch(/aria-label="Move gpt-5\.4 up"[^>]*disabled/);
+  });
 });
 ```
 
@@ -7419,6 +7449,8 @@ export function ModelRow({
   onToggle,
   onDeprecate,
   onDelete,
+  onMoveUp,
+  onMoveDown,
 }: {
   model: InventoryModel;
   busy: boolean;
@@ -7427,6 +7459,11 @@ export function ModelRow({
   onToggle: (m: InventoryModel) => void;
   onDeprecate: (m: InventoryModel) => void;
   onDelete: (m: InventoryModel) => void;
+  // Reorder arrows live INSIDE the row so the list stays <ul><li>: wrapping the
+  // row in a positioning <div> would put a non-li child in the <ul> and nest the
+  // <li> inside it, which is invalid markup. Absent means not reorderable.
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   const inUse = model.in_use_count > 0;
   // Delete and disable share one precondition — nothing may reference the model.
@@ -7436,6 +7473,18 @@ export function ModelRow({
 
   return (
     <li className={row({ state: model.status === "active" ? "active" : "inactive" })}>
+      {(onMoveUp || onMoveDown) && (
+        <div className="flex shrink-0 flex-col">
+          <button type="button" aria-label={`Move ${model.model_name} up`} className="text-xs text-fg-muted"
+            disabled={busy || !onMoveUp} onClick={onMoveUp}>
+            ↑
+          </button>
+          <button type="button" aria-label={`Move ${model.model_name} down`} className="text-xs text-fg-muted"
+            disabled={busy || !onMoveDown} onClick={onMoveDown}>
+            ↓
+          </button>
+        </div>
+      )}
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate font-mono text-xs text-fg">{model.model_name}</span>
         <span className="truncate text-[11px] text-fg-muted">
@@ -7556,9 +7605,15 @@ export default function ModelRegistryPanel({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [draft, setDraft] = useState<ModelDraft>(emptyDraft);
+  const [draft, setDraft] = useState<ModelDraft>(emptyDraft());
   // editing holds the model_name + version being edited; null means "create".
   const [editing, setEditing] = useState<{ name: string; version: number } | null>(null);
+  // deprecating holds the model being retired while the admin picks its
+  // replacement. An inline picker rather than window.prompt: the replacement must
+  // be an existing ACTIVE model, and a free-text prompt cannot offer that list —
+  // the admin would type a name and get a 400 with no way to see the valid ones.
+  const [deprecating, setDeprecating] = useState<InventoryModel | null>(null);
+  const [replacement, setReplacement] = useState("");
 
   const refresh = useCallback(async () => {
     if (!routed) return;
@@ -7594,7 +7649,7 @@ export default function ModelRegistryPanel({
   }
 
   function openCreate() {
-    setDraft(emptyDraft);
+    setDraft(emptyDraft());
     setEditing(null);
     setShowForm(true);
   }
@@ -7634,7 +7689,7 @@ export default function ModelRegistryPanel({
         await createModel(routed, draft);
       }
       setShowForm(false);
-      setDraft(emptyDraft);
+      setDraft(emptyDraft());
       setEditing(null);
       await refresh();
     });
@@ -7722,7 +7777,7 @@ export default function ModelRegistryPanel({
             onChange={(e) => setDraft({ ...draft, api_key: e.target.value })} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="text" size="sm"
-              onClick={() => { setShowForm(false); setDraft(emptyDraft); setEditing(null); }}>
+              onClick={() => { setShowForm(false); setDraft(emptyDraft()); setEditing(null); }}>
               Cancel
             </Button>
             <Button type="submit" variant="filled" size="sm" disabled={busy}>
@@ -7744,40 +7799,19 @@ export default function ModelRegistryPanel({
             ) : (
               <ul className="flex flex-col gap-1">
                 {active.map((m, i) => (
-                  <div key={m.model_name} className="flex items-center gap-1">
-                    <div className="flex flex-col">
-                      <button type="button" aria-label={`Move ${m.model_name} up`} className="text-xs text-fg-muted"
-                        disabled={busy || i === 0} onClick={() => move(active, i, -1)}>
-                        ↑
-                      </button>
-                      <button type="button" aria-label={`Move ${m.model_name} down`} className="text-xs text-fg-muted"
-                        disabled={busy || i === active.length - 1} onClick={() => move(active, i, 1)}>
-                        ↓
-                      </button>
-                    </div>
-                    <div className="flex-1">
-                      <ModelRow model={m} busy={busy}
-                        onEdit={openEdit} onDuplicate={openDuplicate}
-                        onToggle={(mm) => run(async () => {
-                          await setModelStatus(routed, mm.model_name, mm.version, "disabled");
-                          await refresh();
-                        })}
-                        onDeprecate={(mm) => {
-                          const replacement = window.prompt(
-                            `Retiring ${mm.model_name}. Which active model should NEW users get instead?`,
-                          );
-                          if (!replacement) return;
-                          void run(async () => {
-                            await deprecateModel(routed, mm.model_name, mm.version, replacement);
-                            await refresh();
-                          });
-                        }}
-                        onDelete={(mm) => run(async () => {
-                          await deleteModel(routed, mm.model_name);
-                          await refresh();
-                        })} />
-                    </div>
-                  </div>
+                  <ModelRow key={m.model_name} model={m} busy={busy}
+                    onMoveUp={i === 0 ? undefined : () => move(active, i, -1)}
+                    onMoveDown={i === active.length - 1 ? undefined : () => move(active, i, 1)}
+                    onEdit={openEdit} onDuplicate={openDuplicate}
+                    onToggle={(mm) => run(async () => {
+                      await setModelStatus(routed, mm.model_name, mm.version, "disabled");
+                      await refresh();
+                    })}
+                    onDeprecate={setDeprecating}
+                    onDelete={(mm) => run(async () => {
+                      await deleteModel(routed, mm.model_name);
+                      await refresh();
+                    })} />
                 ))}
               </ul>
             )}
@@ -7785,6 +7819,47 @@ export default function ModelRegistryPanel({
               This order is for reading only. A model&apos;s fallback chain is the{" "}
               <span className="font-mono">fallbacks</span> list on the model itself.
             </p>
+
+            {deprecating && (
+              <div className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
+                <span className="text-xs font-medium text-fg-muted">
+                  Retire <span className="font-mono">{deprecating.model_name}</span>
+                </span>
+                <p className="text-[11px] text-fg-muted">
+                  Everyone already using it keeps it. New users get the replacement instead.
+                </p>
+                <select className={selectClass} value={replacement}
+                  onChange={(e) => setReplacement(e.target.value)}>
+                  <option value="" disabled>
+                    replacement for new users…
+                  </option>
+                  {active
+                    .filter((m) => m.model_name !== deprecating.model_name)
+                    .map((m) => (
+                      <option key={m.model_name} value={m.model_name}>
+                        {m.model_name}
+                      </option>
+                    ))}
+                </select>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="text" size="sm"
+                    onClick={() => { setDeprecating(null); setReplacement(""); }}>
+                    Cancel
+                  </Button>
+                  <Button variant="filled" size="sm" disabled={busy || !replacement}
+                    onClick={() =>
+                      run(async () => {
+                        await deprecateModel(routed, deprecating.model_name, deprecating.version, replacement);
+                        setDeprecating(null);
+                        setReplacement("");
+                        await refresh();
+                      })
+                    }>
+                    Deprecate
+                  </Button>
+                </div>
+              </div>
+            )}
           </Section>
 
           <Section title="Inactive">
@@ -8310,10 +8385,12 @@ Add the state that tracks which model's chain is open:
   const [chainFor, setChainFor] = useState<InventoryModel | null>(null);
 ```
 
-Pass an extra handler into each active-list `ModelRow` by wrapping `onEdit`:
+In the active list, close the chain editor when the admin switches to the edit form —
+two panels open on different models at once is how someone saves a chain onto the
+wrong model:
 
 ```tsx
-                        onEdit={(mm) => { setChainFor(null); openEdit(mm); }}
+                    onEdit={(mm) => { setChainFor(null); openEdit(mm); }}
 ```
 
 and render the chain editor plus the defaults panel just before the closing `</div>` of the component:
