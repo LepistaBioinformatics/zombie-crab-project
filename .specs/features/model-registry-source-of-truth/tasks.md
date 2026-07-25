@@ -4882,14 +4882,17 @@ import (
 // materialization overwrites model_list wholesale from the inventory. Nothing in
 // use is lost — the migration already recovered every running model from the
 // workspaces themselves, which is where a working model provably exists.
+// It enumerates templates from DISK, not from m.cfg.Agents: config.Load drops
+// disabled or removed agents from that map, so a per-agent loop would leave exactly
+// those agents' templates un-normalized — still carrying models, still looking like
+// a place the truth lives. Same reason the migration and the drift check enumerate
+// workspaces from disk.
 func (m *Manager) normalizeDiskTemplates() error {
-	seen := map[string]bool{}
-	for _, agent := range m.cfg.Agents {
-		if agent.Template == "" || seen[agent.Template] {
-			continue
-		}
-		seen[agent.Template] = true
-		path := filepath.Join(config.TemplatesDir(m.cfg.ContainerDataRoot, agent.Template), "config.json")
+	matches, err := filepath.Glob(filepath.Join(m.cfg.ContainerDataRoot, "templates", "*", "config.json"))
+	if err != nil {
+		return err
+	}
+	for _, path := range matches {
 		if err := normalizeTemplateFile(path); err != nil {
 			m.logf("normalize template %s: %v", path, err)
 		}
