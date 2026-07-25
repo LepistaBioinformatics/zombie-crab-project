@@ -4133,6 +4133,14 @@ func (m *Manager) migrateModelRegistry() error {
 	root := m.cfg.ContainerDataRoot
 
 	// 1. config.yaml: declared models, and each agent's default.
+	//
+	// config.ModelConfig.BaseURL is a hermes-only field and is EMPTY for every
+	// picoclaw model — config.yaml never carried an api_base for them, because the
+	// template's model_list did. So these records import without one, and picoclaw
+	// falls back to its provider default. CreateModelRaw is used precisely because
+	// the public API would reject a record with no api_base and no auth_method: the
+	// shape is not the proxy's choice, it is what the old config expressed. An admin
+	// editing such a record in the UI supplies the api_base then.
 	for _, agent := range m.cfg.Agents {
 		for _, mc := range agent.SelectableModels() {
 			m.importLegacyModel(registry.Model{
@@ -4561,9 +4569,6 @@ func TestNormalizeDiskTemplatesEmptiesModelListAndBacksUp(t *testing.T) {
 	}
 }
 
-func TestNormalizeDiskTemplatesIsIdempotentAndKeepsTheFirstBackup() {
-}
-
 func TestNormalizeDiskTemplatesDoesNotOverwriteAnExistingBackup(t *testing.T) {
 	m, _, root := testManagerWithRegistry(t)
 	tmplDir := config.TemplatesDir(root, "picoclaw")
@@ -4658,8 +4663,6 @@ func TestCheckModelDriftDoesNotModifyAnything(t *testing.T) {
 	}
 }
 ```
-
-Delete the empty stub `TestNormalizeDiskTemplatesIsIdempotentAndKeepsTheFirstBackup` — it is covered by `TestNormalizeDiskTemplatesDoesNotOverwriteAnExistingBackup`.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -6025,6 +6028,37 @@ Give the fake a `reg *registry.Registry` field and have `newTestServer` open a r
 
 In `PROXY/internal/httpapi/openapi.json`, remove the `/v1/admin/registered-models`, `/v1/admin/registered-models/apply`, `/v1/admin/model` and `/v1/admin/model/users` path entries, and add entries for the nine T13 routes plus the five above. Mirror the existing file's style: each path gets a `summary`, the security scheme the neighbouring admin paths use, and response codes 200/400/403/404/409 as applicable. No request or response schema may include an `api_key` **response** property; the create/update **request** bodies do include `api_key` (write-only) — mark them `"writeOnly": true`.
 
+- [ ] **Step 7b: Verify the two Scope constants exist**
+
+Run: `cd PROXY && grep -n "ScopeTenant\|ScopeSubscription" internal/docker/*.go | grep -v _test | head -5`
+Expected: both `ScopeTenant` and `ScopeSubscription` are declared. If the tenant one is named differently, fix `reapplyForScope` to match rather than adding an alias.
+
+- [ ] **Step 7c: Add the reorder test that asserts AC-19**
+
+Append to `PROXY/internal/httpapi/admin_model_scopes_test.go`:
+
+```go
+func TestReorderDoesNotReapplyAnything(t *testing.T) {
+	s, admin, _ := newTestServer(t)
+	for _, n := range []string{"a", "b"} {
+		doAdmin(t, s, admin, "POST", "/v1/admin/models",
+			`{"model_name":"`+n+`","provider":"openai","model":"`+n+`","api_base":"https://x","api_key":"sk"}`)
+	}
+
+	rec := doAdmin(t, s, admin, "PUT", "/v1/admin/models/order", `{"order":["b","a"]}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reorder = %d: %s", rec.Code, rec.Body.String())
+	}
+	// Position is presentation only. A drag must not re-materialize or restart
+	// anything, so the fake must have recorded no reapply call at all.
+	if n := s.Mgr.(*fakeDocker).reapplyCalls; n != 0 {
+		t.Errorf("reorder triggered %d reapply calls, want 0", n)
+	}
+}
+```
+
+Give `fakeDocker` a `reapplyCalls int` field and increment it in `ReapplyModelForModel`, `ReapplyModelScope` and `ReapplyModelUser`. If `Server.Mgr` is typed as the `Docker` interface, the type assertion above works; if it is a concrete type, keep a package-level pointer to the fake from `newTestServer` instead.
+
 - [ ] **Step 8: Run the whole suite**
 
 Run: `cd PROXY && go build ./... && go vet ./... && go test ./... 2>&1 | tail -30`
@@ -6640,7 +6674,9 @@ export async function modelsApiError(res: Response): Promise<ModelsError> {
   return { message, versionConflict, referrers };
 }
 
-async function request(agent: Instance, path: string, init?: RequestInit): Promise<unknown> {
+// request throws an Error carrying the ModelsError fields, so a caller can render
+// a version conflict or an in-use referrer list without a second round trip.
+async function request(path: string, init?: RequestInit): Promise<unknown> {
   const res = await fetch(path, init);
   if (!res.ok) {
     throw Object.assign(new Error("request failed"), await modelsApiError(res));
@@ -6658,21 +6694,21 @@ const q = (agent: Instance, extra: Record<string, string> = {}) =>
   new URLSearchParams({ agent, ...extra }).toString();
 
 export async function listModels(agent: Instance): Promise<InventoryModel[]> {
-  const data = (await request(agent, `/api/admin/models?${q(agent)}`)) as { models?: InventoryModel[] };
+  const data = (await request(`/api/admin/models?${q(agent)}`)) as { models?: InventoryModel[] };
   return Array.isArray(data.models) ? data.models : [];
 }
 
 export async function modelCatalog(agent: Instance): Promise<CatalogEntry[]> {
-  const data = (await request(agent, `/api/admin/model-catalog?${q(agent)}`)) as { entries?: CatalogEntry[] };
+  const data = (await request(`/api/admin/model-catalog?${q(agent)}`)) as { entries?: CatalogEntry[] };
   return Array.isArray(data.entries) ? data.entries : [];
 }
 
 export async function createModel(agent: Instance, draft: ModelDraft): Promise<void> {
-  await request(agent, "/api/admin/models", json({ agent, ...serializeDraft(draft) }));
+  await request("/api/admin/models", json({ agent, ...serializeDraft(draft) }));
 }
 
 export async function updateModel(agent: Instance, name: string, version: number, draft: ModelDraft): Promise<void> {
-  await request(agent, `/api/admin/models?${q(agent, { name })}`, {
+  await request(`/api/admin/models?${q(agent, { name })}`, {
     ...json({ agent, name, version, ...serializeDraft(draft) }),
     method: "PUT",
   });
@@ -6696,7 +6732,7 @@ function serializeDraft(draft: ModelDraft): Record<string, unknown> {
 }
 
 export async function deleteModel(agent: Instance, name: string): Promise<void> {
-  await request(agent, `/api/admin/models?${q(agent, { name })}`, { method: "DELETE" });
+  await request(`/api/admin/models?${q(agent, { name })}`, { method: "DELETE" });
 }
 
 export async function setModelStatus(
@@ -6705,7 +6741,7 @@ export async function setModelStatus(
   version: number,
   status: ModelStatus,
 ): Promise<void> {
-  await request(agent, `/api/admin/models/status?${q(agent, { name })}`, {
+  await request(`/api/admin/models/status?${q(agent, { name })}`, {
     ...json({ agent, name, version, status }),
     method: "PUT",
   });
@@ -6717,15 +6753,15 @@ export async function deprecateModel(
   version: number,
   replacedBy: string,
 ): Promise<void> {
-  await request(agent, "/api/admin/models/deprecate", json({ agent, name, version, replaced_by: replacedBy }));
+  await request("/api/admin/models/deprecate", json({ agent, name, version, replaced_by: replacedBy }));
 }
 
 export async function reorderModels(agent: Instance, order: string[]): Promise<void> {
-  await request(agent, "/api/admin/models/order", { ...json({ agent, order }), method: "PUT" });
+  await request("/api/admin/models/order", { ...json({ agent, order }), method: "PUT" });
 }
 
 export async function modelUsage(agent: Instance, name: string): Promise<Referrer[]> {
-  const data = (await request(agent, `/api/admin/models/usage?${q(agent, { name })}`)) as {
+  const data = (await request(`/api/admin/models/usage?${q(agent, { name })}`)) as {
     referrers?: Referrer[];
   };
   return Array.isArray(data.referrers) ? data.referrers : [];
@@ -6749,21 +6785,21 @@ function defaultScopeQuery(agent: Instance, scope: DefaultScope): string {
 }
 
 export async function getModelDefault(agent: Instance, scope: DefaultScope): Promise<ScopeDefault | null> {
-  const data = (await request(agent, `/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`)) as {
+  const data = (await request(`/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`)) as {
     default?: ScopeDefault | null;
   };
   return data.default ?? null;
 }
 
 export async function setModelDefault(agent: Instance, scope: DefaultScope, modelName: string): Promise<void> {
-  await request(agent, `/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`, {
+  await request(`/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`, {
     ...json({ agent, model_name: modelName }),
     method: "PUT",
   });
 }
 
 export async function clearModelDefault(agent: Instance, scope: DefaultScope): Promise<void> {
-  await request(agent, `/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`, { method: "DELETE" });
+  await request(`/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`, { method: "DELETE" });
 }
 
 export interface AssignmentTarget {
@@ -6778,7 +6814,6 @@ export async function setModelAssignment(
   modelName: string,
 ): Promise<void> {
   await request(
-    agent,
     "/api/admin/model-assignments",
     json({
       agent,
@@ -6791,7 +6826,7 @@ export async function setModelAssignment(
 }
 
 export async function clearModelAssignment(agent: Instance, target: AssignmentTarget): Promise<void> {
-  await request(agent, "/api/admin/model-assignments", {
+  await request("/api/admin/model-assignments", {
     ...json({
       agent,
       tenant_id: target.tenantId,
@@ -7965,15 +8000,19 @@ export default function ModelDefaultsPanel({
         ? { kind: "tenant", tenantId: scope.tenantId }
         : null;
 
+  // One serialized dependency instead of picking fields off a union: the scope's
+  // identity IS its serialization, and casting to read optional fields would be a
+  // silent hazard the next time the union grows a member.
+  const scopeKey = defaultScope ? JSON.stringify(defaultScope) : "";
+
   const load = useCallback(async () => {
-    if (!routed || !defaultScope) {
+    if (!routed || !scopeKey) {
       setLoaded(true);
       return;
     }
-    setCurrent(await getModelDefault(routed, defaultScope));
+    setCurrent(await getModelDefault(routed, JSON.parse(scopeKey) as DefaultScope));
     setLoaded(true);
-  }, [routed, defaultScope?.kind, (defaultScope as { tenantId?: string })?.tenantId,
-      (defaultScope as { subsAccId?: string })?.subsAccId]);
+  }, [routed, scopeKey]);
 
   useEffect(() => {
     setLoaded(false);
