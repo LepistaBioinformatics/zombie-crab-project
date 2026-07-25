@@ -3805,6 +3805,1062 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-**Phase B complete.** Workspaces are written from the inventory and the old systems are gone. `internal/httpapi` does not compile yet — Phase D fixes it. Phase C is next.
+**Phase B complete.** Workspaces are written from the inventory and the old systems are gone. `internal/httpapi` does not compile yet — Phase D fixes it.
+
+---
+
+## Phase C — Migration
+
+### Task 11: import every pre-existing source, capture what each workspace runs
+
+**Files:**
+- Create: `PROXY/internal/docker/migrate_models.go`
+- Create: `PROXY/internal/docker/migrate_models_test.go`
+
+**Interfaces:**
+- Consumes: T01–T10; `config.TemplatesDir`, `config.TenantModelOverrideFile`, `config.SubscriptionModelOverrideFile`, `config.UserModelOverrideFile`, `config.UserWorkspace`, `(*Manager).existingWorkspaces` (`internal/docker/reconcile.go`).
+- Produces:
+  - `(*Manager).migrateModelRegistry() error` — idempotent; a no-op once `meta.schema_version >= modelRegistrySchemaVersion`
+  - `modelRegistrySchemaVersion = 1`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `PROXY/internal/docker/migrate_models_test.go`:
+
+```go
+package docker
+
+import (
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/config"
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/registry"
+)
+
+// seedLegacyWorkspace writes a workspace as the OLD code left it: the model
+// declared in its own config.json model_list and its key in .security.yml.
+func seedLegacyWorkspace(t *testing.T, root string, key WorkspaceKey, modelName, provider, apiKey string, fallbacks []string) string {
+	t.Helper()
+	userDir := config.UserWorkspace(root, key.TenantID, key.SubsAccID, key.Role, key.UserAccID)
+	if err := os.MkdirAll(userDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	list := []any{map[string]any{
+		"model_name": modelName, "provider": provider, "model": modelName,
+		"api_base": "https://legacy.example/v1", "enabled": true,
+	}}
+	defaults := map[string]any{"provider": provider, "model_name": modelName}
+	if len(fallbacks) > 0 {
+		fb := make([]any, 0, len(fallbacks))
+		for _, n := range fallbacks {
+			fb = append(fb, n)
+			list = append(list, map[string]any{
+				"model_name": n, "provider": provider, "model": n,
+				"api_base": "https://legacy.example/v1", "enabled": true,
+			})
+		}
+		defaults["model_fallbacks"] = fb
+	}
+	cfg := map[string]any{
+		"version":      3,
+		"channel_list": map[string]any{"pico": map[string]any{"enabled": true}},
+		"agents":       map[string]any{"defaults": defaults},
+		"model_list":   list,
+	}
+	raw, _ := json.MarshalIndent(cfg, "", "  ")
+	if err := os.WriteFile(filepath.Join(userDir, "config.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sec := "channel_list:\n  pico:\n    settings:\n      token: pico-legacy\nmodel_list:\n" +
+		"  " + modelName + ":\n    api_keys:\n    - " + apiKey + "\n"
+	for _, n := range fallbacks {
+		sec += "  " + n + ":\n    api_keys:\n    - sk-" + n + "\n"
+	}
+	if err := os.WriteFile(filepath.Join(userDir, ".security.yml"), []byte(sec), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return userDir
+}
+
+func TestMigrateImportsRegisteredModelsFile(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+
+	dir := filepath.Join(root, "registered-models")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	payload := `[{"provider":"zhipu","name":"glm-4.7","model":"glm-4.7",
+	  "api_base":"https://open.bigmodel.cn/api/paas/v4","api_key":"sk-zhipu"}]`
+	if err := os.WriteFile(filepath.Join(dir, "alpha.json"), []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.migrateModelRegistry(); err != nil {
+		t.Fatalf("migrateModelRegistry: %v", err)
+	}
+
+	got, err := reg.GetModel("glm-4.7")
+	if err != nil {
+		t.Fatalf("GetModel: %v", err)
+	}
+	// The key must survive: a registered-models entry holds a credential an admin
+	// actually typed, which no other source can reproduce.
+	if got.APIKey != "sk-zhipu" || got.Provider != "zhipu" {
+		t.Errorf("imported = %+v, want the zhipu definition with its key", got)
+	}
+}
+
+func TestMigrateImportsScopeAndUserOverrides(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+	key := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "u1"}
+	seedLegacyWorkspace(t, root, key, "legacy", "openai", "sk-legacy", nil)
+
+	// A tenant-scope override file as admin-model-override wrote it.
+	tf := config.TenantModelOverrideFile(root, "t1")
+	if err := os.MkdirAll(filepath.Dir(tf), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tf, []byte(`{"provider":"openai","name":"legacy"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A per-user override dotfile.
+	uf := config.UserModelOverrideFile(root, "t1", "s1", "alpha", "u1")
+	if err := os.WriteFile(uf, []byte(`{"provider":"openai","name":"legacy"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.migrateModelRegistry(); err != nil {
+		t.Fatalf("migrateModelRegistry: %v", err)
+	}
+
+	d, err := reg.GetScopeDefault(registry.ScopeSel{Level: registry.LevelTenant, TenantID: "t1"})
+	if err != nil || d.ModelName != "legacy" {
+		t.Errorf("tenant default = %+v (err %v), want legacy", d, err)
+	}
+	a, err := reg.GetAssignment(m.workspaceRef(key))
+	if err != nil {
+		t.Fatalf("GetAssignment: %v", err)
+	}
+	// An override file was a deliberate pin, so it must import as EXPLICIT — as
+	// inherited it would be silently overridden by the next scope change.
+	if a.Source != registry.SourceExplicit || a.ModelName != "legacy" {
+		t.Errorf("assignment = %+v, want legacy/explicit", a)
+	}
+}
+
+func TestMigrateCapturesEveryWorkspacesCurrentModelAndChain(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+	key := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "u1"}
+	seedLegacyWorkspace(t, root, key, "orphan-primary", "venice", "sk-venice", []string{"orphan-fb"})
+
+	if err := m.migrateModelRegistry(); err != nil {
+		t.Fatalf("migrateModelRegistry: %v", err)
+	}
+
+	// This is the anti-orphaning step: without it every existing user reads as
+	// unassigned and the first scope-default change re-resolves them.
+	a, err := reg.GetAssignment(m.workspaceRef(key))
+	if err != nil {
+		t.Fatalf("GetAssignment: %v", err)
+	}
+	if a.ModelName != "orphan-primary" || a.Source != registry.SourceInherited {
+		t.Errorf("assignment = %+v, want orphan-primary/inherited", a)
+	}
+	if len(a.Chain) != 1 || a.Chain[0] != "orphan-fb" {
+		t.Errorf("Chain = %v, want [orphan-fb]", a.Chain)
+	}
+
+	// A model no other source declared is recovered from the workspace itself,
+	// key included, and flagged for review.
+	prim, err := reg.GetModel("orphan-primary")
+	if err != nil {
+		t.Fatalf("GetModel primary: %v", err)
+	}
+	if prim.APIKey != "sk-venice" || !prim.ImportedOrphan {
+		t.Errorf("recovered primary = %+v, want the key and ImportedOrphan", prim)
+	}
+	fb, err := reg.GetModel("orphan-fb")
+	if err != nil {
+		t.Fatalf("GetModel fallback: %v", err)
+	}
+	if fb.APIKey != "sk-orphan-fb" {
+		t.Errorf("recovered fallback key = %q, want sk-orphan-fb", fb.APIKey)
+	}
+	// The primary's declared chain is reconstructed from model_fallbacks, so the
+	// workspace keeps working after the next re-materialization.
+	if len(prim.Fallbacks) != 1 || prim.Fallbacks[0] != "orphan-fb" {
+		t.Errorf("recovered Fallbacks = %v, want [orphan-fb]", prim.Fallbacks)
+	}
+}
+
+func TestMigrateChangesNoWorkspacesActiveModel(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+	key := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "u1"}
+	userDir := seedLegacyWorkspace(t, root, key, "keepme", "openai", "sk-keepme", nil)
+	before, _ := os.ReadFile(filepath.Join(userDir, "config.json"))
+
+	if err := m.migrateModelRegistry(); err != nil {
+		t.Fatalf("migrateModelRegistry: %v", err)
+	}
+
+	after, _ := os.ReadFile(filepath.Join(userDir, "config.json"))
+	if string(before) != string(after) {
+		t.Error("migration rewrote a workspace's config.json; it must only READ workspaces")
+	}
+	// And the recorded assignment must agree with what is on disk, so the drift
+	// check reports clean immediately after.
+	a, _ := reg.GetAssignment(m.workspaceRef(key))
+	if a.ModelName != "keepme" {
+		t.Errorf("assignment = %q, want keepme", a.ModelName)
+	}
+}
+
+func TestMigrateIsIdempotent(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+	key := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "u1"}
+	seedLegacyWorkspace(t, root, key, "once", "openai", "sk-once", nil)
+
+	if err := m.migrateModelRegistry(); err != nil {
+		t.Fatalf("first: %v", err)
+	}
+	v, err := reg.SchemaVersion()
+	if err != nil || v != modelRegistrySchemaVersion {
+		t.Fatalf("SchemaVersion = %d (err %v), want %d", v, err, modelRegistrySchemaVersion)
+	}
+	first, _ := reg.GetModel("once")
+
+	// Tamper, then re-run: a second pass must not re-import over the admin's edit.
+	if _, err := reg.UpdateModel("once", first.Version, func(mm *registry.Model) error {
+		mm.APIBase = "https://edited.example/v1"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.migrateModelRegistry(); err != nil {
+		t.Fatalf("second: %v", err)
+	}
+	after, _ := reg.GetModel("once")
+	if after.APIBase != "https://edited.example/v1" {
+		t.Errorf("second migration clobbered an admin edit: %+v", after)
+	}
+}
+
+func TestMigrateSkipsAWorkspaceWithNoActiveModelNamed(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+	key := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "u1"}
+	userDir := config.UserWorkspace(root, key.TenantID, key.SubsAccID, key.Role, key.UserAccID)
+	if err := os.MkdirAll(userDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"version":3,"agents":{"defaults":{"provider":"","model_name":""}},"model_list":[]}`
+	if err := os.WriteFile(filepath.Join(userDir, "config.json"), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := m.migrateModelRegistry(); err != nil {
+		t.Fatalf("migrateModelRegistry: %v", err)
+	}
+	// Nothing to capture and nothing to invent: a workspace that never had a model
+	// gets no assignment, and will resolve normally on its next start.
+	if _, err := reg.GetAssignment(m.workspaceRef(key)); !errors.Is(err, registry.ErrNotFound) {
+		t.Errorf("want ErrNotFound for a model-less workspace, got %v", err)
+	}
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd PROXY && go test ./internal/docker/ -run TestMigrate -v`
+Expected: FAIL — `m.migrateModelRegistry undefined`.
+
+- [ ] **Step 3: Write the implementation**
+
+Create `PROXY/internal/docker/migrate_models.go`:
+
+```go
+package docker
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/config"
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/registry"
+)
+
+// modelRegistrySchemaVersion marks the inventory as migrated. The marker is
+// written LAST, so a failure anywhere leaves the whole pass re-runnable.
+const modelRegistrySchemaVersion = 1
+
+// legacyRegisteredModel is the on-disk shape of the deleted registered-models
+// store, kept only so the migration can read what it left behind.
+type legacyRegisteredModel struct {
+	Provider string `json:"provider"`
+	Name     string `json:"name"`
+	Model    string `json:"model"`
+	APIBase  string `json:"api_base"`
+	APIKey   string `json:"api_key"`
+}
+
+// legacyModelSel is the on-disk shape of an admin-model-override selection file.
+type legacyModelSel struct {
+	Provider string `json:"provider"`
+	Name     string `json:"name"`
+}
+
+// migrateModelRegistry seeds the inventory from every pre-existing source and
+// records what each existing workspace is currently running.
+//
+// It only READS workspaces — no workspace's active model changes as a result of
+// migrating. Later sources win on model_name collision, because a
+// registered-models entry or a live workspace holds a key an admin actually
+// entered, whereas the config.yaml seed may name an environment variable that is
+// no longer set.
+func (m *Manager) migrateModelRegistry() error {
+	have, err := m.reg.SchemaVersion()
+	if err != nil {
+		return err
+	}
+	if have >= modelRegistrySchemaVersion {
+		return nil
+	}
+	root := m.cfg.ContainerDataRoot
+
+	// 1. config.yaml: declared models, and each agent's default.
+	for _, agent := range m.cfg.Agents {
+		for _, mc := range agent.SelectableModels() {
+			m.importLegacyModel(registry.Model{
+				ModelName: mc.Name, Provider: mc.Provider, Model: mc.Name,
+				APIBase: mc.BaseURL, APIKey: mc.APIKey, Status: registry.StatusActive,
+			})
+		}
+		if agent.Model != nil && agent.Model.Name != "" {
+			key, kerr := registry.ScopeSel{Level: registry.LevelAgent, Agent: agent.Key}.Key()
+			if kerr == nil {
+				if err := m.reg.SetScopeDefaultRaw(key, agent.Model.Name); err != nil {
+					m.logf("migrate models: agent %q default: %v", agent.Key, err)
+				}
+			}
+		}
+	}
+
+	// 2. registered-models/<agent>.json — real keys an admin typed.
+	entries, _ := filepath.Glob(filepath.Join(root, "registered-models", "*.json"))
+	for _, path := range entries {
+		raw, rerr := os.ReadFile(path)
+		if rerr != nil {
+			m.logf("migrate models: read %s: %v", path, rerr)
+			continue
+		}
+		var legacy []legacyRegisteredModel
+		if jerr := json.Unmarshal(raw, &legacy); jerr != nil {
+			m.logf("migrate models: parse %s: %v", path, jerr)
+			continue
+		}
+		for _, l := range legacy {
+			m.importLegacyModel(registry.Model{
+				ModelName: l.Name, Provider: l.Provider, Model: l.Model,
+				APIBase: l.APIBase, APIKey: l.APIKey, Status: registry.StatusActive,
+			})
+		}
+	}
+
+	// 3. Scope override files -> scope defaults.
+	m.importOverrideFiles(root)
+
+	// 4. Every existing workspace: capture what it is actually running.
+	for _, agent := range m.cfg.Agents {
+		for _, key := range m.existingWorkspaces(agent.Key) {
+			if err := m.captureWorkspaceModel(key); err != nil {
+				m.logf("migrate models: capture %+v: %v", key, err)
+			}
+		}
+	}
+
+	m.logf("migrate models: superseded files are no longer read " +
+		"(registered-models/*.json, tenants/*/shared/model.json, " +
+		"tenants/*/subscriptions/*/shared/model.json, .crab-model.json); " +
+		"they are left on disk for rollback")
+	return m.reg.SetSchemaVersion(modelRegistrySchemaVersion)
+}
+
+// importLegacyModel creates a record unless one already exists with that name.
+// Skipping an existing name is what makes the pass safe to re-run and keeps a
+// later, better source (a real key) from being overwritten by an earlier one.
+func (m *Manager) importLegacyModel(mod registry.Model) {
+	if mod.ModelName == "" || mod.Provider == "" {
+		return
+	}
+	if mod.Model == "" {
+		mod.Model = mod.ModelName
+	}
+	if _, err := m.reg.GetModel(mod.ModelName); err == nil {
+		// Already present. Fill in a key only if the record has none — a later
+		// source holding a real credential should win over an empty one.
+		if mod.APIKey != "" {
+			if _, uerr := m.reg.UpdateModelRaw(mod.ModelName, func(cur *registry.Model) error {
+				if cur.APIKey == "" {
+					cur.APIKey = mod.APIKey
+				}
+				return nil
+			}); uerr != nil {
+				m.logf("migrate models: backfill key for %q: %v", mod.ModelName, uerr)
+			}
+		}
+		return
+	}
+	if _, err := m.reg.CreateModelRaw(mod); err != nil {
+		m.logf("migrate models: import %q: %v", mod.ModelName, err)
+	}
+}
+
+// importOverrideFiles reads admin-model-override's selection files into scope
+// defaults. A per-user file is handled by captureWorkspaceModel, which knows the
+// workspace it belongs to.
+func (m *Manager) importOverrideFiles(root string) {
+	tenantFiles, _ := filepath.Glob(filepath.Join(root, "tenants", "*", "shared", "model.json"))
+	for _, path := range tenantFiles {
+		sel, ok := readLegacySel(path)
+		if !ok {
+			continue
+		}
+		// tenants/<t>/shared/model.json
+		tenant := filepath.Base(filepath.Dir(filepath.Dir(path)))
+		key, err := registry.ScopeSel{Level: registry.LevelTenant, TenantID: tenant}.Key()
+		if err == nil {
+			if serr := m.reg.SetScopeDefaultRaw(key, sel.Name); serr != nil {
+				m.logf("migrate models: tenant default %s: %v", tenant, serr)
+			}
+		}
+	}
+
+	subsFiles, _ := filepath.Glob(filepath.Join(root, "tenants", "*", "subscriptions", "*", "shared", "model.json"))
+	for _, path := range subsFiles {
+		sel, ok := readLegacySel(path)
+		if !ok {
+			continue
+		}
+		// tenants/<t>/subscriptions/<s>/shared/model.json
+		subs := filepath.Base(filepath.Dir(filepath.Dir(path)))
+		tenant := filepath.Base(filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(path)))))
+		key, err := registry.ScopeSel{Level: registry.LevelSubscription, TenantID: tenant, SubsAccID: subs}.Key()
+		if err == nil {
+			if serr := m.reg.SetScopeDefaultRaw(key, sel.Name); serr != nil {
+				m.logf("migrate models: subscription default %s/%s: %v", tenant, subs, serr)
+			}
+		}
+	}
+}
+
+func readLegacySel(path string) (legacyModelSel, bool) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return legacyModelSel{}, false
+	}
+	var sel legacyModelSel
+	if err := json.Unmarshal(raw, &sel); err != nil || sel.Name == "" {
+		return legacyModelSel{}, false
+	}
+	return sel, true
+}
+
+// captureWorkspaceModel records what one workspace is running, recovering any
+// model no other source declared from the workspace's own files.
+//
+// This is the step that prevents orphaning: without it every existing user reads
+// as unassigned, and the first scope-default change re-resolves them all.
+func (m *Manager) captureWorkspaceModel(key WorkspaceKey) error {
+	userDir := config.UserWorkspace(m.cfg.ContainerDataRoot, key.TenantID, key.SubsAccID, key.Role, key.UserAccID)
+	configPath := filepath.Join(userDir, "config.json")
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil // never provisioned
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return fmt.Errorf("parse config.json: %w", err)
+	}
+	agents, _ := cfg["agents"].(map[string]any)
+	defaults, _ := agents["defaults"].(map[string]any)
+	primary, _ := defaults["model_name"].(string)
+	if primary == "" {
+		return nil // no model was ever pinned here; it resolves normally next start
+	}
+
+	var chain []string
+	if fb, ok := defaults["model_fallbacks"].([]any); ok {
+		for _, v := range fb {
+			if s, ok := v.(string); ok && s != "" {
+				chain = append(chain, s)
+			}
+		}
+	}
+
+	// Recover any named model the inventory does not have, from this workspace's
+	// own model_list definition and .security.yml key.
+	secPath := filepath.Join(userDir, ".security.yml")
+	for _, name := range append([]string{primary}, chain...) {
+		if _, err := m.reg.GetModel(name); err == nil {
+			continue
+		}
+		mod, ok := recoverModelFromWorkspace(cfg, secPath, name)
+		if !ok {
+			m.logf("migrate models: workspace %+v names model %q that no source declares "+
+				"and its own config.json does not define — left unregistered for admin review", key, name)
+			continue
+		}
+		mod.ImportedOrphan = true
+		if _, err := m.reg.CreateModelRaw(mod); err != nil {
+			m.logf("migrate models: recover %q from workspace %+v: %v", name, key, err)
+		}
+	}
+	// Reconstruct the primary's declared chain from what the workspace was running,
+	// so the next re-materialization reproduces the same set.
+	if len(chain) > 0 {
+		if _, err := m.reg.UpdateModelRaw(primary, func(cur *registry.Model) error {
+			if len(cur.Fallbacks) == 0 {
+				cur.Fallbacks = chain
+			}
+			return nil
+		}); err != nil {
+			m.logf("migrate models: reconstruct chain for %q: %v", primary, err)
+		}
+	}
+
+	// An imported per-user override file was a deliberate pin; anything else is
+	// inherited. Recording a pin as inherited would let the next scope change
+	// silently override it.
+	source := registry.SourceInherited
+	if _, err := os.Stat(config.UserModelOverrideFile(m.cfg.ContainerDataRoot,
+		key.TenantID, key.SubsAccID, key.Role, key.UserAccID)); err == nil {
+		source = registry.SourceExplicit
+	}
+	return m.reg.PutAssignment(m.workspaceRef(key), registry.Assignment{
+		ModelName: primary, Chain: chain, Source: source,
+	})
+}
+
+// recoverModelFromWorkspace rebuilds a model record from one workspace's own
+// files — the only place a model that no other source declares still exists.
+func recoverModelFromWorkspace(cfg map[string]any, secPath, name string) (registry.Model, bool) {
+	list, _ := cfg["model_list"].([]any)
+	for _, item := range list {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if n, _ := entry["model_name"].(string); n != name {
+			continue
+		}
+		mod := registry.Model{
+			ModelName: name,
+			Status:    registry.StatusActive,
+		}
+		mod.Provider, _ = entry["provider"].(string)
+		mod.Model, _ = entry["model"].(string)
+		mod.APIBase, _ = entry["api_base"].(string)
+		mod.AuthMethod, _ = entry["auth_method"].(string)
+		if mod.Model == "" {
+			mod.Model = name
+		}
+		if mod.Provider == "" {
+			return registry.Model{}, false
+		}
+		mod.APIKey = readWorkspaceModelKey(secPath, name)
+		return mod, true
+	}
+	return registry.Model{}, false
+}
+
+// readWorkspaceModelKey pulls model_list.<name>.api_keys[0] out of a workspace's
+// .security.yml — the sink the old code wrote and the only one picoclaw reads.
+func readWorkspaceModelKey(secPath, name string) string {
+	sec, err := readSecurityConfig(secPath)
+	if err != nil {
+		return ""
+	}
+	ml, ok := sec["model_list"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	entry, ok := ml[name].(map[string]any)
+	if !ok {
+		return ""
+	}
+	keys, ok := entry["api_keys"].([]any)
+	if !ok || len(keys) == 0 {
+		return ""
+	}
+	s, _ := keys[0].(string)
+	return s
+}
+```
+
+- [ ] **Step 4: Export the two raw helpers the migration needs**
+
+The migration writes records the public API would refuse (a retired model as a scope default, a record with a pre-set version). Export them from the registry.
+
+In `PROXY/internal/registry/scopes.go`, rename `setScopeDefaultRaw` to `SetScopeDefaultRaw` and update its doc comment to:
+
+```go
+// SetScopeDefaultRaw writes a scope default WITHOUT the active-model check. It
+// exists for the boot migration, which imports pre-existing overrides whose model
+// may already be retired. Never call it from an HTTP handler.
+func (r *Registry) SetScopeDefaultRaw(key, modelName string) error {
+```
+
+Append to `PROXY/internal/registry/models.go`:
+
+```go
+// CreateModelRaw inserts a record without the create-time restrictions the public
+// API enforces (it accepts a deprecated status and a blank api_base). It exists
+// for the boot migration recovering records from live workspaces, whose shape the
+// proxy did not choose. Never call it from an HTTP handler.
+func (r *Registry) CreateModelRaw(m Model) (Model, error) {
+	if m.ModelName == "" {
+		return Model{}, fmt.Errorf("%w: model_name is required", ErrInvalid)
+	}
+	if m.Status == "" {
+		m.Status = StatusActive
+	}
+	var out Model
+	err := r.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bModels)
+		if b.Get([]byte(m.ModelName)) != nil {
+			return fmt.Errorf("%w: %q", ErrDuplicate, m.ModelName)
+		}
+		if m.Position == 0 {
+			m.Position = b.Stats().KeyN + 1
+		}
+		at := r.now()
+		m.Version = 1
+		m.CreatedAt = at
+		m.UpdatedAt = at
+		out = m
+		return putJSON(b, m.ModelName, m)
+	})
+	if err != nil {
+		return Model{}, err
+	}
+	return out, nil
+}
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+Run: `cd PROXY && go test ./internal/docker/ -run TestMigrate -v`
+Expected: PASS — all seven tests.
+
+- [ ] **Step 6: Verify `existingWorkspaces` has the expected signature**
+
+Run: `cd PROXY && grep -n "func (m \*Manager) existingWorkspaces" internal/docker/reconcile.go`
+Expected: `func (m *Manager) existingWorkspaces(agentKey string) []WorkspaceKey`. If it returns an error too, adapt the two call sites in `migrateModelRegistry`.
+
+- [ ] **Step 7: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+git add internal/docker/migrate_models.go internal/docker/migrate_models_test.go internal/registry/
+git commit -m "feat(docker): one-time inventory migration that captures current reality
+
+Step 4 is the anti-orphaning step: it reads every existing workspace's own
+config.json and .security.yml and records what that workspace is RUNNING. Without
+it every existing user reads as unassigned and the first scope-default change
+re-resolves them all — the exact failure this feature exists to remove.
+
+The pass only READS workspaces, so migrating changes no workspace's active model.
+Later sources win on name collision because a registered-models entry or a live
+workspace holds a key an admin actually typed, while the config.yaml seed may name
+an env var that is no longer set. The schema marker is written last, so any
+failure leaves the pass re-runnable.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 12: template normalization, boot wiring, drift check
+
+**Files:**
+- Create: `PROXY/internal/docker/drift.go`
+- Create: `PROXY/internal/docker/drift_test.go`
+- Modify: `PROXY/internal/docker/migrate_models.go` (add the normalization step)
+- Modify: `PROXY/internal/docker/reconcile.go` (call the migration and the drift check)
+
+**Interfaces:**
+- Consumes: T11.
+- Produces:
+  - `(*Manager).normalizeDiskTemplates() error`
+  - `(*Manager).checkModelDrift()` — logs only
+  - `Reconcile` calls `migrateModelRegistry` then `checkModelDrift` before its existing work
+
+- [ ] **Step 1: Write the failing test**
+
+Create `PROXY/internal/docker/drift_test.go`:
+
+```go
+package docker
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/config"
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/registry"
+)
+
+func TestNormalizeDiskTemplatesEmptiesModelListAndBacksUp(t *testing.T) {
+	m, _, root := testManagerWithRegistry(t)
+	tmplDir := config.TemplatesDir(root, "picoclaw")
+	if err := os.MkdirAll(tmplDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	original := `{"version":3,"agents":{"defaults":{"provider":"zhipu","model_name":"glm-4.7"}},` +
+		`"model_list":[{"model_name":"glm-4.7","provider":"zhipu","model":"glm-4.7"}]}`
+	tmplPath := filepath.Join(tmplDir, "config.json")
+	if err := os.WriteFile(tmplPath, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m.cfg.Agents = map[string]config.Agent{"alpha": {Key: "alpha", Template: "picoclaw"}}
+
+	if err := m.normalizeDiskTemplates(); err != nil {
+		t.Fatalf("normalizeDiskTemplates: %v", err)
+	}
+
+	raw, _ := os.ReadFile(tmplPath)
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	list, ok := cfg["model_list"].([]any)
+	if !ok || len(list) != 0 {
+		t.Errorf("model_list = %#v, want []", cfg["model_list"])
+	}
+	defaults := cfg["agents"].(map[string]any)["defaults"].(map[string]any)
+	if defaults["provider"] != "" || defaults["model_name"] != "" {
+		t.Errorf("defaults = %#v, want both cleared", defaults)
+	}
+
+	// This is the migration's only destructive write, so it must be reversible by
+	// hand.
+	backup, err := os.ReadFile(tmplPath + ".pre-registry")
+	if err != nil {
+		t.Fatalf("backup missing: %v", err)
+	}
+	if string(backup) != original {
+		t.Errorf("backup = %s, want the original verbatim", backup)
+	}
+}
+
+func TestNormalizeDiskTemplatesIsIdempotentAndKeepsTheFirstBackup() {
+}
+
+func TestNormalizeDiskTemplatesDoesNotOverwriteAnExistingBackup(t *testing.T) {
+	m, _, root := testManagerWithRegistry(t)
+	tmplDir := config.TemplatesDir(root, "picoclaw")
+	if err := os.MkdirAll(tmplDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tmplPath := filepath.Join(tmplDir, "config.json")
+	if err := os.WriteFile(tmplPath, []byte(`{"model_list":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tmplPath+".pre-registry", []byte(`{"original":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m.cfg.Agents = map[string]config.Agent{"alpha": {Key: "alpha", Template: "picoclaw"}}
+
+	if err := m.normalizeDiskTemplates(); err != nil {
+		t.Fatalf("normalizeDiskTemplates: %v", err)
+	}
+
+	// A re-run must not replace the real original with an already-normalized copy.
+	backup, _ := os.ReadFile(tmplPath + ".pre-registry")
+	if string(backup) != `{"original":true}` {
+		t.Errorf("backup was overwritten: %s", backup)
+	}
+}
+
+func TestCheckModelDriftLogsAMismatchAndStaysSilentWhenClean(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+	var logged []string
+	m.logf = func(format string, args ...any) {
+		logged = append(logged, format)
+	}
+	m.cfg.Agents = map[string]config.Agent{"alpha": {Key: "alpha", Template: "picoclaw"}}
+
+	key := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "u1"}
+	seedLegacyWorkspace(t, root, key, "ondisk", "openai", "sk-ondisk", nil)
+	if err := reg.PutAssignment(m.workspaceRef(key), registry.Assignment{
+		ModelName: "recorded", Source: registry.SourceInherited,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	m.checkModelDrift()
+
+	var found bool
+	for _, l := range logged {
+		if strings.Contains(l, "drift") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a mismatch must be logged; logged = %v", logged)
+	}
+
+	// Correcting the record clears the report — the check is read-only, so it must
+	// reflect state rather than remember a past complaint.
+	logged = nil
+	if err := reg.PutAssignment(m.workspaceRef(key), registry.Assignment{
+		ModelName: "ondisk", Source: registry.SourceInherited,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m.checkModelDrift()
+	for _, l := range logged {
+		if strings.Contains(l, "drift") {
+			t.Errorf("clean state still reported drift: %v", logged)
+		}
+	}
+}
+
+func TestCheckModelDriftDoesNotModifyAnything(t *testing.T) {
+	m, reg, root := testManagerWithRegistry(t)
+	m.cfg.Agents = map[string]config.Agent{"alpha": {Key: "alpha", Template: "picoclaw"}}
+	key := WorkspaceKey{TenantID: "t1", SubsAccID: "s1", Role: "alpha", UserAccID: "u1"}
+	userDir := seedLegacyWorkspace(t, root, key, "ondisk", "openai", "sk-ondisk", nil)
+	if err := reg.PutAssignment(m.workspaceRef(key), registry.Assignment{
+		ModelName: "recorded", Source: registry.SourceInherited,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(filepath.Join(userDir, "config.json"))
+
+	m.checkModelDrift()
+
+	after, _ := os.ReadFile(filepath.Join(userDir, "config.json"))
+	if string(before) != string(after) {
+		t.Error("drift check rewrote a workspace; a correction is an explicit admin reapply")
+	}
+	a, _ := reg.GetAssignment(m.workspaceRef(key))
+	if a.ModelName != "recorded" {
+		t.Error("drift check rewrote the assignment")
+	}
+}
+```
+
+Delete the empty stub `TestNormalizeDiskTemplatesIsIdempotentAndKeepsTheFirstBackup` — it is covered by `TestNormalizeDiskTemplatesDoesNotOverwriteAnExistingBackup`.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd PROXY && go test ./internal/docker/ -run 'TestNormalize|TestCheckModelDrift' -v`
+Expected: FAIL — `m.normalizeDiskTemplates undefined`.
+
+- [ ] **Step 3: Write the implementation**
+
+Create `PROXY/internal/docker/drift.go`:
+
+```go
+package docker
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/LepistaBioinformatics/crab-shell-proxy/internal/config"
+)
+
+// normalizeDiskTemplates empties every per-instance disk template's model_list
+// and clears its pinned default.
+//
+// Leaving models in a template would keep a place the truth could appear to live:
+// an operator editing it would get no effect and no explanation, because
+// materialization overwrites model_list wholesale from the inventory. Nothing in
+// use is lost — the migration already recovered every running model from the
+// workspaces themselves, which is where a working model provably exists.
+func (m *Manager) normalizeDiskTemplates() error {
+	seen := map[string]bool{}
+	for _, agent := range m.cfg.Agents {
+		if agent.Template == "" || seen[agent.Template] {
+			continue
+		}
+		seen[agent.Template] = true
+		path := filepath.Join(config.TemplatesDir(m.cfg.ContainerDataRoot, agent.Template), "config.json")
+		if err := normalizeTemplateFile(path); err != nil {
+			m.logf("normalize template %s: %v", path, err)
+		}
+	}
+	return nil
+}
+
+func normalizeTemplateFile(path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // nothing seeded yet; the embedded template is already empty
+		}
+		return err
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return fmt.Errorf("parse: %w", err)
+	}
+
+	// Back up before the only destructive write the migration performs, and never
+	// overwrite an existing backup: a re-run must not replace the real original
+	// with an already-normalized copy.
+	backup := path + ".pre-registry"
+	if _, err := os.Stat(backup); os.IsNotExist(err) {
+		if err := os.WriteFile(backup, raw, 0o600); err != nil {
+			return fmt.Errorf("write backup: %w", err)
+		}
+	}
+
+	cfg["model_list"] = []any{}
+	if agents, ok := cfg["agents"].(map[string]any); ok {
+		if defaults, ok := agents["defaults"].(map[string]any); ok {
+			defaults["provider"] = ""
+			defaults["model_name"] = ""
+			delete(defaults, "model_fallbacks")
+		}
+	}
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, 0o600)
+}
+
+// checkModelDrift compares each workspace's config.json — its active model AND
+// its fallback chain — against the recorded assignment, and logs mismatches.
+//
+// Read-only on purpose: a correction is an explicit admin reapply, never a
+// boot-time surprise that changes which model someone's agent uses.
+func (m *Manager) checkModelDrift() {
+	for _, agent := range m.cfg.Agents {
+		for _, key := range m.existingWorkspaces(agent.Key) {
+			onDisk, chain, ok := readWorkspaceActiveModel(
+				config.UserWorkspace(m.cfg.ContainerDataRoot, key.TenantID, key.SubsAccID, key.Role, key.UserAccID))
+			if !ok {
+				continue
+			}
+			a, err := m.reg.GetAssignment(m.workspaceRef(key))
+			if err != nil {
+				m.logf("model drift: workspace %+v runs %q but has no recorded assignment", key, onDisk)
+				continue
+			}
+			if a.ModelName != onDisk {
+				m.logf("model drift: workspace %+v runs %q, recorded %q", key, onDisk, a.ModelName)
+				continue
+			}
+			if strings.Join(a.Chain, ",") != strings.Join(chain, ",") {
+				m.logf("model drift: workspace %+v fallback chain on disk %v, recorded %v", key, chain, a.Chain)
+			}
+		}
+	}
+}
+
+// readWorkspaceActiveModel reports the primary and chain a workspace's config.json
+// currently names.
+func readWorkspaceActiveModel(userDir string) (primary string, chain []string, ok bool) {
+	raw, err := os.ReadFile(filepath.Join(userDir, "config.json"))
+	if err != nil {
+		return "", nil, false
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return "", nil, false
+	}
+	agents, _ := cfg["agents"].(map[string]any)
+	defaults, _ := agents["defaults"].(map[string]any)
+	primary, _ = defaults["model_name"].(string)
+	if primary == "" {
+		return "", nil, false
+	}
+	if fb, ok := defaults["model_fallbacks"].([]any); ok {
+		for _, v := range fb {
+			if s, ok := v.(string); ok && s != "" {
+				chain = append(chain, s)
+			}
+		}
+	}
+	return primary, chain, true
+}
+```
+
+- [ ] **Step 4: Add normalization as the migration's last mutating step**
+
+In `PROXY/internal/docker/migrate_models.go`, insert immediately before the `m.logf("migrate models: superseded files…")` line:
+
+```go
+	// 5. Normalize the disk templates LAST among the mutating steps. Not a data
+	// dependency — it touches templates, step 4 touches workspaces — but ordering
+	// it here means a failure anywhere earlier leaves the templates untouched and
+	// the whole pass re-runnable.
+	if err := m.normalizeDiskTemplates(); err != nil {
+		return err
+	}
+```
+
+- [ ] **Step 5: Wire both into Reconcile**
+
+In `PROXY/internal/docker/reconcile.go`, immediately after the `func (m *Manager) Reconcile(ctx context.Context) error {` line, insert:
+
+```go
+	// The inventory must be seeded before anything resolves a model, and a
+	// migration failure must stop the boot: continuing would provision workspaces
+	// against an empty inventory and refuse every one of them.
+	if err := m.migrateModelRegistry(); err != nil {
+		return fmt.Errorf("migrate model registry: %w", err)
+	}
+	m.checkModelDrift()
+```
+
+Add `"fmt"` to `reconcile.go`'s imports if absent.
+
+- [ ] **Step 6: Run the package tests**
+
+Run: `cd PROXY && go test ./internal/docker/ -v 2>&1 | tail -30`
+Expected: PASS — every `internal/docker` test.
+
+- [ ] **Step 7: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+git add internal/docker/
+git commit -m "feat(docker): normalize disk templates, wire migration and drift check into boot
+
+A template that still carried models would remain a place the truth could appear
+to live: an operator editing it would get no effect and no explanation, since
+materialization overwrites model_list wholesale. Nothing in use is lost — the
+migration already recovered every running model from the workspaces themselves.
+
+Normalization is the migration's only destructive write, so it backs up to
+config.json.pre-registry and never overwrites an existing backup (a re-run must
+not replace the real original with a normalized copy).
+
+The drift check is read-only: a correction is an explicit admin reapply, never a
+boot-time surprise that changes which model someone's agent uses.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+**Phase C complete.** An existing deployment boots, imports its state, and no workspace's active model changes.
+
 
 
