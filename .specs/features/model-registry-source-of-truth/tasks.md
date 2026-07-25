@@ -3330,6 +3330,17 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Delete: `PROXY/internal/docker/registered_models.go`, `PROXY/internal/docker/registered_models_test.go`
 - Modify: `PROXY/internal/docker/provision_test.go` (the `applyModel` test)
 - Create: `PROXY/internal/docker/reapply_test.go`
+- Modify: `PROXY/internal/httpapi/admin.go` (delete the model-override and registered-models handlers)
+- Modify: `PROXY/internal/httpapi/handlers.go` (trim the `Docker` interface, drop the old routes)
+- Modify: `PROXY/internal/httpapi/handlers_test.go` (the fake `Docker`)
+- Delete: `PROXY/internal/httpapi/admin_model_test.go`
+
+**Why this task carries the httpapi deletions:** the Global Constraint is that
+`go vet ./... && go test ./...` passes, because that IS the Docker build gate. Deleting
+the two docker-layer systems without removing their httpapi callers in the same task
+would leave the module non-compiling across three tasks, so three task boundaries
+would have no meaningful gate at all. Nothing is added here — the new handlers arrive
+in T13/T14.
 
 **Interfaces:**
 - Consumes: T07–T09.
@@ -3338,7 +3349,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
   - `(*Manager).ReapplyModelUser(key WorkspaceKey) error` — **signature change**: the `agent config.Agent` parameter is gone (the registry needs no agent config)
   - `(*Manager).ReapplyModelForModel(modelName string) error` — new; re-materializes every workspace whose set contains the model
   - `(*Manager).reapplyWorkspace(key WorkspaceKey) error`
-- Removed: `resolveModel`, `reapplyModel`, `getModelOverride`, `setModelOverride`, `clearModelOverride`, `EffectiveModel`, `SetModelOverride`, `ClearModelOverride`, `ModelSel`, `ModelTarget`, `modelOverridePath`, `setModelListEntry` callers outside `materialize.go`, `applyModel`, and every `RegisteredModel*` symbol.
+- Removed from `internal/docker`: `resolveModel`, `reapplyModel`, `getModelOverride`, `setModelOverride`, `clearModelOverride`, `EffectiveModel`, `SetModelOverride`, `ClearModelOverride`, `ModelSel`, `ModelTarget`, `modelOverridePath`, `applyModel`, and every `RegisteredModel*` symbol.
+- Removed from `internal/httpapi`: `resolveModelTarget`, the old `handleAdminModelsList`, `handleAdminModelGet`, `handleAdminModelSet`, `handleAdminModelClear`, `handleAdminModelUsers`, `registeredModelRequest`, `applyRegisteredModelRequest`, all four `handleAdminRegisteredModel*` handlers, their route registrations, and the three model-override methods on the `Docker` interface.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3864,17 +3876,84 @@ func TestSeedPicoTokenPreservesTemplateContentAndGeneratesAToken(t *testing.T) {
 
 Ensure `provision_test.go` imports `"strings"`; drop any import it no longer uses.
 
-- [ ] **Step 9: Run the package tests**
+- [ ] **Step 9: Run the docker package tests**
 
 Run: `cd PROXY && go test ./internal/docker/ -v 2>&1 | tail -40`
-Expected: PASS. Compile errors will point at remaining `applyModel` / `RegisteredModel` / `ModelSel` references — remove each one; they are all superseded. `internal/httpapi` will still fail to build; that is T13/T14.
+Expected: PASS. Compile errors will point at remaining `applyModel` / `RegisteredModel` / `ModelSel` references — remove each one; they are all superseded. `internal/httpapi` still fails to build at this point; steps 9b–9e fix it inside this same task.
+
+- [ ] **Step 9b: Delete the superseded httpapi handlers**
+
+In `PROXY/internal/httpapi/admin.go`, delete from the `// --- admin-model-override …`
+marker at line ~562 through the end of that feature's handlers:
+`resolveModelTarget`, `handleAdminModelsList`, `handleAdminModelGet`,
+`handleAdminModelSet`, `handleAdminModelClear`, `handleAdminModelUsers`, the
+`registeredModelRequest` and `applyRegisteredModelRequest` types, and all four
+`handleAdminRegisteredModel*` handlers.
+
+In `PROXY/internal/httpapi/handlers.go`, delete the nine route registrations at lines
+211-219 (`/v1/admin/models`, `/v1/admin/model`, `/v1/admin/model/users`,
+`/v1/admin/registered-models`, `/v1/admin/registered-models/apply`). T13 and T14
+register the replacements; leaving them registered here would reference deleted
+handlers.
+
+- [ ] **Step 9c: Trim the Docker interface**
+
+In `PROXY/internal/httpapi/handlers.go`, delete from the `Docker` interface:
+
+```go
+	EffectiveModel(agent config.Agent, target docker.ModelTarget) (*config.ModelConfig, string)
+	SetModelOverride(target docker.ModelTarget, sel docker.ModelSel) error
+	ClearModelOverride(target docker.ModelTarget) error
+```
+
+and replace
+
+```go
+	ReapplyModelUser(key docker.WorkspaceKey, agent config.Agent) error
+```
+
+with
+
+```go
+	ReapplyModelUser(key docker.WorkspaceKey) error
+	// ReapplyModelForModel re-materializes every workspace whose materialized set
+	// contains the model — primaries AND chain holders.
+	ReapplyModelForModel(modelName string) error
+```
+
+If `config` becomes an unused import in `handlers.go`, remove it.
+
+- [ ] **Step 9d: Update the fake Docker and delete the obsolete test file**
+
+In `PROXY/internal/httpapi/handlers_test.go`, remove the three deleted methods from the
+fake, change `ReapplyModelUser` to the one-argument form, and add:
+
+```go
+func (f *fakeDocker) ReapplyModelForModel(modelName string) error { return nil }
+```
+
+Then:
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+git rm internal/httpapi/admin_model_test.go
+```
+
+That file only exercised the deleted model-override endpoints.
+
+- [ ] **Step 9e: Verify the whole module compiles and the suite passes**
+
+Run: `cd PROXY && go build ./... && go vet ./... && go test ./... 2>&1 | tail -30`
+Expected: PASS across every package. This is the Global Constraint's gate, and it must
+hold at this task boundary — that is why the deletions above belong here rather than in
+T14.
 
 - [ ] **Step 10: Commit**
 
 ```bash
 cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
-git add -A internal/docker/ cmd/
-git commit -m "refactor(docker): delete the two competing model systems
+git add -A internal/docker/ internal/httpapi/ cmd/
+git commit -m "refactor: delete the two competing model systems, docker and httpapi together
 
 resolveModel/reapplyModel (config.yaml cascade) and registered_models.go (disk
 catalog) both wrote agents.defaults without knowing about each other, so a scope
@@ -3889,12 +3968,17 @@ failure fallback exists to prevent.
 provision no longer takes a model: it seeds the workspace and the caller
 materializes from the inventory, so a model comes from exactly one place.
 
+The httpapi callers go in the same commit rather than three tasks later: the build
+gate is go vet + go test over the whole module, so splitting them would leave three
+task boundaries with nothing to gate against. Nothing is added here — the
+replacement endpoints arrive next.
+
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
 ---
 
-**Phase B complete.** Workspaces are written from the inventory and the old systems are gone. `internal/httpapi` does not compile yet — Phase D fixes it.
+**Phase B complete.** Workspaces are written from the inventory, both old systems are gone, and the whole module compiles with its suite green at this boundary.
 
 ---
 
@@ -5311,7 +5395,7 @@ func doAdmin(t *testing.T, s *Server, profile, method, path, body string) *httpt
 - [ ] **Step 6: Run test to verify it fails**
 
 Run: `cd PROXY && go test ./internal/httpapi/ -run TestAdminModel -v`
-Expected: FAIL — build errors (the package does not compile yet after Phase B, plus the handlers are missing).
+Expected: FAIL — `s.handleAdminModelsList undefined` and `s.Reg undefined`. The package itself compiled before this test was added (T10 removed the stale callers).
 
 - [ ] **Step 7: Write the handlers**
 
@@ -5608,7 +5692,8 @@ Add the `registry` import to `handlers.go`, and pass `Reg: reg` wherever the `Se
 - [ ] **Step 9: Run the handler tests**
 
 Run: `cd PROXY && go test ./internal/httpapi/ -run TestAdminModel -v`
-Expected: PASS — all eight tests. Remaining build errors in this package come from the old model-override handlers, which T14 removes.
+Expected: PASS — all eight tests, and `go build ./...` clean: T10 already removed every
+stale caller, so this task only adds.
 
 - [ ] **Step 10: Fix design.md §2 per the correction**
 
@@ -6045,31 +6130,13 @@ func (m *Manager) ClearModelAssignment(key WorkspaceKey) error {
 
 Add the `registry` import to `model.go`.
 
-- [ ] **Step 5: Delete the superseded handlers and routes**
+- [ ] **Step 5: Extend the Docker interface with the two assignment methods**
 
-In `PROXY/internal/httpapi/admin.go`, delete everything under the `// --- admin-model-override …` marker at line ~562 through the end of that feature's handlers: `resolveModelTarget`, `handleAdminModelsList` (the old `config.yaml` one), `handleAdminModelGet`, `handleAdminModelSet`, `handleAdminModelClear`, `handleAdminModelUsers`, and the `registeredModelRequest` / `applyRegisteredModelRequest` types plus the four `handleAdminRegisteredModel*` handlers.
-
-In `PROXY/internal/httpapi/handlers.go`, delete from the `Docker` interface:
-
-```go
-	EffectiveModel(agent config.Agent, target docker.ModelTarget) (*config.ModelConfig, string)
-	SetModelOverride(target docker.ModelTarget, sel docker.ModelSel) error
-	ClearModelOverride(target docker.ModelTarget) error
-```
-
-and change
+T10 already deleted the model-override handlers, their routes and the three
+superseded interface methods, so this task only ADDS. In
+`PROXY/internal/httpapi/handlers.go`, append to the `Docker` interface:
 
 ```go
-	ReapplyModelUser(key docker.WorkspaceKey, agent config.Agent) error
-```
-
-to
-
-```go
-	ReapplyModelUser(key docker.WorkspaceKey) error
-	// ReapplyModelForModel re-materializes every workspace whose materialized set
-	// contains the model — primaries AND chain holders.
-	ReapplyModelForModel(modelName string) error
 	// SetModelAssignment pins one workspace to a model; ClearModelAssignment drops
 	// the pin so the scope default applies again.
 	SetModelAssignment(key docker.WorkspaceKey, modelName string) error
@@ -6086,19 +6153,12 @@ Register the new routes next to the T13 block:
 	mux.HandleFunc("DELETE /v1/admin/model-assignments", s.handleAdminModelAssignmentClear)
 ```
 
-Delete the obsolete test file:
+- [ ] **Step 6: Extend the fake Docker in the httpapi tests**
 
-```bash
-cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
-git rm internal/httpapi/admin_model_test.go
-```
-
-- [ ] **Step 6: Update the fake Docker in the httpapi tests**
-
-`PROXY/internal/httpapi/handlers_test.go` has a fake satisfying `Docker`. Remove the three deleted methods from it, change `ReapplyModelUser` to the one-argument form, and add:
+`PROXY/internal/httpapi/handlers_test.go` has a fake satisfying `Docker`, already
+updated by T10. Add the two new methods:
 
 ```go
-func (f *fakeDocker) ReapplyModelForModel(modelName string) error { return nil }
 func (f *fakeDocker) SetModelAssignment(key docker.WorkspaceKey, modelName string) error {
 	return f.reg.PutAssignment(registry.WorkspaceRef{
 		TenantID: key.TenantID, SubsAccID: key.SubsAccID, Agent: key.Role, UserAccID: key.UserAccID,
@@ -6151,7 +6211,7 @@ Give `fakeDocker` a `reapplyCalls int` field and increment it in `ReapplyModelFo
 - [ ] **Step 8: Run the whole suite**
 
 Run: `cd PROXY && go build ./... && go vet ./... && go test ./... 2>&1 | tail -30`
-Expected: PASS across every package. This is the first point since T10 that the whole module compiles.
+Expected: PASS across every package, as at every task boundary since T10.
 
 - [ ] **Step 9: Commit**
 
