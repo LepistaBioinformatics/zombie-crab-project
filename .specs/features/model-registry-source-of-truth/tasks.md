@@ -4940,26 +4940,28 @@ func normalizeTemplateFile(path string) error {
 //
 // Read-only on purpose: a correction is an explicit admin reapply, never a
 // boot-time surprise that changes which model someone's agent uses.
+// It enumerates workspaces from DISK rather than from m.cfg.Agents, for the same
+// reason the migration does: config.Load drops disabled or removed agents from that
+// map, so a per-agent loop would silently stop reporting drift for exactly the
+// workspaces most likely to have it.
 func (m *Manager) checkModelDrift() {
-	for _, agent := range m.cfg.Agents {
-		for _, key := range m.existingWorkspaces(agent.Key) {
-			onDisk, chain, ok := readWorkspaceActiveModel(
-				config.UserWorkspace(m.cfg.ContainerDataRoot, key.TenantID, key.SubsAccID, key.Role, key.UserAccID))
-			if !ok {
-				continue
-			}
-			a, err := m.reg.GetAssignment(m.workspaceRef(key))
-			if err != nil {
-				m.logf("model drift: workspace %+v runs %q but has no recorded assignment", key, onDisk)
-				continue
-			}
-			if a.ModelName != onDisk {
-				m.logf("model drift: workspace %+v runs %q, recorded %q", key, onDisk, a.ModelName)
-				continue
-			}
-			if strings.Join(a.Chain, ",") != strings.Join(chain, ",") {
-				m.logf("model drift: workspace %+v fallback chain on disk %v, recorded %v", key, chain, a.Chain)
-			}
+	for _, key := range m.allExistingWorkspaces() {
+		onDisk, chain, ok := readWorkspaceActiveModel(
+			config.UserWorkspace(m.cfg.ContainerDataRoot, key.TenantID, key.SubsAccID, key.Role, key.UserAccID))
+		if !ok {
+			continue
+		}
+		a, err := m.reg.GetAssignment(m.workspaceRef(key))
+		if err != nil {
+			m.logf("model drift: workspace %+v runs %q but has no recorded assignment", key, onDisk)
+			continue
+		}
+		if a.ModelName != onDisk {
+			m.logf("model drift: workspace %+v runs %q, recorded %q", key, onDisk, a.ModelName)
+			continue
+		}
+		if strings.Join(a.Chain, ",") != strings.Join(chain, ",") {
+			m.logf("model drift: workspace %+v fallback chain on disk %v, recorded %v", key, chain, a.Chain)
 		}
 	}
 }
