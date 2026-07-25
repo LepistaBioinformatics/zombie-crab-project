@@ -126,7 +126,7 @@ flowchart TD
     e -->|no| err(["ErrNoModelResolvable"])
 
     hit --> dep{"candidate deprecated<br/>AND workspace has no<br/>materialized assignment?"}
-    dep -->|no| out(["primary = candidate<br/>chain = other active models,<br/>position order"])
+    dep -->|no| out(["primary = candidate<br/>chain = primary's declared fallbacks,<br/>one level, active only"])
     dep -->|yes| hop["candidate = replaced_by<br/>(max 8 hops, cycle-checked)"]
     hop --> dep
 ```
