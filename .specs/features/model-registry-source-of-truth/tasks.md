@@ -6318,6 +6318,2033 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Phases D and E complete.** The proxy compiles, its whole suite passes, and the new admin surface is reachable through the gateway.
 
+---
+
+## Phase F — Webapp
+
+### Task 17: `lib/models.ts` — types, calls and the pure helpers the UI needs
+
+**Files:**
+- Create: `WEBAPP/lib/models.ts`
+- Create: `WEBAPP/lib/models.test.ts`
+- Delete: `WEBAPP/lib/registeredModels.ts`
+
+**Interfaces:**
+- Consumes: nothing from earlier tasks (the BFF routes arrive in T18; these calls target them).
+- Produces:
+  - types `ModelStatus`, `InventoryModel`, `CatalogEntry`, `Referrer`, `ScopeDefault`, `ModelDraft`
+  - `splitInventory(models) => { active, inactive }`
+  - `draftFromCatalog(entry) => ModelDraft`
+  - `draftFromDuplicate(model) => ModelDraft`
+  - `inactiveReason(model) => string`
+  - `modelsApiError(res) => Promise<ModelsError>` where `ModelsError = { message: string; versionConflict: boolean; referrers: Referrer[] }`
+  - calls `listModels`, `createModel`, `updateModel`, `deleteModel`, `setModelStatus`, `deprecateModel`, `reorderModels`, `modelUsage`, `modelCatalog`, `getModelDefault`, `setModelDefault`, `clearModelDefault`, `setModelAssignment`, `clearModelAssignment`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `WEBAPP/lib/models.test.ts`:
+
+```ts
+import { describe, it, expect } from "vitest";
+import {
+  splitInventory,
+  draftFromCatalog,
+  draftFromDuplicate,
+  inactiveReason,
+  modelsApiError,
+} from "./models";
+import type { InventoryModel } from "./models";
+
+function model(over: Partial<InventoryModel> = {}): InventoryModel {
+  return {
+    model_name: "m",
+    provider: "openai",
+    model: "gpt-5.4",
+    api_base: "https://api.openai.com/v1",
+    status: "active",
+    fallbacks: [],
+    position: 1,
+    has_key: true,
+    in_use_count: 0,
+    version: 1,
+    created_at: "2026-07-25T12:00:00Z",
+    updated_at: "2026-07-25T12:00:00Z",
+    ...over,
+  };
+}
+
+describe("splitInventory", () => {
+  it("separates active from disabled and deprecated", () => {
+    const { active, inactive } = splitInventory([
+      model({ model_name: "a", status: "active", position: 2 }),
+      model({ model_name: "b", status: "disabled", position: 1 }),
+      model({ model_name: "c", status: "deprecated", replaced_by: "a", position: 3 }),
+    ]);
+    expect(active.map((m) => m.model_name)).toEqual(["a"]);
+    expect(inactive.map((m) => m.model_name)).toEqual(["b", "c"]);
+  });
+
+  it("orders the active group by position", () => {
+    const { active } = splitInventory([
+      model({ model_name: "second", position: 2 }),
+      model({ model_name: "first", position: 1 }),
+    ]);
+    expect(active.map((m) => m.model_name)).toEqual(["first", "second"]);
+  });
+
+  it("returns empty groups for an empty inventory rather than throwing", () => {
+    expect(splitInventory([])).toEqual({ active: [], inactive: [] });
+  });
+});
+
+describe("inactiveReason", () => {
+  it("names the replacement for a deprecated model", () => {
+    expect(inactiveReason(model({ status: "deprecated", replaced_by: "successor" }))).toBe(
+      "deprecated → replaced by successor",
+    );
+  });
+
+  it("labels a disabled model", () => {
+    expect(inactiveReason(model({ status: "disabled" }))).toBe("disabled");
+  });
+
+  it("says nothing for an active model", () => {
+    expect(inactiveReason(model())).toBe("");
+  });
+});
+
+describe("draftFromCatalog", () => {
+  it("prefills provider, model and api_base and leaves the name and key blank", () => {
+    const draft = draftFromCatalog({
+      provider: "zhipu",
+      model: "glm-4.7",
+      api_base: "https://open.bigmodel.cn/api/paas/v4",
+    });
+    expect(draft.provider).toBe("zhipu");
+    expect(draft.model).toBe("glm-4.7");
+    expect(draft.api_base).toBe("https://open.bigmodel.cn/api/paas/v4");
+    // The catalog deliberately suggests no model_name: it must be unique in the
+    // inventory, so a suggested one would invite a duplicate.
+    expect(draft.model_name).toBe("");
+    expect(draft.api_key).toBe("");
+  });
+
+  it("carries auth_method for a catalog entry that has no api_base", () => {
+    const draft = draftFromCatalog({ provider: "antigravity", model: "gemini-3-flash", auth_method: "oauth" });
+    expect(draft.auth_method).toBe("oauth");
+    expect(draft.api_base).toBe("");
+  });
+});
+
+describe("draftFromDuplicate", () => {
+  it("copies every field except the name and the key", () => {
+    const draft = draftFromDuplicate(
+      model({ model_name: "original", api_base: "https://x/v1", fallbacks: ["fb"], auth_method: "oauth" }),
+    );
+    expect(draft.provider).toBe("openai");
+    expect(draft.api_base).toBe("https://x/v1");
+    expect(draft.auth_method).toBe("oauth");
+    expect(draft.fallbacks).toEqual(["fb"]);
+    // The name must be unique, and the key is never returned by the API — so both
+    // are blank and the admin has to supply them.
+    expect(draft.model_name).toBe("");
+    expect(draft.api_key).toBe("");
+  });
+});
+
+describe("modelsApiError", () => {
+  it("flags a version conflict so the UI can say reload", async () => {
+    const res = new Response(JSON.stringify({ error: "stale", version_conflict: true }), { status: 409 });
+    const err = await modelsApiError(res);
+    expect(err.versionConflict).toBe(true);
+  });
+
+  it("surfaces the referrers of an in-use rejection", async () => {
+    const res = new Response(
+      JSON.stringify({ error: "in use", referrers: [{ kind: "fallback", id: "main" }] }),
+      { status: 409 },
+    );
+    const err = await modelsApiError(res);
+    expect(err.versionConflict).toBe(false);
+    expect(err.referrers).toEqual([{ kind: "fallback", id: "main" }]);
+  });
+
+  it("maps the stack-wide error shapes", async () => {
+    const conn = await modelsApiError(new Response(JSON.stringify({ error: "connectivity" }), { status: 502 }));
+    expect(conn.message).toBe("Can't reach the gateway right now.");
+    const expired = await modelsApiError(
+      new Response(JSON.stringify({ error: "session_expired" }), { status: 401 }),
+    );
+    expect(expired.message).toBe("Your session expired — sign in again.");
+  });
+
+  it("falls back to a generic message on an unparseable body", async () => {
+    const err = await modelsApiError(new Response("<html>500</html>", { status: 500 }));
+    expect(err.message).toBe("Something went wrong.");
+    expect(err.referrers).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd WEBAPP && yarn vitest run lib/models.test.ts`
+Expected: FAIL — cannot resolve `./models`.
+
+- [ ] **Step 3: Write the implementation**
+
+Create `WEBAPP/lib/models.ts`:
+
+```ts
+import type { Instance } from "@/lib/mycelium";
+
+export type ModelStatus = "active" | "disabled" | "deprecated";
+
+// InventoryModel mirrors the proxy's PublicModel. There is deliberately no
+// api_key field: the API never returns one.
+export interface InventoryModel {
+  model_name: string;
+  provider: string;
+  model: string;
+  api_base?: string;
+  auth_method?: string;
+  extra_body?: unknown;
+  status: ModelStatus;
+  replaced_by?: string;
+  fallbacks: string[];
+  position: number;
+  has_key: boolean;
+  in_use_count: number;
+  imported_orphan?: boolean;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// CatalogEntry is a prefill suggestion. It carries no key and no model_name.
+export interface CatalogEntry {
+  provider: string;
+  model: string;
+  api_base?: string;
+  auth_method?: string;
+  extra_body?: unknown;
+}
+
+export interface Referrer {
+  kind: "workspace" | "scope_default" | "replaced_by" | "fallback";
+  id: string;
+}
+
+export interface ScopeDefault {
+  model_name: string;
+  updated_at: string;
+}
+
+// ModelDraft is the register/edit form's state. api_key is write-only: it is sent
+// when non-empty and never populated from a response.
+export interface ModelDraft {
+  model_name: string;
+  provider: string;
+  model: string;
+  api_base: string;
+  auth_method: string;
+  api_key: string;
+  fallbacks: string[];
+}
+
+export const emptyDraft: ModelDraft = {
+  model_name: "",
+  provider: "",
+  model: "",
+  api_base: "",
+  auth_method: "",
+  api_key: "",
+  fallbacks: [],
+};
+
+// splitInventory groups the listing the way the panel renders it. The active group
+// is ordered by position, which is PRESENTATION ONLY — it is not the fallback
+// chain, and the UI must not imply otherwise.
+export function splitInventory(models: InventoryModel[]): {
+  active: InventoryModel[];
+  inactive: InventoryModel[];
+} {
+  const active = models.filter((m) => m.status === "active").sort((a, b) => a.position - b.position);
+  const inactive = models
+    .filter((m) => m.status !== "active")
+    .sort((a, b) => a.position - b.position);
+  return { active, inactive };
+}
+
+// inactiveReason is the badge text for the inactive group. Deprecated names its
+// replacement, because "where do new users go instead" is the first thing an admin
+// looking at a retired model needs to know.
+export function inactiveReason(m: InventoryModel): string {
+  if (m.status === "deprecated") {
+    return `deprecated → replaced by ${m.replaced_by ?? "?"}`;
+  }
+  if (m.status === "disabled") {
+    return "disabled";
+  }
+  return "";
+}
+
+export function draftFromCatalog(entry: CatalogEntry): ModelDraft {
+  return {
+    ...emptyDraft,
+    provider: entry.provider,
+    model: entry.model,
+    api_base: entry.api_base ?? "",
+    auth_method: entry.auth_method ?? "",
+  };
+}
+
+// draftFromDuplicate copies an existing entry for editing. model_name is blank
+// because it must be unique, and api_key because the API never returns it.
+export function draftFromDuplicate(m: InventoryModel): ModelDraft {
+  return {
+    model_name: "",
+    provider: m.provider,
+    model: m.model,
+    api_base: m.api_base ?? "",
+    auth_method: m.auth_method ?? "",
+    api_key: "",
+    fallbacks: [...m.fallbacks],
+  };
+}
+
+export interface ModelsError {
+  message: string;
+  versionConflict: boolean;
+  referrers: Referrer[];
+}
+
+// modelsApiError turns a failed response into something the panel can render
+// specifically: a stale version says "reload", an in-use rejection names what to
+// detach. A generic conflict message would leave the admin with no next action.
+export async function modelsApiError(res: Response): Promise<ModelsError> {
+  const data = await res.json().catch(() => null);
+  const referrers: Referrer[] = Array.isArray(data?.referrers) ? data.referrers : [];
+  const versionConflict = data?.version_conflict === true;
+  const e = data?.error;
+  let message = "Something went wrong.";
+  if (e === "connectivity") {
+    message = "Can't reach the gateway right now.";
+  } else if (e === "session_expired") {
+    message = "Your session expired — sign in again.";
+  } else if (versionConflict) {
+    message = "Another admin changed this model — reload before saving.";
+  } else if (typeof e === "string" && e.trim()) {
+    message = e;
+  }
+  return { message, versionConflict, referrers };
+}
+
+async function request(agent: Instance, path: string, init?: RequestInit): Promise<unknown> {
+  const res = await fetch(path, init);
+  if (!res.ok) {
+    throw Object.assign(new Error("request failed"), await modelsApiError(res));
+  }
+  return res.json().catch(() => ({}));
+}
+
+const json = (body: unknown): RequestInit => ({
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+const q = (agent: Instance, extra: Record<string, string> = {}) =>
+  new URLSearchParams({ agent, ...extra }).toString();
+
+export async function listModels(agent: Instance): Promise<InventoryModel[]> {
+  const data = (await request(agent, `/api/admin/models?${q(agent)}`)) as { models?: InventoryModel[] };
+  return Array.isArray(data.models) ? data.models : [];
+}
+
+export async function modelCatalog(agent: Instance): Promise<CatalogEntry[]> {
+  const data = (await request(agent, `/api/admin/model-catalog?${q(agent)}`)) as { entries?: CatalogEntry[] };
+  return Array.isArray(data.entries) ? data.entries : [];
+}
+
+export async function createModel(agent: Instance, draft: ModelDraft): Promise<void> {
+  await request(agent, "/api/admin/models", json({ agent, ...serializeDraft(draft) }));
+}
+
+export async function updateModel(agent: Instance, name: string, version: number, draft: ModelDraft): Promise<void> {
+  await request(agent, `/api/admin/models?${q(agent, { name })}`, {
+    ...json({ agent, name, version, ...serializeDraft(draft) }),
+    method: "PUT",
+  });
+}
+
+// serializeDraft omits api_key when blank, so an edit that does not touch the key
+// keeps the stored one instead of clearing it.
+function serializeDraft(draft: ModelDraft): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    model_name: draft.model_name,
+    provider: draft.provider,
+    model: draft.model,
+    api_base: draft.api_base,
+    auth_method: draft.auth_method,
+    fallbacks: draft.fallbacks,
+  };
+  if (draft.api_key) {
+    body.api_key = draft.api_key;
+  }
+  return body;
+}
+
+export async function deleteModel(agent: Instance, name: string): Promise<void> {
+  await request(agent, `/api/admin/models?${q(agent, { name })}`, { method: "DELETE" });
+}
+
+export async function setModelStatus(
+  agent: Instance,
+  name: string,
+  version: number,
+  status: ModelStatus,
+): Promise<void> {
+  await request(agent, `/api/admin/models/status?${q(agent, { name })}`, {
+    ...json({ agent, name, version, status }),
+    method: "PUT",
+  });
+}
+
+export async function deprecateModel(
+  agent: Instance,
+  name: string,
+  version: number,
+  replacedBy: string,
+): Promise<void> {
+  await request(agent, "/api/admin/models/deprecate", json({ agent, name, version, replaced_by: replacedBy }));
+}
+
+export async function reorderModels(agent: Instance, order: string[]): Promise<void> {
+  await request(agent, "/api/admin/models/order", { ...json({ agent, order }), method: "PUT" });
+}
+
+export async function modelUsage(agent: Instance, name: string): Promise<Referrer[]> {
+  const data = (await request(agent, `/api/admin/models/usage?${q(agent, { name })}`)) as {
+    referrers?: Referrer[];
+  };
+  return Array.isArray(data.referrers) ? data.referrers : [];
+}
+
+export type DefaultScope =
+  | { kind: "global" }
+  | { kind: "agent" }
+  | { kind: "tenant"; tenantId: string }
+  | { kind: "subscription"; tenantId: string; subsAccId: string };
+
+function defaultScopeQuery(agent: Instance, scope: DefaultScope): string {
+  const extra: Record<string, string> = { scope: scope.kind };
+  if (scope.kind === "tenant" || scope.kind === "subscription") {
+    extra.tenant_id = scope.tenantId;
+  }
+  if (scope.kind === "subscription") {
+    extra.subs_acc_id = scope.subsAccId;
+  }
+  return q(agent, extra);
+}
+
+export async function getModelDefault(agent: Instance, scope: DefaultScope): Promise<ScopeDefault | null> {
+  const data = (await request(agent, `/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`)) as {
+    default?: ScopeDefault | null;
+  };
+  return data.default ?? null;
+}
+
+export async function setModelDefault(agent: Instance, scope: DefaultScope, modelName: string): Promise<void> {
+  await request(agent, `/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`, {
+    ...json({ agent, model_name: modelName }),
+    method: "PUT",
+  });
+}
+
+export async function clearModelDefault(agent: Instance, scope: DefaultScope): Promise<void> {
+  await request(agent, `/api/admin/model-defaults?${defaultScopeQuery(agent, scope)}`, { method: "DELETE" });
+}
+
+export interface AssignmentTarget {
+  tenantId: string;
+  subsAccId: string;
+  userAccId: string;
+}
+
+export async function setModelAssignment(
+  agent: Instance,
+  target: AssignmentTarget,
+  modelName: string,
+): Promise<void> {
+  await request(
+    agent,
+    "/api/admin/model-assignments",
+    json({
+      agent,
+      tenant_id: target.tenantId,
+      subs_acc_id: target.subsAccId,
+      user_acc_id: target.userAccId,
+      model_name: modelName,
+    }),
+  );
+}
+
+export async function clearModelAssignment(agent: Instance, target: AssignmentTarget): Promise<void> {
+  await request(agent, "/api/admin/model-assignments", {
+    ...json({
+      agent,
+      tenant_id: target.tenantId,
+      subs_acc_id: target.subsAccId,
+      user_acc_id: target.userAccId,
+    }),
+    method: "DELETE",
+  });
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `cd WEBAPP && yarn vitest run lib/models.test.ts`
+Expected: PASS — all 14 assertions across the five describes.
+
+- [ ] **Step 5: Delete the superseded module**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-exoskeleton-webapp
+git rm lib/registeredModels.ts
+```
+
+`tsc` will now flag `app/admin/model-registry-panel.tsx`; T19 rewrites it. Do not patch it here.
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-exoskeleton-webapp
+git add lib/models.ts lib/models.test.ts
+git commit -m "feat(models): inventory client and the pure helpers the panel needs
+
+The panel's logic lives in tested pure functions rather than inside a client
+component: splitInventory, inactiveReason, the two draft builders and the error
+mapper. serializeDraft omits api_key when blank so an edit that does not touch the
+key keeps the stored one — the API never returns it, so the form cannot round-trip
+it. modelsApiError distinguishes a stale version (reload) from an in-use rejection
+(detach these), because a generic conflict leaves the admin with no next action.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 18: BFF routes
+
+**Files:**
+- Create: `WEBAPP/app/api/admin/models/route.ts`
+- Create: `WEBAPP/app/api/admin/models/status/route.ts`
+- Create: `WEBAPP/app/api/admin/models/deprecate/route.ts`
+- Create: `WEBAPP/app/api/admin/models/order/route.ts`
+- Create: `WEBAPP/app/api/admin/models/usage/route.ts`
+- Create: `WEBAPP/app/api/admin/model-catalog/route.ts`
+- Create: `WEBAPP/app/api/admin/model-defaults/route.ts`
+- Create: `WEBAPP/app/api/admin/model-assignments/route.ts`
+- Delete: `WEBAPP/app/api/admin/registered-models/route.ts`, `WEBAPP/app/api/admin/registered-models/apply/route.ts`
+
+**Interfaces:**
+- Consumes: `proxyAdminJsonAgent`, `requireSession` (`lib/adminProxy.ts`), `isInstance` (`lib/mycelium.ts`).
+- Produces: the eight routes `lib/models.ts` calls.
+
+- [ ] **Step 1: Write the inventory route**
+
+Create `WEBAPP/app/api/admin/models/route.ts`:
+
+```ts
+import { NextRequest, NextResponse } from "next/server";
+import { proxyAdminJsonAgent, requireSession } from "@/lib/adminProxy";
+import { isInstance } from "@/lib/mycelium";
+
+// Model inventory (admin). The inventory itself is proxy-wide, but requests are
+// still routed through an agent's service because that is how the gateway
+// addresses the proxy at all.
+export async function GET(req: NextRequest) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const agent = req.nextUrl.searchParams.get("agent");
+  if (!agent || !isInstance(agent)) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  return proxyAdminJsonAgent(session, agent, "/models", { method: "GET" });
+}
+
+export async function POST(req: NextRequest) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const body = await req.json().catch(() => null);
+  const agent = typeof body?.agent === "string" ? body.agent : null;
+  if (!agent || !isInstance(agent) || typeof body?.model_name !== "string" || !body.model_name) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  const { agent: _agent, ...payload } = body;
+  return proxyAdminJsonAgent(session, agent, "/models", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function PUT(req: NextRequest) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const body = await req.json().catch(() => null);
+  const agent = typeof body?.agent === "string" ? body.agent : null;
+  const name = req.nextUrl.searchParams.get("name");
+  if (!agent || !isInstance(agent) || !name) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  const { agent: _agent, name: _name, ...payload } = body;
+  return proxyAdminJsonAgent(session, agent, `/models/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const p = req.nextUrl.searchParams;
+  const agent = p.get("agent");
+  const name = p.get("name");
+  if (!agent || !isInstance(agent) || !name) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  return proxyAdminJsonAgent(session, agent, `/models/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+```
+
+- [ ] **Step 2: Write the status, deprecate, order and usage routes**
+
+Create `WEBAPP/app/api/admin/models/status/route.ts`:
+
+```ts
+import { NextRequest, NextResponse } from "next/server";
+import { proxyAdminJsonAgent, requireSession } from "@/lib/adminProxy";
+import { isInstance } from "@/lib/mycelium";
+
+export async function PUT(req: NextRequest) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const body = await req.json().catch(() => null);
+  const agent = typeof body?.agent === "string" ? body.agent : null;
+  const name = req.nextUrl.searchParams.get("name");
+  const status = body?.status;
+  if (!agent || !isInstance(agent) || !name || !["active", "disabled"].includes(status)) {
+    // "deprecated" is not settable here: retiring a model needs a replacement and
+    // goes through /models/deprecate.
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  return proxyAdminJsonAgent(session, agent, `/models/${encodeURIComponent(name)}/status`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status, version: body.version }),
+  });
+}
+```
+
+Create `WEBAPP/app/api/admin/models/deprecate/route.ts`:
+
+```ts
+import { NextRequest, NextResponse } from "next/server";
+import { proxyAdminJsonAgent, requireSession } from "@/lib/adminProxy";
+import { isInstance } from "@/lib/mycelium";
+
+export async function POST(req: NextRequest) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const body = await req.json().catch(() => null);
+  const agent = typeof body?.agent === "string" ? body.agent : null;
+  const name = typeof body?.name === "string" ? body.name : null;
+  const replacedBy = typeof body?.replaced_by === "string" ? body.replaced_by : null;
+  if (!agent || !isInstance(agent) || !name || !replacedBy) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  return proxyAdminJsonAgent(session, agent, `/models/${encodeURIComponent(name)}/deprecate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ replaced_by: replacedBy, version: body.version }),
+  });
+}
+```
+
+Create `WEBAPP/app/api/admin/models/order/route.ts`:
+
+```ts
+import { NextRequest, NextResponse } from "next/server";
+import { proxyAdminJsonAgent, requireSession } from "@/lib/adminProxy";
+import { isInstance } from "@/lib/mycelium";
+
+export async function PUT(req: NextRequest) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const body = await req.json().catch(() => null);
+  const agent = typeof body?.agent === "string" ? body.agent : null;
+  if (!agent || !isInstance(agent) || !Array.isArray(body?.order)) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  return proxyAdminJsonAgent(session, agent, "/models/order", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ order: body.order }),
+  });
+}
+```
+
+Create `WEBAPP/app/api/admin/models/usage/route.ts`:
+
+```ts
+import { NextRequest, NextResponse } from "next/server";
+import { proxyAdminJsonAgent, requireSession } from "@/lib/adminProxy";
+import { isInstance } from "@/lib/mycelium";
+
+export async function GET(req: NextRequest) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const p = req.nextUrl.searchParams;
+  const agent = p.get("agent");
+  const name = p.get("name");
+  if (!agent || !isInstance(agent) || !name) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  return proxyAdminJsonAgent(session, agent, `/models/${encodeURIComponent(name)}/usage`, { method: "GET" });
+}
+```
+
+- [ ] **Step 3: Write the catalog, defaults and assignments routes**
+
+Create `WEBAPP/app/api/admin/model-catalog/route.ts`:
+
+```ts
+import { NextRequest, NextResponse } from "next/server";
+import { proxyAdminJsonAgent, requireSession } from "@/lib/adminProxy";
+import { isInstance } from "@/lib/mycelium";
+
+export async function GET(req: NextRequest) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const agent = req.nextUrl.searchParams.get("agent");
+  if (!agent || !isInstance(agent)) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  return proxyAdminJsonAgent(session, agent, "/model-catalog", { method: "GET" });
+}
+```
+
+Create `WEBAPP/app/api/admin/model-defaults/route.ts`:
+
+```ts
+import { NextRequest, NextResponse } from "next/server";
+import { proxyAdminJsonAgent, requireSession } from "@/lib/adminProxy";
+import { isInstance } from "@/lib/mycelium";
+
+const SCOPES = ["global", "agent", "tenant", "subscription"];
+
+// upstreamQuery forwards only the scope identifiers. The proxy decides the gate
+// from them, so the BFF must not add or reinterpret any.
+function upstreamQuery(req: NextRequest): string | null {
+  const p = req.nextUrl.searchParams;
+  const scope = p.get("scope");
+  if (!scope || !SCOPES.includes(scope)) return null;
+  const out = new URLSearchParams({ scope });
+  if (scope === "tenant" || scope === "subscription") {
+    const tenantId = p.get("tenant_id");
+    if (!tenantId) return null;
+    out.set("tenant_id", tenantId);
+  }
+  if (scope === "subscription") {
+    const subsAccId = p.get("subs_acc_id");
+    if (!subsAccId) return null;
+    out.set("subs_acc_id", subsAccId);
+  }
+  return out.toString();
+}
+
+async function forward(req: NextRequest, method: "GET" | "PUT" | "DELETE") {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const agent = req.nextUrl.searchParams.get("agent");
+  const query = upstreamQuery(req);
+  if (!agent || !isInstance(agent) || !query) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  if (method !== "PUT") {
+    return proxyAdminJsonAgent(session, agent, `/model-defaults?${query}`, { method });
+  }
+  const body = await req.json().catch(() => null);
+  if (typeof body?.model_name !== "string" || !body.model_name) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  return proxyAdminJsonAgent(session, agent, `/model-defaults?${query}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model_name: body.model_name }),
+  });
+}
+
+export const GET = (req: NextRequest) => forward(req, "GET");
+export const PUT = (req: NextRequest) => forward(req, "PUT");
+export const DELETE = (req: NextRequest) => forward(req, "DELETE");
+```
+
+Create `WEBAPP/app/api/admin/model-assignments/route.ts`:
+
+```ts
+import { NextRequest, NextResponse } from "next/server";
+import { proxyAdminJsonAgent, requireSession } from "@/lib/adminProxy";
+import { isInstance } from "@/lib/mycelium";
+
+async function forward(req: NextRequest, method: "POST" | "DELETE") {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  const body = await req.json().catch(() => null);
+  const agent = typeof body?.agent === "string" ? body.agent : null;
+  const tenantId = typeof body?.tenant_id === "string" ? body.tenant_id : null;
+  const subsAccId = typeof body?.subs_acc_id === "string" ? body.subs_acc_id : null;
+  const userAccId = typeof body?.user_acc_id === "string" ? body.user_acc_id : null;
+  if (!agent || !isInstance(agent) || !tenantId || !subsAccId || !userAccId) {
+    return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  }
+  const payload: Record<string, unknown> = {
+    tenant_id: tenantId,
+    subs_acc_id: subsAccId,
+    user_acc_id: userAccId,
+  };
+  if (method === "POST") {
+    if (typeof body?.model_name !== "string" || !body.model_name) {
+      return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+    }
+    payload.model_name = body.model_name;
+  }
+  return proxyAdminJsonAgent(session, agent, "/model-assignments", {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export const POST = (req: NextRequest) => forward(req, "POST");
+export const DELETE = (req: NextRequest) => forward(req, "DELETE");
+```
+
+- [ ] **Step 4: Delete the superseded routes**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-exoskeleton-webapp
+git rm -r app/api/admin/registered-models
+```
+
+- [ ] **Step 5: Type-check**
+
+Run: `cd WEBAPP && yarn tsc --noEmit 2>&1 | head -20`
+Expected: errors only in `app/admin/model-registry-panel.tsx` (T19 rewrites it). No errors in `app/api/admin/`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-exoskeleton-webapp
+git add app/api/admin/
+git commit -m "feat(api): BFF routes for the model inventory
+
+Each route validates shape only and forwards; the proxy owns every authorization
+decision, so the BFF never adds or reinterprets a scope identifier. The status
+route refuses 'deprecated' on purpose — retiring a model needs a replacement and
+goes through /models/deprecate.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 19: the inventory panel — two lists, register/edit form, duplicate
+
+**Files:**
+- Rewrite: `WEBAPP/app/admin/model-registry-panel.tsx`
+- Create: `WEBAPP/app/admin/model-row.tsx`
+- Create: `WEBAPP/app/admin/model-row.test.tsx`
+
+**Interfaces:**
+- Consumes: T17 `lib/models.ts`, T18 routes; existing `Button`, `IconButton`, `Input`, `Badge`, `Alert`, `Spinner` from `components/ui/`.
+- Produces:
+  - `ModelRow` — a presentational component taking `{ model, onEdit, onDuplicate, onToggle, onDeprecate, onDelete, busy }`
+  - `ModelRegistryPanel` — default export, same props as today (`{ scope, agents, target }`)
+
+- [ ] **Step 1: Write the failing test**
+
+Create `WEBAPP/app/admin/model-row.test.tsx`:
+
+```tsx
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, it, expect } from "vitest";
+import { ModelRow } from "./model-row";
+import type { InventoryModel } from "@/lib/models";
+
+function model(over: Partial<InventoryModel> = {}): InventoryModel {
+  return {
+    model_name: "gpt-5.4",
+    provider: "openai",
+    model: "gpt-5.4",
+    api_base: "https://api.openai.com/v1",
+    status: "active",
+    fallbacks: [],
+    position: 1,
+    has_key: true,
+    in_use_count: 0,
+    version: 1,
+    created_at: "2026-07-25T12:00:00Z",
+    updated_at: "2026-07-25T12:00:00Z",
+    ...over,
+  };
+}
+
+const noop = () => {};
+const handlers = { onEdit: noop, onDuplicate: noop, onToggle: noop, onDeprecate: noop, onDelete: noop };
+
+describe("ModelRow", () => {
+  it("shows the name, provider, api_base and a key badge", () => {
+    const html = renderToStaticMarkup(<ModelRow model={model()} busy={false} {...handlers} />);
+    expect(html).toContain("gpt-5.4");
+    expect(html).toContain("openai");
+    expect(html).toContain("https://api.openai.com/v1");
+    expect(html).toContain("key");
+  });
+
+  it("shows the declared fallback chain, because the chain decides which keys land in a workspace", () => {
+    const html = renderToStaticMarkup(
+      <ModelRow model={model({ fallbacks: ["backup", "last-resort"] })} busy={false} {...handlers} />,
+    );
+    expect(html).toContain("backup");
+    expect(html).toContain("last-resort");
+  });
+
+  it("disables delete and disable while the model is in use, and says why", () => {
+    const html = renderToStaticMarkup(
+      <ModelRow model={model({ in_use_count: 3 })} busy={false} {...handlers} />,
+    );
+    // Two disabled buttons (delete + disable) and a reason the admin can act on.
+    expect(html).toContain("disabled");
+    expect(html).toContain("in use by 3");
+  });
+
+  it("enables delete when nothing uses the model", () => {
+    const html = renderToStaticMarkup(<ModelRow model={model({ in_use_count: 0 })} busy={false} {...handlers} />);
+    expect(html).not.toContain("in use by");
+  });
+
+  it("badges a deprecated model with its replacement", () => {
+    const html = renderToStaticMarkup(
+      <ModelRow model={model({ status: "deprecated", replaced_by: "gpt-6" })} busy={false} {...handlers} />,
+    );
+    expect(html).toContain("replaced by gpt-6");
+  });
+
+  it("badges an imported orphan so the admin reviews it", () => {
+    const html = renderToStaticMarkup(
+      <ModelRow model={model({ imported_orphan: true })} busy={false} {...handlers} />,
+    );
+    expect(html).toContain("imported");
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd WEBAPP && yarn vitest run app/admin/model-row.test.tsx`
+Expected: FAIL — cannot resolve `./model-row`.
+
+- [ ] **Step 3: Write the row component**
+
+Create `WEBAPP/app/admin/model-row.tsx`:
+
+```tsx
+"use client";
+
+import { cva } from "class-variance-authority";
+import { Pencil, Copy, PowerOff, Power, Archive, Trash2 } from "lucide-react";
+import { IconButton } from "@/components/ui/icon-button";
+import { Badge } from "@/components/ui/badge";
+import { inactiveReason, type InventoryModel } from "@/lib/models";
+
+// Variants rather than interpolated className strings, per the codebase's
+// convention.
+const row = cva(
+  "flex items-center gap-2 rounded-lg border px-3 py-1.5",
+  {
+    variants: {
+      state: {
+        active: "border-brand/30 bg-elevated",
+        inactive: "border-brand/20 bg-elevated/60 opacity-80",
+      },
+    },
+    defaultVariants: { state: "active" },
+  },
+);
+
+export function ModelRow({
+  model,
+  busy,
+  onEdit,
+  onDuplicate,
+  onToggle,
+  onDeprecate,
+  onDelete,
+}: {
+  model: InventoryModel;
+  busy: boolean;
+  onEdit: (m: InventoryModel) => void;
+  onDuplicate: (m: InventoryModel) => void;
+  onToggle: (m: InventoryModel) => void;
+  onDeprecate: (m: InventoryModel) => void;
+  onDelete: (m: InventoryModel) => void;
+}) {
+  const inUse = model.in_use_count > 0;
+  // Delete and disable share one precondition — nothing may reference the model.
+  // Deprecation is the tool for retiring something in use, so it stays available.
+  const lockReason = inUse ? `in use by ${model.in_use_count}` : "";
+  const reason = inactiveReason(model);
+
+  return (
+    <li className={row({ state: model.status === "active" ? "active" : "inactive" })}>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate font-mono text-xs text-fg">{model.model_name}</span>
+        <span className="truncate text-[11px] text-fg-muted">
+          {model.provider}
+          {model.api_base ? ` · ${model.api_base}` : ""}
+        </span>
+        {model.fallbacks.length > 0 && (
+          <span className="truncate text-[11px] text-fg-muted">
+            fallbacks: {model.fallbacks.join(" → ")}
+          </span>
+        )}
+      </div>
+
+      {reason && <Badge tone="neutral">{reason}</Badge>}
+      {model.imported_orphan && <Badge tone="neutral">imported</Badge>}
+      {model.has_key && <Badge tone="neutral">key</Badge>}
+      {inUse && <Badge tone="accent">{lockReason}</Badge>}
+
+      <IconButton variant="ghost" size="sm" aria-label={`Edit ${model.model_name}`} title="Edit"
+        disabled={busy} onClick={() => onEdit(model)}>
+        <Pencil size={15} aria-hidden />
+      </IconButton>
+      <IconButton variant="ghost" size="sm" aria-label={`Duplicate ${model.model_name}`} title="Duplicate"
+        disabled={busy} onClick={() => onDuplicate(model)}>
+        <Copy size={15} aria-hidden />
+      </IconButton>
+      <IconButton
+        variant="ghost"
+        size="sm"
+        aria-label={`${model.status === "active" ? "Disable" : "Enable"} ${model.model_name}`}
+        title={inUse && model.status === "active" ? `Cannot disable: ${lockReason}` : "Enable / disable"}
+        disabled={busy || (inUse && model.status === "active")}
+        onClick={() => onToggle(model)}
+      >
+        {model.status === "active" ? <PowerOff size={15} aria-hidden /> : <Power size={15} aria-hidden />}
+      </IconButton>
+      {model.status === "active" && (
+        <IconButton variant="ghost" size="sm" aria-label={`Deprecate ${model.model_name}`}
+          title="Deprecate (retire while keeping existing users on it)"
+          disabled={busy} onClick={() => onDeprecate(model)}>
+          <Archive size={15} aria-hidden />
+        </IconButton>
+      )}
+      <IconButton
+        variant="ghost"
+        size="sm"
+        aria-label={`Delete ${model.model_name}`}
+        title={inUse ? `Cannot delete: ${lockReason}` : "Delete"}
+        disabled={busy || inUse}
+        onClick={() => onDelete(model)}
+      >
+        <Trash2 size={15} aria-hidden />
+      </IconButton>
+    </li>
+  );
+}
+```
+
+- [ ] **Step 4: Run the row tests**
+
+Run: `cd WEBAPP && yarn vitest run app/admin/model-row.test.tsx`
+Expected: PASS — all six.
+
+- [ ] **Step 5: Rewrite the panel's inventory half**
+
+Replace `WEBAPP/app/admin/model-registry-panel.tsx` with the inventory region. Keep the existing default export name and props so `app/admin/`'s tab wiring is untouched.
+
+```tsx
+"use client";
+
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { Plus } from "lucide-react";
+import {
+  listModels,
+  modelCatalog,
+  createModel,
+  updateModel,
+  deleteModel,
+  setModelStatus,
+  deprecateModel,
+  reorderModels,
+  splitInventory,
+  draftFromCatalog,
+  draftFromDuplicate,
+  emptyDraft,
+  type CatalogEntry,
+  type InventoryModel,
+  type ModelDraft,
+} from "@/lib/models";
+import { ALL_AGENTS, type ScopeRef } from "@/lib/admin";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { Spinner } from "@/components/ui/spinner";
+import { ModelRow } from "./model-row";
+
+const selectClass =
+  "h-11 w-full rounded-lg border border-brand bg-elevated px-3 text-sm text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+
+const CUSTOM = "__custom__";
+
+// Admin model inventory. The inventory is PROXY-WIDE — not per agent — so the
+// agent picker only decides which service the request is routed through, and
+// ALL_AGENTS resolves to the first agent rather than fanning out.
+export default function ModelRegistryPanel({
+  scope,
+  agents,
+  target,
+}: {
+  scope: ScopeRef;
+  agents: string[];
+  target: string;
+}) {
+  const routed = target === ALL_AGENTS ? agents[0] ?? "" : target;
+
+  const [models, setModels] = useState<InventoryModel[] | null>(null);
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [draft, setDraft] = useState<ModelDraft>(emptyDraft);
+  // editing holds the model_name + version being edited; null means "create".
+  const [editing, setEditing] = useState<{ name: string; version: number } | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!routed) return;
+    setModels(await listModels(routed));
+  }, [routed]);
+
+  useEffect(() => {
+    if (!routed) return;
+    let cancelled = false;
+    setModels(null);
+    setError(null);
+    listModels(routed)
+      .then((m) => !cancelled && setModels(m))
+      .catch((e: Error) => !cancelled && setError(e.message));
+    modelCatalog(routed)
+      .then((c) => !cancelled && setCatalog(c))
+      .catch(() => !cancelled && setCatalog([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [routed]);
+
+  async function run(fn: () => Promise<void>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openCreate() {
+    setDraft(emptyDraft);
+    setEditing(null);
+    setShowForm(true);
+  }
+
+  function openEdit(m: InventoryModel) {
+    // api_key stays blank: the API never returns it, and leaving it blank means
+    // saving keeps the stored key rather than clearing it.
+    setDraft({
+      model_name: m.model_name,
+      provider: m.provider,
+      model: m.model,
+      api_base: m.api_base ?? "",
+      auth_method: m.auth_method ?? "",
+      api_key: "",
+      fallbacks: [...m.fallbacks],
+    });
+    setEditing({ name: m.model_name, version: m.version });
+    setShowForm(true);
+  }
+
+  function openDuplicate(m: InventoryModel) {
+    setDraft(draftFromDuplicate(m));
+    setEditing(null);
+    setShowForm(true);
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!draft.model_name.trim() || !draft.provider.trim() || !draft.model.trim()) {
+      setError("Fill model name, provider and model.");
+      return;
+    }
+    await run(async () => {
+      if (editing) {
+        await updateModel(routed, editing.name, editing.version, draft);
+      } else {
+        await createModel(routed, draft);
+      }
+      setShowForm(false);
+      setDraft(emptyDraft);
+      setEditing(null);
+      await refresh();
+    });
+  }
+
+  function onCatalogPick(value: string) {
+    if (value === CUSTOM) {
+      setDraft((d) => ({ ...d, provider: "", model: "", api_base: "", auth_method: "" }));
+      return;
+    }
+    const entry = catalog[Number(value)];
+    if (!entry) return;
+    // Keep whatever name and key the admin already typed; only the definition
+    // fields are prefilled.
+    setDraft((d) => ({ ...draftFromCatalog(entry), model_name: d.model_name, api_key: d.api_key, fallbacks: d.fallbacks }));
+  }
+
+  const { active, inactive } = splitInventory(models ?? []);
+
+  function move(list: InventoryModel[], index: number, delta: number) {
+    const next = [...list];
+    const to = index + delta;
+    if (to < 0 || to >= next.length) return;
+    [next[index], next[to]] = [next[to], next[index]];
+    void run(async () => {
+      await reorderModels(routed, next.map((m) => m.model_name));
+      await refresh();
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {error && <Alert severity="error">{error}</Alert>}
+
+      {!routed && (
+        <Alert severity="info">No agents reported by the gateway, so the inventory cannot be reached.</Alert>
+      )}
+
+      <div className="flex items-center gap-2">
+        <span className="h-2 w-2 shrink-0 bg-accent" aria-hidden />
+        <span className="flex-1 font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+          Model inventory
+        </span>
+        <Button variant="text" size="sm" className="gap-1.5 px-1 text-accent" disabled={!routed} onClick={openCreate}>
+          <Plus size={16} />
+          Register model
+        </Button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={onSubmit} className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-fg-muted">Start from a known model</span>
+            <select className={selectClass} defaultValue="" onChange={(e) => onCatalogPick(e.target.value)}>
+              <option value="" disabled>
+                pick one to prefill…
+              </option>
+              {catalog.map((c, i) => (
+                <option key={`${c.provider}|${c.model}`} value={String(i)}>
+                  {c.provider} · {c.model}
+                </option>
+              ))}
+              <option value={CUSTOM}>custom (fill everything by hand)</option>
+            </select>
+          </label>
+          <Input inputSize="sm" placeholder="model name (unique, e.g. team-gpt)" value={draft.model_name}
+            disabled={!!editing}
+            onChange={(e) => setDraft({ ...draft, model_name: e.target.value })} />
+          <Input inputSize="sm" placeholder="provider (e.g. openai)" value={draft.provider}
+            onChange={(e) => setDraft({ ...draft, provider: e.target.value })} />
+          <Input inputSize="sm" placeholder="model (e.g. gpt-5.4)" value={draft.model}
+            onChange={(e) => setDraft({ ...draft, model: e.target.value })} />
+          <Input inputSize="sm" placeholder="api_base" value={draft.api_base}
+            onChange={(e) => setDraft({ ...draft, api_base: e.target.value })} />
+          <Input inputSize="sm" placeholder="auth_method (optional, e.g. oauth)" value={draft.auth_method}
+            onChange={(e) => setDraft({ ...draft, auth_method: e.target.value })} />
+          <Input inputSize="sm" type="password" autoComplete="off"
+            placeholder={editing ? "api_key (leave blank to keep the stored key)" : "api_key (write-only)"}
+            value={draft.api_key}
+            onChange={(e) => setDraft({ ...draft, api_key: e.target.value })} />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="text" size="sm"
+              onClick={() => { setShowForm(false); setDraft(emptyDraft); setEditing(null); }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="filled" size="sm" disabled={busy}>
+              {busy ? "Saving…" : editing ? "Save" : "Register"}
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {models === null && !error ? (
+        <div className="flex justify-center py-3">
+          <Spinner size={18} />
+        </div>
+      ) : (
+        <>
+          <Section title="Active">
+            {active.length === 0 ? (
+              <p className="py-2 text-sm text-fg-muted">No active models. Register one to get started.</p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {active.map((m, i) => (
+                  <div key={m.model_name} className="flex items-center gap-1">
+                    <div className="flex flex-col">
+                      <button type="button" aria-label={`Move ${m.model_name} up`} className="text-xs text-fg-muted"
+                        disabled={busy || i === 0} onClick={() => move(active, i, -1)}>
+                        ↑
+                      </button>
+                      <button type="button" aria-label={`Move ${m.model_name} down`} className="text-xs text-fg-muted"
+                        disabled={busy || i === active.length - 1} onClick={() => move(active, i, 1)}>
+                        ↓
+                      </button>
+                    </div>
+                    <div className="flex-1">
+                      <ModelRow model={m} busy={busy}
+                        onEdit={openEdit} onDuplicate={openDuplicate}
+                        onToggle={(mm) => run(async () => {
+                          await setModelStatus(routed, mm.model_name, mm.version, "disabled");
+                          await refresh();
+                        })}
+                        onDeprecate={(mm) => {
+                          const replacement = window.prompt(
+                            `Retiring ${mm.model_name}. Which active model should NEW users get instead?`,
+                          );
+                          if (!replacement) return;
+                          void run(async () => {
+                            await deprecateModel(routed, mm.model_name, mm.version, replacement);
+                            await refresh();
+                          });
+                        }}
+                        onDelete={(mm) => run(async () => {
+                          await deleteModel(routed, mm.model_name);
+                          await refresh();
+                        })} />
+                    </div>
+                  </div>
+                ))}
+              </ul>
+            )}
+            <p className="text-[11px] text-fg-muted">
+              This order is for reading only. A model&apos;s fallback chain is the{" "}
+              <span className="font-mono">fallbacks</span> list on the model itself.
+            </p>
+          </Section>
+
+          <Section title="Inactive">
+            {inactive.length === 0 ? (
+              <p className="py-2 text-sm text-fg-muted">Nothing disabled or deprecated.</p>
+            ) : (
+              <ul className="flex flex-col gap-1">
+                {inactive.map((m) => (
+                  <ModelRow key={m.model_name} model={m} busy={busy}
+                    onEdit={openEdit} onDuplicate={openDuplicate}
+                    onToggle={(mm) => run(async () => {
+                      await setModelStatus(routed, mm.model_name, mm.version, "active");
+                      await refresh();
+                    })}
+                    onDeprecate={() => {}}
+                    onDelete={(mm) => run(async () => {
+                      await deleteModel(routed, mm.model_name);
+                      await refresh();
+                    })} />
+                ))}
+              </ul>
+            )}
+          </Section>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">{title}</span>
+      {children}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 6: Type-check and build**
+
+Run: `cd WEBAPP && yarn tsc --noEmit && yarn next build 2>&1 | tail -20`
+Expected: both clean. If `ScopeRef` is unused in this file now, remove it from the props type only if the tab wiring does not pass it — otherwise keep the prop and prefix it `_scope`.
+
+- [ ] **Step 7: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-exoskeleton-webapp
+git add app/admin/model-registry-panel.tsx app/admin/model-row.tsx app/admin/model-row.test.tsx
+git commit -m "feat(admin): inventory panel — active/inactive lists, catalog-driven form, duplicate
+
+The register form is driven by the embedded suggestion catalog instead of five
+free-text inputs, which is what makes typo-driven failures impossible rather than
+merely unlikely. Duplicate blanks the name and the key: the name must be unique
+and the key is never returned by the API.
+
+The active list is reorderable but the copy says plainly that the order is for
+reading only — a model's chain is its own fallbacks list. Delete and disable are
+rendered unavailable with the reason while a model is in use; deprecate stays
+available, since that is the tool for retiring something in use.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 20: defaults, per-user assignment, fallback chain editor
+
+**Files:**
+- Create: `WEBAPP/app/admin/model-defaults-panel.tsx`
+- Create: `WEBAPP/app/admin/fallback-editor.tsx`
+- Create: `WEBAPP/app/admin/fallback-editor.test.tsx`
+- Modify: `WEBAPP/app/admin/model-registry-panel.tsx` (render both)
+
+**Interfaces:**
+- Consumes: T17, T19.
+- Produces:
+  - `FallbackEditor` — `{ model, all, busy, onSave }`
+  - `ModelDefaultsPanel` — `{ scope, routed, models }`
+  - `fallbackCandidates(all, self) => InventoryModel[]`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `WEBAPP/app/admin/fallback-editor.test.tsx`:
+
+```tsx
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, it, expect } from "vitest";
+import { FallbackEditor, fallbackCandidates } from "./fallback-editor";
+import type { InventoryModel } from "@/lib/models";
+
+function model(name: string, over: Partial<InventoryModel> = {}): InventoryModel {
+  return {
+    model_name: name,
+    provider: "openai",
+    model: name,
+    api_base: "https://x/v1",
+    status: "active",
+    fallbacks: [],
+    position: 1,
+    has_key: true,
+    in_use_count: 0,
+    version: 1,
+    created_at: "2026-07-25T12:00:00Z",
+    updated_at: "2026-07-25T12:00:00Z",
+    ...over,
+  };
+}
+
+describe("fallbackCandidates", () => {
+  it("excludes the model itself", () => {
+    const all = [model("a"), model("b")];
+    expect(fallbackCandidates(all, "a").map((m) => m.model_name)).toEqual(["b"]);
+  });
+
+  it("excludes non-active models, which the resolver would skip anyway", () => {
+    const all = [model("a"), model("off", { status: "disabled" }), model("old", { status: "deprecated" })];
+    expect(fallbackCandidates(all, "a").map((m) => m.model_name)).toEqual([]);
+  });
+});
+
+describe("FallbackEditor", () => {
+  it("lists the current chain in order", () => {
+    const html = renderToStaticMarkup(
+      <FallbackEditor
+        model={model("main", { fallbacks: ["first", "second"] })}
+        all={[model("main"), model("first"), model("second")]}
+        busy={false}
+        onSave={() => {}}
+      />,
+    );
+    const firstAt = html.indexOf("first");
+    const secondAt = html.indexOf("second");
+    expect(firstAt).toBeGreaterThan(-1);
+    expect(secondAt).toBeGreaterThan(firstAt);
+  });
+
+  it("states that this list is what becomes model_fallbacks", () => {
+    const html = renderToStaticMarkup(
+      <FallbackEditor model={model("main")} all={[model("main")]} busy={false} onSave={() => {}} />,
+    );
+    expect(html).toContain("model_fallbacks");
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd WEBAPP && yarn vitest run app/admin/fallback-editor.test.tsx`
+Expected: FAIL — cannot resolve `./fallback-editor`.
+
+- [ ] **Step 3: Write the fallback editor**
+
+Create `WEBAPP/app/admin/fallback-editor.tsx`:
+
+```tsx
+"use client";
+
+import { useState } from "react";
+import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import type { InventoryModel } from "@/lib/models";
+
+const selectClass =
+  "h-9 w-full rounded-lg border border-brand bg-elevated px-2 text-xs text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft";
+
+// fallbackCandidates excludes the model itself and every non-active model: the
+// resolver skips a non-active fallback anyway, so offering one would let an admin
+// build a chain that silently does nothing.
+export function fallbackCandidates(all: InventoryModel[], self: string): InventoryModel[] {
+  return all.filter((m) => m.model_name !== self && m.status === "active");
+}
+
+export function FallbackEditor({
+  model,
+  all,
+  busy,
+  onSave,
+}: {
+  model: InventoryModel;
+  all: InventoryModel[];
+  busy: boolean;
+  onSave: (chain: string[]) => void;
+}) {
+  const [chain, setChain] = useState<string[]>([...model.fallbacks]);
+  const candidates = fallbackCandidates(all, model.model_name).filter((m) => !chain.includes(m.model_name));
+
+  function move(index: number, delta: number) {
+    const to = index + delta;
+    if (to < 0 || to >= chain.length) return;
+    const next = [...chain];
+    [next[index], next[to]] = [next[to], next[index]];
+    setChain(next);
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-brand/30 bg-elevated p-3">
+      <span className="text-xs font-medium text-fg-muted">
+        Fallback chain for <span className="font-mono">{model.model_name}</span>
+      </span>
+      <p className="text-[11px] text-fg-muted">
+        This ordered list — not the inventory listing order — becomes{" "}
+        <span className="font-mono">agents.defaults.model_fallbacks</span>. Every model here also gets its key
+        written into each workspace that uses <span className="font-mono">{model.model_name}</span>.
+      </p>
+
+      {chain.length === 0 ? (
+        <p className="text-sm text-fg-muted">No fallbacks. Requests that fail have nowhere to go.</p>
+      ) : (
+        <ol className="flex flex-col gap-1">
+          {chain.map((name, i) => (
+            <li key={name} className="flex items-center gap-2 rounded-lg border border-brand/20 px-2 py-1">
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg">
+                {i + 1}. {name}
+              </span>
+              <button type="button" aria-label={`Move ${name} up`} className="text-xs text-fg-muted"
+                disabled={busy || i === 0} onClick={() => move(i, -1)}>
+                ↑
+              </button>
+              <button type="button" aria-label={`Move ${name} down`} className="text-xs text-fg-muted"
+                disabled={busy || i === chain.length - 1} onClick={() => move(i, 1)}>
+                ↓
+              </button>
+              <IconButton variant="ghost" size="sm" aria-label={`Remove ${name}`} title="Remove"
+                disabled={busy} onClick={() => setChain(chain.filter((n) => n !== name))}>
+                <X size={14} aria-hidden />
+              </IconButton>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <select className={selectClass} value="" disabled={busy || candidates.length === 0}
+        onChange={(e) => e.target.value && setChain([...chain, e.target.value])}>
+        <option value="" disabled>
+          {candidates.length === 0 ? "no other active models" : "add a fallback…"}
+        </option>
+        {candidates.map((m) => (
+          <option key={m.model_name} value={m.model_name}>
+            {m.model_name}
+          </option>
+        ))}
+      </select>
+
+      <div className="flex justify-end">
+        <Button variant="tonal" size="sm" disabled={busy} onClick={() => onSave(chain)}>
+          Save chain
+        </Button>
+      </div>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 4: Write the defaults and assignment panel**
+
+Create `WEBAPP/app/admin/model-defaults-panel.tsx`:
+
+```tsx
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import {
+  getModelDefault,
+  setModelDefault,
+  clearModelDefault,
+  setModelAssignment,
+  clearModelAssignment,
+  type DefaultScope,
+  type InventoryModel,
+  type ScopeDefault,
+} from "@/lib/models";
+import { listSubscriptionUsers, type ScopeRef, type UserRef } from "@/lib/admin";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert } from "@/components/ui/alert";
+import { Spinner } from "@/components/ui/spinner";
+
+const selectClass = "h-9 rounded-lg border border-brand bg-surface px-2 text-xs text-fg";
+
+// Scope defaults plus per-user pins. A pin wins over every default (the proxy's
+// cascade is user > subscription > tenant > agent > global), so the UI has to make
+// the difference between a pin and a cascade visible.
+export default function ModelDefaultsPanel({
+  scope,
+  routed,
+  models,
+}: {
+  scope: ScopeRef;
+  routed: string;
+  models: InventoryModel[];
+}) {
+  const [current, setCurrent] = useState<ScopeDefault | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [users, setUsers] = useState<UserRef[] | null>(null);
+  const [pick, setPick] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const assignable = models.filter((m) => m.status !== "disabled");
+
+  const defaultScope: DefaultScope | null =
+    scope.kind === "subscription" && scope.subsAccId
+      ? { kind: "subscription", tenantId: scope.tenantId, subsAccId: scope.subsAccId }
+      : scope.kind === "tenant"
+        ? { kind: "tenant", tenantId: scope.tenantId }
+        : null;
+
+  const load = useCallback(async () => {
+    if (!routed || !defaultScope) {
+      setLoaded(true);
+      return;
+    }
+    setCurrent(await getModelDefault(routed, defaultScope));
+    setLoaded(true);
+  }, [routed, defaultScope?.kind, (defaultScope as { tenantId?: string })?.tenantId,
+      (defaultScope as { subsAccId?: string })?.subsAccId]);
+
+  useEffect(() => {
+    setLoaded(false);
+    load().catch((e: Error) => {
+      setError(e.message);
+      setLoaded(true);
+    });
+  }, [load]);
+
+  useEffect(() => {
+    if (scope.kind !== "subscription" || !scope.subsAccId) {
+      setUsers(null);
+      return;
+    }
+    let cancelled = false;
+    setUsers(null);
+    listSubscriptionUsers(scope.tenantId, scope.subsAccId)
+      .then((u) => !cancelled && setUsers(u))
+      .catch(() => !cancelled && setUsers([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [scope.kind, scope.tenantId, scope.subsAccId]);
+
+  async function run(fn: () => Promise<void>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {error && <Alert severity="error">{error}</Alert>}
+
+      <div className="flex flex-col gap-2">
+        <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+          Default for this scope
+        </span>
+        {!defaultScope ? (
+          <p className="py-2 text-sm text-fg-muted">Select a tenant or subscription on the left.</p>
+        ) : !loaded ? (
+          <div className="flex justify-center py-3">
+            <Spinner size={18} />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <select className={selectClass} value={current?.model_name ?? ""} disabled={busy}
+              onChange={(e) =>
+                run(async () => {
+                  await setModelDefault(routed, defaultScope, e.target.value);
+                  await load();
+                })
+              }>
+              <option value="" disabled>
+                no default set
+              </option>
+              {models.filter((m) => m.status === "active").map((m) => (
+                <option key={m.model_name} value={m.model_name}>
+                  {m.model_name}
+                </option>
+              ))}
+            </select>
+            {current && (
+              <Button variant="text" size="sm" disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    await clearModelDefault(routed, defaultScope);
+                    await load();
+                  })
+                }>
+                Clear
+              </Button>
+            )}
+          </div>
+        )}
+        <p className="text-[11px] text-fg-muted">
+          New workspaces under this scope land on this model. A per-user pin below overrides it.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <span className="font-display text-xs font-semibold uppercase tracking-wide text-fg-muted">
+          Per-user pins
+        </span>
+        {scope.kind !== "subscription" ? (
+          <p className="py-2 text-sm text-fg-muted">Select a subscription to pin models to its users.</p>
+        ) : users === null ? (
+          <div className="flex justify-center py-3">
+            <Spinner size={18} />
+          </div>
+        ) : users.length === 0 ? (
+          <p className="py-2 text-sm text-fg-muted">
+            No users have a workspace under this subscription yet (they must start a chat first).
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {users.map((u) => (
+              <li key={`${u.role}|${u.accId}`}
+                className="flex items-center gap-2 rounded-lg border border-brand/30 bg-elevated px-3 py-1.5">
+                <span className="min-w-0 flex-1 truncate text-sm text-fg" title={u.accId}>
+                  {u.name || u.email || u.accId}
+                </span>
+                {u.role && <Badge tone="accent">{u.role}</Badge>}
+                <select className={selectClass} value={pick[u.accId] ?? ""} disabled={busy}
+                  onChange={(e) => setPick((prev) => ({ ...prev, [u.accId]: e.target.value }))}>
+                  <option value="" disabled>
+                    inherited from scope
+                  </option>
+                  {assignable.map((m) => (
+                    <option key={m.model_name} value={m.model_name}>
+                      {m.model_name}
+                    </option>
+                  ))}
+                </select>
+                <Button variant="tonal" size="sm" disabled={busy || !pick[u.accId]}
+                  onClick={() =>
+                    run(async () => {
+                      await setModelAssignment(
+                        u.role ?? routed,
+                        { tenantId: scope.tenantId, subsAccId: scope.subsAccId!, userAccId: u.accId },
+                        pick[u.accId],
+                      );
+                    })
+                  }>
+                  Pin
+                </Button>
+                <Button variant="text" size="sm" disabled={busy}
+                  onClick={() =>
+                    run(async () => {
+                      await clearModelAssignment(u.role ?? routed, {
+                        tenantId: scope.tenantId,
+                        subsAccId: scope.subsAccId!,
+                        userAccId: u.accId,
+                      });
+                      setPick((prev) => ({ ...prev, [u.accId]: "" }));
+                    })
+                  }>
+                  Unpin
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 5: Render both from the inventory panel**
+
+In `WEBAPP/app/admin/model-registry-panel.tsx`:
+
+Add the imports:
+
+```tsx
+import ModelDefaultsPanel from "./model-defaults-panel";
+import { FallbackEditor } from "./fallback-editor";
+```
+
+Add the state that tracks which model's chain is open:
+
+```tsx
+  const [chainFor, setChainFor] = useState<InventoryModel | null>(null);
+```
+
+Pass an extra handler into each active-list `ModelRow` by wrapping `onEdit`:
+
+```tsx
+                        onEdit={(mm) => { setChainFor(null); openEdit(mm); }}
+```
+
+and render the chain editor plus the defaults panel just before the closing `</div>` of the component:
+
+```tsx
+      {chainFor && (
+        <FallbackEditor
+          model={chainFor}
+          all={models ?? []}
+          busy={busy}
+          onSave={(chain) =>
+            run(async () => {
+              await updateModel(routed, chainFor.model_name, chainFor.version, {
+                model_name: chainFor.model_name,
+                provider: chainFor.provider,
+                model: chainFor.model,
+                api_base: chainFor.api_base ?? "",
+                auth_method: chainFor.auth_method ?? "",
+                api_key: "",
+                fallbacks: chain,
+              });
+              setChainFor(null);
+              await refresh();
+            })
+          }
+        />
+      )}
+
+      {routed && <ModelDefaultsPanel scope={scope} routed={routed} models={models ?? []} />}
+```
+
+Add a chain button to the active rows by giving `ModelRow` one more optional prop. In `model-row.tsx` add to the props type:
+
+```tsx
+  onEditChain?: (m: InventoryModel) => void;
+```
+
+and render, before the delete button:
+
+```tsx
+      {onEditChain && (
+        <IconButton variant="ghost" size="sm" aria-label={`Edit fallback chain for ${model.model_name}`}
+          title="Fallback chain" disabled={busy} onClick={() => onEditChain(model)}>
+          <span aria-hidden className="text-xs">⛓</span>
+        </IconButton>
+      )}
+```
+
+Pass `onEditChain={setChainFor}` on the active-list rows only — an inactive model is not materialized anywhere, so editing its chain has no effect worth offering.
+
+- [ ] **Step 6: Run the tests, type-check and build**
+
+Run: `cd WEBAPP && yarn vitest run && yarn tsc --noEmit && yarn next build 2>&1 | tail -20`
+Expected: all vitest green (including the pre-existing 55), `tsc` clean, build clean.
+
+- [ ] **Step 7: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-exoskeleton-webapp
+git add app/admin/
+git commit -m "feat(admin): scope defaults, per-user pins, fallback chain editor
+
+The chain editor states plainly that its ordered list — not the inventory listing
+order — becomes agents.defaults.model_fallbacks, and that every model in it gets
+its key written into each workspace using the primary. That consequence has to be
+visible where the decision is made.
+
+Candidates exclude the model itself and every non-active model: the resolver skips
+a non-active fallback anyway, so offering one would let an admin build a chain that
+silently does nothing.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 21: point the native model-secret picker at the inventory
+
+**Files:**
+- Modify: `WEBAPP/app/admin/shared-secrets-panel.tsx`
+
+**Interfaces:**
+- Consumes: T17 `listModels`.
+- Produces: no new exports.
+
+- [ ] **Step 1: Find how the panel currently sources model names**
+
+Run:
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-exoskeleton-webapp
+grep -n "model_list\|model-list\|models" app/admin/shared-secrets-panel.tsx
+```
+
+Note each place a model name is offered for the native `model_list.<model>.api_keys` slot.
+
+- [ ] **Step 2: Replace the source**
+
+Wherever the panel builds that list, replace the source with `listModels(routed)` from `@/lib/models`, offering `m.model_name` for every model whose `status !== "disabled"`. Keep the existing select markup and error handling; only the data source changes.
+
+Add a one-line hint next to the select:
+
+```tsx
+<span className="text-[11px] text-fg-muted">
+  Setting a key here overrides the inventory&apos;s own key for this model, in this scope only.
+</span>
+```
+
+That sentence is the whole reason the slot still exists: without it an admin cannot tell why two places hold a key for the same model.
+
+- [ ] **Step 3: Verify the proxy agrees**
+
+The proxy now validates this slot against the inventory (T15), so a name from this list always passes and a hand-typed one may not. Confirm the select has no free-text escape hatch; if it does, remove it.
+
+- [ ] **Step 4: Run the tests, type-check and build**
+
+Run: `cd WEBAPP && yarn vitest run && yarn tsc --noEmit && yarn next build 2>&1 | tail -20`
+Expected: all green.
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-exoskeleton-webapp
+git add app/admin/shared-secrets-panel.tsx
+git commit -m "feat(admin): native model-secret picker reads the inventory
+
+The proxy now validates this slot against the inventory, so the picker must offer
+inventory names and nothing else — a hand-typed name would be rejected. The hint
+explains why a second place can hold a key for the same model: it is a
+scope-limited override of the inventory key, not a competing source.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Final verification
+
+- [ ] **Proxy gate**
+
+Run:
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+go mod tidy && go vet ./... && go test ./...
+```
+Expected: all pass — this is exactly what the Docker build runs.
+
+- [ ] **Webapp gate**
+
+Run:
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-exoskeleton-webapp
+yarn tsc --noEmit && yarn vitest run && yarn next build
+```
+Expected: all pass.
+
+- [ ] **Gateway config parses**
+
+Run:
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project
+python3 -c "import tomllib
+for p in ['fungi/mycelium/config.base.toml','fungi/mycelium/config.standalone.toml']:
+    tomllib.load(open(p,'rb')); print(p,'ok')"
+```
+
+- [ ] **No key can reach a client**
+
+Run:
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project/crab/crab-shell-proxy
+grep -rn "api_key" --include="*.go" internal/httpapi/ | grep -v _test
+```
+Expected: only the `modelRequest.APIKey` request field. Any `api_key` on a response path is a defect.
+
+- [ ] **Bump the submodule pointers and record the decision**
+
+```bash
+cd /mnt/external/thirdparty-projects/zombie-crab-project
+git add crab/crab-shell-proxy crab/crab-exoskeleton-webapp
+git commit -m "chore: bump submodules for the model registry source of truth
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+Then add an `AD-013` entry to `.specs/project/STATE.md` following the format of `AD-012`, recording: the single-source-of-truth decision and the clobber it removes; per-model declared fallback chains and why the global-ordered-list shape was rejected; that `config.yaml`'s `agent.Model` is now a migration seed with no runtime effect; that hermes still reads it; and the two deploy steps below.
+
+## Deploy steps (operator, in order)
+
+1. **Reload the mycelium gateway** so the new admin paths route (T16). Without this the admin UI reports "Request path does not match any service".
+2. **Restart the proxy once** so `Reconcile` runs the migration. Watch the log for `migrate models:` lines — any `ImportedOrphan` recovery names a model an admin should review, and any `model drift:` line names a workspace whose recorded model disagrees with its config.json.
+3. **Verify before touching anything in the UI:** no workspace's active model changed. `docker exec` into one running container's workspace and confirm `config.json`'s `agents.defaults.model_name` is what it was, and that `<dataRoot>/templates/<agent>/config.json.pre-registry` exists.
+4. **Register at least one model and set a global default** before any new user signs up — a workspace with no resolvable model is refused at provision, by design.
+
+
 
 
 
