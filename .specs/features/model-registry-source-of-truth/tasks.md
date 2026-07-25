@@ -1470,7 +1470,8 @@ const maxDeprecationHops = 8
 // it, while new ones get replacedBy. That is the only way to retire something in
 // use — disable requires zero usage (I3).
 //
-// Enforces I4 (the replacement must exist and be active) and I5 (no cycles).
+// Enforces I4 (the replacement must exist and must not be disabled — a
+// deprecated one is a valid chain link) and I5 (no cycles).
 func (r *Registry) Deprecate(name string, version uint64, replacedBy string) (Model, error) {
 	if replacedBy == "" {
 		return Model{}, fmt.Errorf("%w: deprecating %q requires a replacement so new users have somewhere to go", ErrInvalid, name)
@@ -1495,8 +1496,13 @@ func (r *Registry) Deprecate(name string, version uint64, replacedBy string) (Mo
 			}
 			return err
 		}
-		if repl.Status != StatusActive {
-			return fmt.Errorf("%w: replacement %q is %s, so it could not serve new users", ErrInvalid, replacedBy, repl.Status)
+		// Only DISABLED is rejected. A deprecated replacement is a legitimate chain
+		// link — resolution hops onward from it until it reaches something active —
+		// and requiring active here would make it impossible to retire a series of
+		// models incrementally, since each new retirement would have to re-point
+		// every predecessor.
+		if repl.Status == StatusDisabled {
+			return fmt.Errorf("%w: replacement %q is disabled, so it could not serve new users", ErrInvalid, replacedBy)
 		}
 		// Walk forward from the replacement: if it leads back to name, this write
 		// would close a loop and strand every workspace that resolves through it.

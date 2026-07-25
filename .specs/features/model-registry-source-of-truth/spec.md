@@ -76,8 +76,12 @@ Four further defects in the same area, all verified:
   what to detach first.
 - **FR-6** Transitioning a model to `disabled` carries the same precondition as
   FR-5.
-- **FR-7** Deprecating a model requires a `replaced_by` naming an existing
-  `active` model. Deprecation chains are cycle-free and traversal is bounded.
+- **FR-7** Deprecating a model requires a `replaced_by` naming an existing model
+  that is **not `disabled`**. A `deprecated` replacement is legitimate: it is a
+  chain link, and resolution hops onward from it until it reaches something
+  active — which is what lets an admin retire a series of models incrementally
+  rather than having to re-point every predecessor each time. Deprecation chains
+  are cycle-free and traversal is bounded (8 hops).
 - **FR-8** Each write carries the record's `version`; a stale version is
   rejected with 409 and no write occurs.
 - **FR-9** A read-only **suggestion catalog** of known model definitions
@@ -262,8 +266,9 @@ Four further defects in the same area, all verified:
 - **AC-4** WHEN an admin sets a model in use to `disabled` THEN the system SHALL
   reject it with the same 409 as AC-3.
 - **AC-5** WHEN an admin deprecates a model without naming a replacement, or
-  names one that is absent or not `active`, THEN the system SHALL respond 400 and
-  write nothing.
+  names one that is absent, `disabled`, or itself, THEN the system SHALL respond
+  400 and write nothing. WHEN the named replacement is `deprecated` THEN the
+  deprecation SHALL succeed, because resolution hops onward from it (FR-7).
 - **AC-6** WHEN a model is deprecated with replacement `Y` AND a new user
   provisions under a scope whose default is the deprecated model THEN that new
   workspace SHALL be materialized with `Y`, AND every workspace already using the

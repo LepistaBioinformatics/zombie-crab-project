@@ -185,7 +185,7 @@ write cannot be split:
 | I1 | `model_name` unique | 409 |
 | I2 | delete blocked while referenced by an assignment (as primary or chain member), a scope default, another model's `replaced_by`, or another model's `fallbacks` | 409 + referrer list |
 | I3 | `→ disabled` has I2's precondition | 409 + referrer list |
-| I4 | `→ deprecated` requires `replaced_by` naming an existing `active` model | 400 |
+| I4 | `→ deprecated` requires `replaced_by` naming an existing model that is not `disabled` and not itself. A `deprecated` replacement is a legitimate chain link — resolution hops onward from it — which is what lets a series of models be retired incrementally | 400 |
 | I5 | deprecation chains acyclic | 400 |
 | I6 | write `version` must match stored | 409 |
 | I7 | responses never carry `api_key` | — (type-enforced, §2) |
