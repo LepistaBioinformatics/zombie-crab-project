@@ -45,6 +45,9 @@ services:
     environment:
       DATABASE_URL: postgresql://${CHAT_WEBAPP_DB_USER:-chatwebapp}:${CHAT_WEBAPP_DB_PASSWORD:-chatwebapp}@chat-webapp-postgres:5432/${CHAT_WEBAPP_DB_NAME:-chatwebapp}
       MYCELIUM_INTERNAL_URL: http://mycelium-gateway:8080
+      # 1/true -> `/` is the sign-in screen and the pre-auth landing page is never
+      # served (see docker-compose.yaml for the rationale).
+      START_AT_SIGNIN: ${START_AT_SIGNIN:-}
     image: ghcr.io/lepistabioinformatics/crab-exoskeleton-webapp:${CHAT_WEBAPP_TAG:-latest}
     labels:
       - traefik.enable=true
