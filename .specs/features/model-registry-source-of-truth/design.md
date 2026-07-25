@@ -76,7 +76,8 @@ type Model struct {
 
     Status     Status          `json:"status"`       // active | disabled | deprecated
     ReplacedBy string          `json:"replaced_by,omitempty"`
-    Position   int             `json:"position"`
+    Fallbacks  []string        `json:"fallbacks,omitempty"` // ordered model_names
+    Position   int             `json:"position"`     // UI list order; no functional effect
 
     Version    uint64          `json:"version"`
     CreatedAt  time.Time       `json:"created_at"`
@@ -86,7 +87,8 @@ type Model struct {
 }
 
 type Assignment struct {
-    ModelName      string    `json:"model_name"`
+    ModelName      string    `json:"model_name"`    // the primary
+    Chain          []string  `json:"chain"`         // fallback names materialized alongside it
     Source         Source    `json:"source"`        // explicit | inherited
     MaterializedAt time.Time `json:"materialized_at"`
 }
@@ -135,23 +137,28 @@ existing users keep the old model" fall out of resolution rather than needing a
 separate code path. Traversal is bounded at 8 hops with a visited set; exceeding
 either is an error naming the chain, not a silent fallback.
 
-`chain` is every `active` model other than the primary, in `position` order
-(CTX-MR-09). A `deprecated` primary is not in the chain of anything. `position` is
-one global ordering; `disabled` and `deprecated` models keep theirs but are
-excluded from every chain, so reactivating one restores its place rather than
-appending it.
+`chain` is the primary's own `Fallbacks`, in declared order, expanded **one level
+only** and filtered to `active` models — a non-active entry is skipped and logged
+(AC-15b) rather than failing the resolution. `position` is presentation only
+(CTX-MR-09): it orders the active list in the UI and nothing else reads it.
 
 ### Re-materialization triggers
 
-Per FR-19: scope-default changes, per-user assignment changes and model
-definition/key edits re-materialize **eagerly** (stop/start the affected
-workspaces). Reordering is **lazy** — it changes every workspace's chain, and
-restarting the whole fleet on a drag is the wrong default; an explicit "apply now"
-covers the case where the admin does want it immediately. Deprecation triggers
-nothing, by design.
+Per FR-19, all eager, all stop/start:
 
-The eager paths need a reverse lookup ("which workspaces use model X"), which is
-the same `assignments` scan `referrers` already performs.
+| Change | Affected workspaces |
+|---|---|
+| scope default | those resolving through it (no more specific override) |
+| per-user assignment | that workspace |
+| model definition or key | those whose `Assignment` names it as primary **or** in `chain` |
+| a model's `fallbacks` | those whose `Assignment` names it as primary |
+| reorder (`position`) | none — presentation only (AC-19) |
+| deprecation | none — existing users keeping the model is the point |
+
+Recording `Chain` on the `Assignment` is what makes the definition/key trigger
+correct: without it a key edit would reach only the workspaces where the model is
+primary, leaving every workspace that has it as a fallback holding a revoked
+credential. The lookup is the same `assignments` scan `referrers` performs.
 
 ### Deletions this enables
 
@@ -171,17 +178,24 @@ write cannot be split:
 | ID | Rule | On violation |
 |---|---|---|
 | I1 | `model_name` unique | 409 |
-| I2 | delete blocked while referenced by an assignment, a scope default, or another model's `replaced_by` | 409 + referrer list |
+| I2 | delete blocked while referenced by an assignment (as primary or chain member), a scope default, another model's `replaced_by`, or another model's `fallbacks` | 409 + referrer list |
 | I3 | `→ disabled` has I2's precondition | 409 + referrer list |
 | I4 | `→ deprecated` requires `replaced_by` naming an existing `active` model | 400 |
 | I5 | deprecation chains acyclic | 400 |
 | I6 | write `version` must match stored | 409 |
 | I7 | responses never carry `api_key` | — (type-enforced, §2) |
+| I8 | every name in `fallbacks` exists; a model may not list itself | 400 |
 
 `referrers(model_name)` is one scan of `assignments` plus one of
-`scope_defaults` plus one of `models`. With tens of models and hundreds of
-workspaces a full scan inside the transaction is cheaper than maintaining
-reverse indexes, and it cannot drift.
+`scope_defaults` plus one of `models` (covering both `replaced_by` and
+`fallbacks`). With tens of models and hundreds of workspaces a full scan inside
+the transaction is cheaper than maintaining reverse indexes, and it cannot drift.
+
+I2 is satisfiable precisely because chains are **declared** rather than derived
+from the active set: detaching a model from the one or two `fallbacks` lists that
+name it is a concrete action the 409 tells the admin to take. Had the chain been
+"every active model", every active model would be referenced by every workspace
+and I2 would be unsatisfiable — see CTX-MR-09 for why that shape was rejected.
 
 ## 5. Materialization
 
@@ -200,11 +214,17 @@ CTX-MR-07). Then `agents.defaults.provider` / `model_name` = primary, and
 
 **`.security.yml`** — read-modify-write (the shape `setModelListEntry`
 already uses, `internal/docker/model.go:151`): for each materialized model, set
-`model_list.<model_name>.api_keys = [key]`. The pico channel token and every
-sibling key survive. `writeSecurityConfig` already chowns and re-locks 0444.
+`model_list.<model_name>.api_keys = [key]`, **and prune** any `model_list` entry
+outside the materialized set (FR-17b). Pruning is necessary because `config.json`'s
+`model_list` is replaced wholesale while this file is read-modify-write — without
+it, every model a workspace ever used keeps its key here forever and the two files
+drift permanently. `unsetNativeSlot` (`internal/docker/secrets.go:111`) is the
+existing machinery. The pico channel token, the `web.*` families and every
+native-secret overlay slot are untouched. `writeSecurityConfig` already chowns and
+re-locks 0444.
 
-Then record the assignment (FR-17) with `source` reflecting whether the
-resolution came from an explicit per-user pin or a scope default.
+Then record the assignment (FR-17): primary, `chain`, and a `source` reflecting
+whether the resolution came from an explicit per-user pin or a scope default.
 
 **No resolvable model** — `provision` returns `ErrNoModelResolvable` before
 creating anything (FR-18). This is load-bearing: picoclaw fails at startup when
@@ -343,9 +363,9 @@ interpolated `className` strings, matching the codebase's convention.
 
 | Area | Coverage |
 |---|---|
-| Store invariants | I1–I6 each rejected in-transaction with nothing written |
-| Resolver | all five cascade levels; explicit beats inherited (AC-8); deprecation hop only for unmaterialized workspaces (AC-6); cycle and hop-limit errors |
-| Materialization | `config.json` entry has no `api_key` and `.security.yml` has the key (AC-2); pico token survives; fallback order matches `position` (AC-15) |
+| Store invariants | I1–I8 each rejected in-transaction with nothing written; a `fallbacks` referrer blocks delete/disable and detaching it unblocks (AC-15c) |
+| Resolver | all five cascade levels; explicit beats inherited (AC-8); deprecation hop only for unmaterialized workspaces (AC-6); cycle and hop-limit errors; a non-active fallback is skipped and logged (AC-15b) |
+| Materialization | `config.json` entry has no `api_key` and `.security.yml` has the key (AC-2); a stale sibling key is pruned and the pico token survives (AC-2, FR-17b); `model_fallbacks` matches the primary's declared `fallbacks` (AC-15) |
 | Provision refusal | no model resolvable ⇒ error, no container (AC-9) |
 | Migration | fixture data root with all five pre-migration sources ⇒ every workspace assigned and no active model changed (AC-11); second run is a no-op (AC-12) |
 | HTTP | each gate returns 403 for the wrong tier (AC-13); 409 shapes carry referrers / version conflict |
@@ -358,9 +378,10 @@ interpolated `className` strings, matching the codebase's convention.
   the final transaction, the schema marker written last, superseded files left
   intact (FR-24), the one destructive write (template normalization) backed up to
   `config.json.pre-registry`, and AC-11 asserting no active model changes.
-- **Key spread.** Every workspace's `.security.yml` holds every active model's
-  key (CTX-MR-09). Accepted; a per-model fallback list would narrow it later
-  without a storage change.
+- **Key spread is bounded but not zero.** A workspace's `.security.yml` holds the
+  keys of its primary plus that primary's declared fallbacks (CTX-MR-09). A long
+  `fallbacks` list on a widely-used model still spreads keys widely — the UI should
+  make the chain visible on the row so the consequence is legible.
 - **Hermes divergence.** Until CTX-MR-13 is resolved, "single source of truth"
   is true for picoclaw agents only. The inventory must not be presented in the UI
   as governing hermes agents.
@@ -370,7 +391,19 @@ interpolated `className` strings, matching the codebase's convention.
 
 ## 12. Open items for the user
 
-### BLOCKING — 1. Does chain membership count as a reference?
+### RESOLVED — chain membership is a declared reference
+
+The question below was raised as blocking and **settled by the user in favour of
+option (a)**: each model declares its own `fallbacks` list. `Assignment` gained a
+`Chain` field so the eager triggers and the drift check see the whole materialized
+set; `referrers` counts `fallbacks` membership; `position` survives as
+presentation only. §2, §3, §4 and §5 above reflect the resolution — the record
+below is kept because it is the reasoning that shaped the data model.
+
+<details>
+<summary>Original framing</summary>
+
+#### Does chain membership count as a reference?
 
 CTX-MR-09 makes the chain "every active model, in `position` order", so every
 active model is materialized into **every** workspace: a `config.json`
@@ -423,10 +456,9 @@ Recommendation: **(a)** if bounded blast radius matters more than the exact UI
 shape; **(c)** if the single reorderable list is non-negotiable. (b) is dominated
 by (c).
 
-This decision changes `Assignment`'s shape and the wording of FR-5, FR-6 and
-FR-19 — it must be settled before tasks are written.
+</details>
 
-### 2. Non-blocking
+### Non-blocking
 
 1. Confirm CTX-MR-12 (keep the native `model_list.*.api_keys` slot as a scope
    override) versus dropping it for strict single-sourcing.

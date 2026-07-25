@@ -111,16 +111,34 @@ read-only **suggestion catalog** (`provider` + `model` + `api_base`, never a
 key), served to the register form so the admin picks instead of free-typing.
 It is never copied into any workspace.
 
-## CTX-MR-09 — Fallback chain is the active models in explicit order
+## CTX-MR-09 — Each model declares its own fallback list
 
-Each model carries a `position`. The chain materialized into a workspace is the
-resolved primary followed by the remaining `active` models in `position` order,
-written as `agents.defaults.model_fallbacks`. One knob (order), not two.
+Each model carries `fallbacks []string`, an ordered list of other models' names.
+The chain materialized into a workspace is the resolved primary's own `fallbacks`,
+in declared order, written to `agents.defaults.model_fallbacks`. This is picoclaw's
+own field shape (`ModelConfig.Fallbacks`). Expansion is **one level only** — no
+transitive walk — matching picoclaw's flat `model_fallbacks`.
 
-**Trade-off accepted:** every workspace's `.security.yml` therefore holds the key
-of every active model. The alternative — a per-model explicit fallback list,
-limiting key spread to that model's chain — was considered and deferred; it can
-be added later without changing the storage shape.
+**Why not a single global ordered list** (the first shape considered, and closer
+to how the requirement was originally phrased): a global order makes the chain
+"every active model", so every active model is materialized into every workspace.
+That breaks referential integrity in a way that has no clean repair. A model that
+is `active` but primary nowhere would have zero referrers, so it could be deleted
+while every workspace still names it in `model_fallbacks` — and editing its key
+would propagate nowhere, leaving fallbacks on a revoked credential. Counting chain
+membership as a reference instead deadlocks: every active model is referenced by
+every workspace, so nothing could ever be deleted or disabled. And more broadly,
+any change to the active set or to any active model's credentials would become a
+fleet-wide change.
+
+A declared per-model list fixes all of it: chain membership is a countable
+reference, so delete and disable block naturally; the blast radius of a change is
+bounded to the models that declare it; and key spread is bounded to declared
+chains rather than reaching every workspace.
+
+**The reorderable listing survives as presentation.** Each model keeps a
+`position` that orders the active list in the UI. It has **no functional effect** —
+reordering never re-materializes anything and never restarts a workspace.
 
 ## CTX-MR-10 — No resolvable model refuses to provision
 

@@ -57,8 +57,11 @@ Four further defects in the same area, all verified:
 
 - **FR-1** A proxy-level model inventory persists model records keyed by a
   unique `model_name`, each holding: `provider`, `model`, `api_base`, `api_key`,
-  optional `auth_method` and `extra_body`, `status`, `replaced_by`, `position`,
-  `version`, `created_at`, `updated_at`.
+  optional `auth_method` and `extra_body`, `status`, `replaced_by`, `fallbacks`,
+  `position`, `version`, `created_at`, `updated_at`.
+- **FR-1b** `fallbacks` is an ordered list of other models' `model_name`s. A model
+  may not list itself, and every name listed must exist. `position` orders the
+  active list in the UI and has **no functional effect** (CTX-MR-09).
 - **FR-2** Create, read, update, delete and reorder the inventory. Reads never
   return `api_key` — only `has_key`.
 - **FR-3** `model_name` is unique across the inventory. A duplicate create is
@@ -68,8 +71,9 @@ Four further defects in the same area, all verified:
 - **FR-4** A model's `status` is `active`, `disabled` or `deprecated` per
   CTX-MR-03.
 - **FR-5** Deleting a model is rejected while it is referenced by any assignment,
-  any scope default, or another model's `replaced_by`. The rejection enumerates
-  the referrers.
+  any scope default, another model's `replaced_by`, or another model's
+  `fallbacks`. The rejection enumerates the referrers, so the admin knows exactly
+  what to detach first.
 - **FR-6** Transitioning a model to `disabled` carries the same precondition as
   FR-5.
 - **FR-7** Deprecating a model requires a `replaced_by` naming an existing
@@ -82,10 +86,12 @@ Four further defects in the same area, all verified:
 
 ### Assignment inventory
 
-- **FR-10** For every provisioned workspace the inventory records which model it
-  is using, as `{model_name, source, materialized_at}` where `source` is
-  `explicit` (an admin pinned it to this user) or `inherited` (it came from a
-  scope default).
+- **FR-10** For every provisioned workspace the inventory records what was
+  materialized, as `{model_name, chain, source, materialized_at}` where
+  `model_name` is the primary, `chain` the fallback names written alongside it,
+  and `source` is `explicit` (an admin pinned it to this user) or `inherited` (it
+  came from a scope default). `chain` is recorded so FR-19's eager triggers and
+  FR-25's drift check can see the whole materialized set, not just the primary.
 - **FR-11** Scope defaults are stored at `global`, `agent`, `tenant` and
   `subscription` level. `global` and `agent` are instance-wide and therefore
   require proxy-level admin privileges; `tenant` and `subscription` use the
@@ -102,10 +108,12 @@ Four further defects in the same area, all verified:
 
 ### Materialization
 
-- **FR-15** Provisioning materializes the resolved primary plus fallback chain
-  into the workspace: full `model_list` entries in `config.json` (each
-  `"enabled": true`), `agents.defaults.provider`/`model_name` set to the primary,
-  and `agents.defaults.model_fallbacks` to the chain names in order.
+- **FR-15** Provisioning materializes the resolved primary plus its declared
+  fallback chain into the workspace: full `model_list` entries in `config.json`
+  (each `"enabled": true`), `agents.defaults.provider`/`model_name` set to the
+  primary, and `agents.defaults.model_fallbacks` to the chain names in order. The
+  chain is the primary's own `fallbacks`, expanded **one level only**, with any
+  entry that is not `active` skipped and logged.
 - **FR-16** Materialized `config.json` `model_list` entries carry **no
   `api_key`**. Each model's key is written to `.security.yml` at
   `model_list.<model_name>.api_keys` as a single-element array, read-modify-write
@@ -125,10 +133,12 @@ Four further defects in the same area, all verified:
     resolves through it (i.e. without a more specific override) — **eager**;
   - changing a **per-user assignment** re-materializes that workspace — **eager**;
   - editing a **model's definition or key** re-materializes every established
-    workspace currently using it — **eager**;
-  - **reordering** the active set changes every workspace's fallback chain, so it
-    is applied **lazily** on each workspace's next materialization, with an
-    explicit "apply now" action available; a drag must not restart the fleet;
+    workspace whose materialized set contains it — that is, where it is the
+    primary **or** appears in the primary's declared chain — **eager**;
+  - editing a model's **`fallbacks`** re-materializes every established workspace
+    whose primary is that model — **eager**;
+  - **reordering** the active list is presentation only (FR-1b) and triggers
+    **nothing**;
   - **deprecating** a model triggers nothing immediately — existing users keeping
     the model is the point (FR-13).
 
@@ -159,8 +169,9 @@ Four further defects in the same area, all verified:
   `.crab-model.json`) are left on disk but no longer read; the proxy logs that
   they are being ignored.
 - **FR-25** Every subsequent boot runs a drift check comparing each workspace's
-  active `config.json` model against its recorded assignment, logging mismatches
-  without auto-correcting.
+  `config.json` — its active model **and** its `model_fallbacks` — against the
+  recorded assignment's primary and `chain`, logging mismatches without
+  auto-correcting.
 
 ### Admin surface
 
@@ -169,11 +180,14 @@ Four further defects in the same area, all verified:
   instance-wide blast radius), as do the `global` and `agent` scope defaults.
   `tenant` and `subscription` defaults reuse the shared-scope tier check;
   per-user assignment reuses the user-management check.
-- **FR-27** The admin UI lists the inventory as two groups — active (ordered,
-  reorderable; the order **is** the fallback chain) and inactive (`disabled` or
+- **FR-27** The admin UI lists the inventory as two groups — active (ordered by
+  `position`, reorderable as presentation) and inactive (`disabled` or
   `deprecated`, badged with the reason and, for deprecated, the replacement) —
-  each row showing provider, api_base, whether a key is stored, and its usage
-  count.
+  each row showing provider, api_base, whether a key is stored, its usage count,
+  and its declared fallback chain.
+- **FR-27b** A model's `fallbacks` list is editable as an ordered selection of
+  other `active` models, and the UI states plainly that this list — not the
+  listing order — is what becomes `agents.defaults.model_fallbacks`.
 - **FR-28** The register/edit form is driven by the suggestion catalog: picking a
   known model prefills `provider`, `model` and `api_base`, with a manual option
   for anything else, plus `model_name` and `api_key`.
@@ -222,8 +236,9 @@ Four further defects in the same area, all verified:
 - **Hermes agents.** They keep reading `config.yaml`'s `agent.Model` (CTX-MR-13);
   their key reaches the container as an environment variable, a different
   mechanism entirely. Folding them in is a follow-on.
-- **Per-model explicit fallback lists.** The chain is the ordered active set
-  (CTX-MR-09); a narrower per-model list is deferred.
+- **Transitive fallback expansion.** A primary's `fallbacks` is expanded one level
+  only (FR-15), matching picoclaw's flat `model_fallbacks`. Walking a fallback's
+  own fallbacks is not done.
 - **End-user model switching** per conversation.
 - **Deleting the superseded on-disk files** (FR-24 leaves them).
 
@@ -268,9 +283,16 @@ Four further defects in the same area, all verified:
   mutation THEN the system SHALL respond 403 and write nothing.
 - **AC-14** WHEN an admin duplicates a model in the UI THEN the form SHALL be
   prefilled with every field except `model_name` and `api_key`, both blank.
-- **AC-15** WHEN an admin reorders the active list THEN the new order SHALL
-  become the `agents.defaults.model_fallbacks` sequence materialized on the next
-  re-materialization.
+- **AC-15** WHEN a model's `fallbacks` list is `[B, C]` AND a workspace resolves
+  to that model THEN that workspace's `agents.defaults.model_fallbacks` SHALL be
+  `[B, C]` in that order, AND its `config.json` `model_list` SHALL contain exactly
+  the primary plus `B` and `C`, AND its `.security.yml` SHALL hold exactly those
+  three keys.
+- **AC-15b** WHEN a model listed in a primary's `fallbacks` is not `active` THEN
+  it SHALL be skipped in the materialized chain and the skip logged.
+- **AC-15c** WHEN an admin deletes or disables a model that appears in another
+  model's `fallbacks` THEN the system SHALL respond 409 naming that model, AND
+  after the admin removes it from that list the same operation SHALL succeed.
 - **AC-16** WHEN a native secret names `model_list.<model>.api_keys` for a model
   absent from the inventory THEN validation SHALL reject it.
 - **AC-17** WHEN the migration completes THEN every per-instance disk template's
@@ -279,10 +301,11 @@ Four further defects in the same area, all verified:
   model only declared in that template SHALL still resolve to it (via its own
   imported record).
 - **AC-18** WHEN an admin edits a model's `api_base` or `api_key` THEN every
-  established workspace currently using that model SHALL be re-materialized and
-  the running ones restarted, AND workspaces not using it SHALL be untouched.
+  established workspace whose materialized set contains that model — as primary or
+  as a chain member — SHALL be re-materialized and the running ones restarted, AND
+  workspaces without it SHALL be untouched.
 - **AC-19** WHEN an admin reorders the active list THEN no workspace SHALL be
-  restarted by the reorder itself.
+  re-materialized or restarted, and no materialized file SHALL change.
 
 ## Traceability
 
