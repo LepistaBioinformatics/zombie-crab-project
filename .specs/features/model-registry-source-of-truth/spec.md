@@ -340,6 +340,30 @@ Four further defects in the same area, all verified:
   THEN every existing workspace SHALL end with a recorded assignment naming the
   model its `config.json` currently uses, AND no workspace's active model SHALL
   change as a result of the migration alone.
+
+  **Documented exception.** Two workspaces may disagree about the `model` id behind
+  one `model_name` — reachable on a legacy instance, because `provision` never
+  re-seeds a returning user and the old registry UI wrote per-user `model_list`
+  entries from a free-text field. One inventory record cannot serve both, since
+  `model_name` is unique (FR-3) and doubles as the `.security.yml` credential-slot
+  key. The migration therefore corrects a `model` id only while it still carries the
+  `config.yaml`-seed placeholder (`model == model_name`), which makes the outcome
+  deterministic instead of decided by directory-walk order, protects an
+  already-correct id from being overwritten, and **logs the declined id for admin
+  review**. The workspace whose id was declined is still re-materialized onto the
+  record's id at its next start, until an admin resolves the conflict.
+
+  A related consequence of the same first-writer-wins rule: the
+  `registered-models/*.json` import runs before workspaces are read, so a stale
+  legacy registry entry can consume the placeholder before a live workspace's own
+  correct id is ever seen. Also logged, also admin-actionable.
+
+  **Deferred, not impossible.** The divergent workspace could be imported under a
+  distinct derived `model_name`, flagged for review, so both keep their id — that
+  satisfies FR-3 rather than dropping it. It is deferred because a synthetic name
+  would force that workspace's assignment to `explicit` (FR-22's reproducibility
+  rule), pulling it out of AC-7's scope sweeps, and would rename its credential slot
+  along with it.
 - **AC-12** WHEN the proxy boots a second time THEN the migration SHALL be a
   no-op.
 - **AC-13** WHEN a caller without proxy-admin privileges calls any inventory
