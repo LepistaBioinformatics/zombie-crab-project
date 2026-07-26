@@ -197,6 +197,13 @@ Four further defects in the same area, all verified:
 - **FR-27b** A model's `fallbacks` list is editable as an ordered selection of
   other `active` models, and the UI states plainly that this list — not the
   listing order — is what becomes `agents.defaults.model_fallbacks`.
+- **FR-27c** The deprecation-replacement picker offers only `active` models, even
+  though the API accepts any non-`disabled` one (FR-7). The API stays permissive
+  because the boot migration must import pre-existing chains; the UI narrows
+  because an admin can always point at the current active successor directly and
+  reach the same resolution, while chaining through a deprecated model consumes the
+  resolver's bounded hop budget for no gain. API-permits and UI-offers are
+  deliberately different sets.
 - **FR-28** The register/edit form is driven by the suggestion catalog: picking a
   known model prefills `provider`, `model` and `api_base`, with a manual option
   for anything else, plus `model_name` and `api_key`.
