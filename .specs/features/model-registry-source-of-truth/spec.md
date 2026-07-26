@@ -169,8 +169,23 @@ Four further defects in the same area, all verified:
   assignments). The per-instance disk template is **not** an import source — it
   is normalized per FR-20.
 - **FR-22** The import then records, for every existing workspace, the model its
-  `config.json` currently names — as an `inherited` assignment when no explicit
-  override was imported for it.
+  `config.json` currently names. The assignment's `source` is decided by
+  **reproducibility**, not by the presence of a legacy override file: if the
+  already-imported cascade would resolve that same model for that workspace, it is
+  `inherited`; otherwise it is `explicit`.
+
+  The override-file test this requirement originally specified is wrong for the
+  population it governs. The deleted `ApplyRegisteredModelToUser` never wrote
+  `UserModelOverrideFile`, so "no override file" is not evidence of inheritance —
+  and because the resolver honours only `explicit`, recording those workspaces as
+  `inherited` means the next start substitutes a scope default or refuses with
+  `ErrNoModelResolvable`. That is precisely the silent, unrecoverable overwrite this
+  feature exists to remove, performed by the migration itself.
+
+  **Trade accepted:** a migrated workspace whose model no scope reproduces becomes
+  immune to AC-7 scope sweeps until an admin unpins it. That is the cheaper failure,
+  and it is discoverable and reversible because FR-27's per-user indicator shows
+  `pinned` versus `inherited` and Unpin re-materializes back to an inherited record.
 - **FR-23** A workspace whose current model matches nothing imported is imported
   as a model record from that workspace's own `model_list` entry and
   `.security.yml` key, flagged and logged for admin review.
@@ -220,6 +235,11 @@ Four further defects in the same area, all verified:
 - **FR-32** `validateNativeSlot`'s `model_list.<model>.api_keys` family validates
   the model against the inventory instead of a template `.security.yml`. Its
   overlay precedence over the inventory key is documented (CTX-MR-12).
+- **FR-32c** A native `model_list.<model>.api_keys` overlay cannot apply to a model
+  the inventory holds **without** a key (an OAuth model): materialization writes no
+  `.security.yml` entry for a keyless model and prunes any leftover, while
+  `setNativeSlot` requires the entry to pre-exist. The scope override silently
+  no-ops for those models. Known limitation, not a defect in the overlay.
 - **FR-32b** Applying the overlay **skips, logs and continues** past a
   `model_list.<model>.api_keys` slot whose model is not in *that* workspace's
   materialized set, rather than aborting the merge.
