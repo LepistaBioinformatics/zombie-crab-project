@@ -213,6 +213,22 @@ Four further defects in the same area, all verified:
 - **FR-32** `validateNativeSlot`'s `model_list.<model>.api_keys` family validates
   the model against the inventory instead of a template `.security.yml`. Its
   overlay precedence over the inventory key is documented (CTX-MR-12).
+- **FR-32b** Applying the overlay **skips, logs and continues** past a
+  `model_list.<model>.api_keys` slot whose model is not in *that* workspace's
+  materialized set, rather than aborting the merge.
+
+  This is load-bearing, and the reason is that validation and application see
+  different sets by design. A slot is validated against the whole inventory,
+  because a scope-level secret is written before anyone knows which workspaces
+  will resolve to that model — and new ones appear later. But a workspace's
+  `.security.yml` `model_list` holds only its own resolved primary plus chain, so
+  a legitimate scope secret is simply *not applicable* to workspaces that use a
+  different model. Treating that as an error aborts the whole overlay: one such
+  slot would stop every other slot in it from being applied — including working
+  `web.*` entries — on every ensure, permanently, until someone deleted the
+  offending secret by hand. Skipping is the correct behaviour for a scope overlay;
+  the log line is what keeps it from being silent, since the admin did set a
+  credential that did nothing here.
 
 ### Gateway routing
 
