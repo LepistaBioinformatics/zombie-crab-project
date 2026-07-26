@@ -1,6 +1,6 @@
 # State
 
-**Last Updated:** 2026-07-25T00:00:00-03:00
+**Last Updated:** 2026-07-26T00:00:00-03:00
 **Current Work:** four features implemented across both submodules (see AD-012):
 `per-agent-injection-scope` + `native-secrets-admin-only` (proxy + webapp),
 `start-at-signin-env` and `pwa-installability` (webapp). Proxy `go build`/`go vet` clean, new
@@ -21,6 +21,59 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-013: one proxy-level model inventory is the single source of truth (2026-07-26)
+
+**Decision (user-directed).** Model selection had **two** systems writing
+`agents.defaults.provider/model_name` into the same workspace `config.json`, neither aware
+of the other: `admin-model-override`'s `config.yaml` cascade (`resolveModel`) and the
+on-disk `registered-models` store. Any `ReapplyModelScope` silently overwrote a per-user
+assignment — unrecoverably, since the assignment was never persisted anywhere but the file
+it clobbered. Both are deleted. `internal/registry` (bbolt at
+`<containerDataRoot>/model-registry.db`) is now the only answer, via one `Resolve`.
+
+1. **Cascade:** per-user pin > subscription > tenant > agent > global. No resolvable model
+   **refuses to provision** — picoclaw fails at startup when `agents.defaults.model_name`
+   names a model absent from `model_list`, so a silent default would produce a permanently
+   unbootable container.
+2. **Referential integrity:** delete and `→ disabled` are both blocked while a model is
+   referenced by any assignment (as primary **or** chain member), scope default,
+   `replaced_by`, or another model's `fallbacks` — the rejection names the referrers.
+   `deprecated` is the only way to retire something in use: it requires a replacement that
+   is not `disabled`, and new users get the successor while existing users keep the old
+   model. That falls out of one condition in `Resolve` — the hop fires only when the
+   workspace has no materialized assignment — rather than a separate code path.
+3. **Fallback chains are declared per model** (`Model.Fallbacks`), not derived from a global
+   order. A global ordered list would have made chain membership uncountable: a model active
+   but primary nowhere would have zero referrers and be deletable while every workspace still
+   named it in `model_fallbacks`, and counting chain membership instead deadlocks. `position`
+   survives as UI ordering with **no** functional effect.
+4. **Keys live only in `.security.yml`** at `model_list.<name>.api_keys`. picoclaw ignores
+   `config.json`'s `api_key` in schema V2+ and the template is `"version": 3`; containers get
+   no key env var, so `.security.yml` is the only sink that works. Materialization also
+   **prunes** it — `config.json`'s `model_list` is replaced wholesale while `.security.yml` is
+   read-modify-write, so without pruning every model a workspace ever used keeps its key
+   forever. `PublicModel` has no key field at all, so leaking one requires adding a field.
+5. **`config.yaml`'s `agent.Model` is now a migration seed with no runtime effect.** Editing
+   it after the migration does nothing. **Hermes still reads it** — its key is injected as a
+   container env var under `keyEnvName`, a different mechanism — so "single source of truth"
+   holds for picoclaw agents only until that is folded in.
+6. **Boot migration** imports `config.yaml`, `registered-models/*.json` and the old override
+   files, then reads **every existing workspace's own `config.json`** to record what it is
+   running. Without that step every existing user reads as unassigned and the first
+   scope-default change re-resolves them all. It only READS workspaces; the one destructive
+   write is normalizing each disk template's `model_list` to `[]`, backed up first to
+   `config.json.pre-registry`. The schema marker is written last, so any failure leaves the
+   pass re-runnable.
+7. **No gateway change was needed** (FR-33 amended): the per-mode deploy configs already
+   collapsed the admin allowlist into one `/v1/admin/*` wildcard per service with all four
+   methods. The gateway reload remains a deploy step only because a running gateway holds its
+   config in memory.
+
+**Deploy order:** reload the gateway; restart the proxy once so `Reconcile` runs the
+migration, watching for `migrate models:` and `model drift:` lines; verify no workspace's
+active model changed and that `config.json.pre-registry` exists; then register at least one
+model and set a scope default before any new user signs up.
 
 ### AD-012: shared injection is per-agent; native secrets are admin-only (2026-07-25)
 
