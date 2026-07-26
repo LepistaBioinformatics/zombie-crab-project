@@ -216,14 +216,24 @@ Four further defects in the same area, all verified:
 
 ### Gateway routing
 
-- **FR-33** The mycelium gateway path allowlist
-  (`fungi/mycelium/config.base.toml` and `config.standalone.toml` in the parent
-  repo) registers every new admin route for each picoclaw service, and drops the
-  superseded `/v1/admin/registered-models`, `/v1/admin/registered-models/apply`,
-  `/v1/admin/model` and `/v1/admin/model/users` entries. Without this the gateway
-  answers "Request path does not match any service" and the feature is
-  unreachable, so this is deploy-blocking and requires a gateway reload
-  (precedent: parent commit `c89570c`).
+- **FR-33** Every new admin route must be reachable through the mycelium gateway.
+  **Already satisfied — verified during execution, no change required.** The
+  per-mode deploy configs (`deploy/standalone/config.standalone.toml`,
+  `deploy/prod/config.base.toml`, `deploy/dokploy/config.base.toml`) collapsed the
+  per-route admin allowlist into a single wildcard per service —
+  `path = "/v1/admin/*"` with `methods = ["GET", "POST", "PUT", "DELETE"]` — whose
+  own comment states that the proxy enforces the exact path and method per route.
+  Every route this feature adds is therefore already routed, and there are no
+  superseded per-route entries left to drop.
+
+  This supersedes the original requirement, which was written against the
+  pre-consolidation layout (`fungi/mycelium/config.{base,standalone}.toml`, one
+  block per route, precedent `c89570c`). Those paths no longer exist: parent commit
+  `91c506d` moved the files under `deploy/` and the wildcard replaced the
+  enumeration. Adding per-route blocks beside the wildcard would be redundant.
+
+  **The gateway reload is still a deploy step** — not for new paths, but because a
+  running gateway holds its config in memory.
 
 ## Non-functional
 
@@ -323,7 +333,7 @@ Four further defects in the same area, all verified:
 |---|---|
 | `crab-shell-proxy` | `.specs/features/model-registry-source-of-truth/` — storage, resolver, materialization, migration, HTTP |
 | `crab-exoskeleton-webapp` | `.specs/features/model-registry-source-of-truth/` — BFF routes, admin panel |
-| parent (this repo) | `fungi/mycelium/config.{base,standalone}.toml` — gateway path allowlist (FR-33), plus submodule pointer bumps |
+| parent (this repo) | no gateway change needed (FR-33 already satisfied by the `/v1/admin/*` wildcard in `deploy/*/config*.toml`); submodule pointer bumps and `.specs/` only |
 
 ## Status
 
