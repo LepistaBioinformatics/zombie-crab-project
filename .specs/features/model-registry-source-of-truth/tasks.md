@@ -7745,6 +7745,10 @@ export default function ModelRegistryPanel({
       auth_method: m.auth_method ?? "",
       api_key: "",
       fallbacks: [...m.fallbacks],
+      // Carried opaquely. PUT is a full replace for every readable field, so a
+      // draft that dropped extra_body would silently clear it on an unrelated
+      // edit — the MiniMax catalog entry's reasoning_split is a real instance.
+      extra_body: m.extra_body,
     });
     setEditing({ name: m.model_name, version: m.version });
     setShowForm(true);
@@ -8491,6 +8495,7 @@ and render the chain editor plus the defaults panel just before the closing `</d
                 auth_method: chainFor.auth_method ?? "",
                 api_key: "",
                 fallbacks: chain,
+                extra_body: chainFor.extra_body,
               });
               setChainFor(null);
               await refresh();
