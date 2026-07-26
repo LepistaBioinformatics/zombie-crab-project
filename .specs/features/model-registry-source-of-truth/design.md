@@ -70,7 +70,7 @@ type Model struct {
     Provider   string          `json:"provider"`
     Model      string          `json:"model"`
     APIBase    string          `json:"api_base"`
-    APIKey     string          `json:"-"`            // persisted; never marshalled to a client
+    APIKey     string          `json:"api_key,omitempty"` // persisted; PublicModel has no key field
     AuthMethod string          `json:"auth_method,omitempty"`
     ExtraBody  json.RawMessage `json:"extra_body,omitempty"`
 
