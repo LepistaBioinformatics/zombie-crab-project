@@ -315,6 +315,7 @@ correction is an explicit admin reapply, never a boot-time surprise.
 | `POST` | `/v1/admin/models` | `HasAdminPrivileges` |
 | `PUT` | `/v1/admin/models/{name}` | `HasAdminPrivileges` |
 | `DELETE` | `/v1/admin/models/{name}` | `HasAdminPrivileges` |
+| `PUT` | `/v1/admin/models/{name}/status` | `HasAdminPrivileges` |
 | `POST` | `/v1/admin/models/{name}/deprecate` | `HasAdminPrivileges` |
 | `PUT` | `/v1/admin/models/order` | `HasAdminPrivileges` |
 | `GET` | `/v1/admin/models/{name}/usage` | `HasAdminPrivileges` |
