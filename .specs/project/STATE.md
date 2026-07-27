@@ -1,7 +1,17 @@
 # State
 
-**Last Updated:** 2026-07-20T00:00:00-03:00
-**Current Work:** chat-webapp UI refactor (`chat-ui-material-refactor`) -- MUI+Emotion fully ripped
+**Last Updated:** 2026-07-26T00:00:00-03:00
+**Current Work:** four features implemented across both submodules (see AD-012):
+`per-agent-injection-scope` + `native-secrets-admin-only` (proxy + webapp),
+`start-at-signin-env` and `pwa-installability` (webapp). Proxy `go build`/`go vet` clean, new
+cascade/bind/native tests pass; webapp `next build` + `tsc` clean, 55 vitest tests pass.
+**Two operator steps are outstanding and MUST happen at deploy:** (1) remove the managed
+containers once so the four shared-files binds apply (`docker rm -f $(docker ps -aq -f
+label=crab.managed=true)` — workspaces live on the host volume, nothing is lost); (2) run Chrome
+DevTools → Application → Manifest / Lighthouse installability against the HTTPS deployment and
+record the output in `crab-exoskeleton-webapp/.specs/features/pwa-installability/spec.md`.
+
+**Previous work:** chat-webapp UI refactor (`chat-ui-material-refactor`) -- MUI+Emotion fully ripped
 out, replaced with Tailwind v4 + class-variance-authority; two-rail shell (nav drawer + conditional
 history drawer + chat view) on a single `/chat` route; workspaces deduped/grouped by tenant→account→
 agent. `next build` passes; signin + shell + dark-mode tokens verified at runtime. Full chat E2E
@@ -11,6 +21,113 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-013: one proxy-level model inventory is the single source of truth (2026-07-26)
+
+**Decision (user-directed).** Model selection had **two** systems writing
+`agents.defaults.provider/model_name` into the same workspace `config.json`, neither aware
+of the other: `admin-model-override`'s `config.yaml` cascade (`resolveModel`) and the
+on-disk `registered-models` store. Any `ReapplyModelScope` silently overwrote a per-user
+assignment — unrecoverably, since the assignment was never persisted anywhere but the file
+it clobbered. Both are deleted. `internal/registry` (bbolt at
+`<containerDataRoot>/model-registry.db`) is now the only answer, via one `Resolve`.
+
+1. **Cascade:** per-user pin > subscription > tenant > agent > global. No resolvable model
+   **refuses to provision** — picoclaw fails at startup when `agents.defaults.model_name`
+   names a model absent from `model_list`, so a silent default would produce a permanently
+   unbootable container.
+2. **Referential integrity:** delete and `→ disabled` are both blocked while a model is
+   referenced by any assignment (as primary **or** chain member), scope default,
+   `replaced_by`, or another model's `fallbacks` — the rejection names the referrers.
+   `deprecated` is the only way to retire something in use: it requires a replacement that
+   is not `disabled`, and new users get the successor while existing users keep the old
+   model. That falls out of one condition in `Resolve` — the hop fires only when the
+   workspace has no materialized assignment — rather than a separate code path.
+3. **Fallback chains are declared per model** (`Model.Fallbacks`), not derived from a global
+   order. A global ordered list would have made chain membership uncountable: a model active
+   but primary nowhere would have zero referrers and be deletable while every workspace still
+   named it in `model_fallbacks`, and counting chain membership instead deadlocks. `position`
+   survives as UI ordering with **no** functional effect.
+4. **Keys live only in `.security.yml`** at `model_list.<name>.api_keys`. picoclaw ignores
+   `config.json`'s `api_key` in schema V2+ and the template is `"version": 3`; containers get
+   no key env var, so `.security.yml` is the only sink that works. Materialization also
+   **prunes** it — `config.json`'s `model_list` is replaced wholesale while `.security.yml` is
+   read-modify-write, so without pruning every model a workspace ever used keeps its key
+   forever. `PublicModel` has no key field at all, so leaking one requires adding a field.
+5. **`config.yaml`'s `agent.Model` is now a migration seed with no runtime effect.** Editing
+   it after the migration does nothing. **Hermes still reads it** — its key is injected as a
+   container env var under `keyEnvName`, a different mechanism — so "single source of truth"
+   holds for picoclaw agents only until that is folded in.
+6. **Boot migration** imports `config.yaml`, `registered-models/*.json` and the old override
+   files, then reads **every existing workspace's own `config.json`** to record what it is
+   running. Without that step every existing user reads as unassigned and the first
+   scope-default change re-resolves them all. It only READS workspaces; the one destructive
+   write is normalizing each disk template's `model_list` to `[]`, backed up first to
+   `config.json.pre-registry`. The schema marker is written last, so any failure leaves the
+   pass re-runnable.
+7. **No gateway change was needed** (FR-33 amended): the per-mode deploy configs already
+   collapsed the admin allowlist into one `/v1/admin/*` wildcard per service with all four
+   methods. The gateway reload remains a deploy step only because a running gateway holds its
+   config in memory.
+
+**Deploy order:** reload the gateway; restart the proxy once so `Reconcile` runs the
+migration, watching for `migrate models:` and `model drift:` lines; verify no workspace's
+active model changed and that `config.json.pre-registry` exists; then register at least one
+model and set a scope default before any new user signs up.
+
+### AD-012: shared injection is per-agent; native secrets are admin-only (2026-07-25)
+
+**Decision (user-directed, four features).**
+
+1. **`per-agent-injection-scope`** — shared **files/secrets/skills** gain an agent dimension.
+The pre-existing agent-less paths (`tenants/<t>/shared/{files,secrets,skills}` and the
+subscription twins) are **redefined as "all agents"** and per-agent content lives one level
+deeper at `shared/agents/<agent>/…`, so **nothing already published migrates**. Cascade, lowest
+precedence first: tenant/all → tenant/agent → subscription/all → subscription/agent → user.
+The agent travels as an explicit `agent` request parameter (`all` = default), **not** by routing
+through `/<agent>/v1/admin` like the model registry does — routing cannot express "all agents".
+`EffectiveSkillsDir` gained an agent segment; shared **files** are four sibling RO binds
+(`.shared/{tenant,subscription,tenant-agent,subscription-agent}`) rather than a copy-merge,
+which would duplicate arbitrarily large uploads per provision. New `GET /v1/admin/agents`
+replaces the webapp's hardcoded `INSTANCES` (resolves `model-list-management` OPEN-3).
+
+2. **`native-secrets-admin-only`** — the `native` format (picoclaw `.security.yml` slots:
+`web.<provider>`, `model_list.<model>.api_keys`) **moves** to the admin surface. This is the
+second attempt: the webapp-only `native-secrets-scope-gate` was reverted because native never
+cascaded, so gating it stranded users on invalid model keys. What changed: the gate is now in
+the **proxy** (not only the BFF), and the admin path exists — scope-level native writes cascade
+into each workspace's `.security.yml`, applied at **provision**, so even a user who has never
+chatted gets the admin's key. **Native precedence is inverted** vs dotenv/json: admin beats the
+user's legacy entry. **Writes only** are gated — list and **delete** stay open, else a user
+could never remove their own pre-gate data (no admin purge endpoint exists; that is a recorded
+follow-up). `model_list.*` slots require a single-agent target (nothing to validate against for
+"all agents"); `web.*` works at any target. Deleting a shared native secret unsets **and
+re-applies** per workspace, covering stopped ones that `RestartScope` never visits.
+
+3. **`start-at-signin-env`** — `START_AT_SIGNIN` (server-side, request-time) redirects `/` to
+`/signin`, making the landing page — and the Lepista brand bar it embeds — unreachable for a
+white-labelled deployment. Also fixed the `layout.tsx` description literal, which named this
+project in the `<meta>` of every rebranded deploy.
+
+4. **`pwa-installability`** — the manifest declared `192x192`/`512x512` on
+`/api/branding/logo/light`, a **1408×768 wordmark JPEG** reached through a **302**, with no
+`type` and `purpose: "any maskable"` on non-square art; and it **500'd on a DB blip**
+(`getAppName()` had no try/catch, unlike `layout.tsx`). Fixed by construction: real square PNGs
+at true sizes, split `any`/`maskable`, `type` declared, `id` + `description`, 200-with-bytes on
+every icon URL, DB-failure fallbacks, square `apple-touch-icon`. Branding gains a **third**
+image — a square app icon (PNG/WebP only), separate from the wordmark logos; squareness is not
+enforced server-side because `white-label-pwa` deliberately took no image-processing dependency.
+An in-app **Install app** button was added (`beforeinstallprompt` + iOS Share instructions):
+users were not finding the browser menu path, and it doubles as a live installability signal.
+
+**Verification and its limits.** Proxy: `go build`/`go vet` clean; new tests cover the per-agent
+cascade, agent separation, the bind set (extracted as a pure function because the container test
+that would cover it is in the **pre-existing** root-only chown-failing group — verified unchanged
+by stash-compare), native admin-wins precedence, native target rules, and the 403. Webapp: `next
+build` + `tsc` clean, 55 vitest tests. PWA validated by a 27-assertion scripted check against
+`next start` **with Postgres unreachable**, so the DB fallbacks were exercised rather than
+bypassed. **Not verified:** live BFF→proxy round trips, the real browser install, and the
+container-recreate deploy step.
 
 ### AD-011: picoclaw has NO file-based agent/subagent injection — agents are config-registered (2026-07-20)
 

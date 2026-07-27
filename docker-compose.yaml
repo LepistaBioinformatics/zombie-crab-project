@@ -220,6 +220,11 @@ services:
     environment:
       MYCELIUM_INTERNAL_URL: http://mycelium-gateway:8080
       DATABASE_URL: postgresql://${CHAT_WEBAPP_DB_USER:-chatwebapp}:${CHAT_WEBAPP_DB_PASSWORD:-chatwebapp}@chat-webapp-postgres:5432/${CHAT_WEBAPP_DB_NAME:-chatwebapp}
+      # Set to 1/true to skip the pre-auth landing page: `/` becomes the sign-in
+      # screen and the landing (with its Lepista brand bar) is unreachable. For
+      # deployments running this stack under their own brand -- pairs with the
+      # in-app branding settings (app name + logos).
+      START_AT_SIGNIN: ${START_AT_SIGNIN:-}
     ports:
       - "${CHAT_WEBAPP_PORT:-3000}:3000"
     depends_on:
