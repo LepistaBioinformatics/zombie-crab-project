@@ -224,6 +224,23 @@ acceptInsecureRouting = true
 methods = ["GET", "PUT"]
 
 [[alpha.path]]
+# Self-service restart (restart-control): GET reports whether this member's
+# instance still needs a bounce (and when an admin scheduled one); POST performs
+# it for the caller's OWN container only.
+#
+# ONE block covering both methods, gated on the role NAME (read), even though
+# POST must require write. The gateway matches routes by path alone and errors
+# with "Multiple routes found for the specified path" when two blocks share one
+# path -- so GET and POST cannot be gated differently here. The write requirement
+# for POST is enforced in-proxy instead, by the same profile chain /v1/secrets
+# uses; a read-only member reaching POST gets a 403 from the proxy.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/restart"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST"]
+
+[[alpha.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
 # proxy enforces the exact path+method per route. Collapsed to one
 # wildcard (mycelium matches via the wildmatch crate).
@@ -303,6 +320,23 @@ path = "/v1/memory"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "PUT"]
+
+[[beta.path]]
+# Self-service restart (restart-control): GET reports whether this member's
+# instance still needs a bounce (and when an admin scheduled one); POST performs
+# it for the caller's OWN container only.
+#
+# ONE block covering both methods, gated on the role NAME (read), even though
+# POST must require write. The gateway matches routes by path alone and errors
+# with "Multiple routes found for the specified path" when two blocks share one
+# path -- so GET and POST cannot be gated differently here. The write requirement
+# for POST is enforced in-proxy instead, by the same profile chain /v1/secrets
+# uses; a read-only member reaching POST gets a 403 from the proxy.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/restart"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST"]
 
 [[beta.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
@@ -394,6 +428,23 @@ path = "/v1/memory"
 secretName = "hermes-glm-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "PUT"]
+
+[[hermes-glm.path]]
+# Self-service restart (restart-control): GET reports whether this member's
+# instance still needs a bounce (and when an admin scheduled one); POST performs
+# it for the caller's OWN container only.
+#
+# ONE block covering both methods, gated on the role NAME (read), even though
+# POST must require write. The gateway matches routes by path alone and errors
+# with "Multiple routes found for the specified path" when two blocks share one
+# path -- so GET and POST cannot be gated differently here. The write requirement
+# for POST is enforced in-proxy instead, by the same profile chain /v1/secrets
+# uses; a read-only member reaching POST gets a 403 from the proxy.
+group = { protectedByRoles = [{ name = "hermes-glm" }] }
+path = "/v1/restart"
+secretName = "hermes-glm-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST"]
 
 [[hermes-glm.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
