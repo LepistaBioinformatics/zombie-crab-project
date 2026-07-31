@@ -3,3 +3,6 @@ data/
 
 # Real deploy env files with secrets (deploy/<mode>/.env) — never commit
 deploy/**/.env
+
+# Git worktrees created by tooling under .claude/ — never part of the tree
+.claude/worktrees/
