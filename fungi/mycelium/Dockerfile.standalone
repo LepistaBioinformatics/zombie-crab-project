@@ -10,20 +10,27 @@
 # pinned commit -- so the whole image is reproducible from the git ref alone.
 #
 # Pin with --build-arg MYCELIUM_GIT_REF=<commit-sha> to move to a newer
-# revision; the default below is the commit tagged 9.0.0-rc.12 (resolved via
-# `git rev-parse 9.0.0-rc.12^{commit}`). It carries the staff-bootstrap web
+# revision; the default below is the commit tagged 9.0.0-rc.13 (resolved via
+# `git rev-parse 9.0.0-rc.13^{commit}`). It carries the staff-bootstrap web
 # onboarding flow (commit 8d8933b3, released in rc.4) this stack's
 # config.standalone.toml opts into via `staffBootstrapSecret`, and the
 # human-friendly stub email render + wired file email transport (#169, rc.7) --
 # the latter directly relevant here, since standalone mode uses the stub/file
 # email transport.
 #
-# What rc.8 through rc.12 changed is NOT recorded here, because nobody checked.
+# What rc.8 through rc.13 changed is NOT recorded here, because nobody checked.
 # Read upstream's release notes before assuming this bump was inert.
+#
+# THIS DEFAULT IS NOT WHAT GETS BUILT ON ITS OWN. docker-compose.yaml passes
+# MYCELIUM_GIT_REF as a build arg, which overrides the ARG below -- so a bump
+# here has to be mirrored in docker-compose.yaml and deploy/standalone/.env.example
+# (and in the operator's own .env, which overrides both). The published-image
+# modes pin the SAME release by tag instead: MYCELIUM_IMAGE_TAG=9.0.0-rc.13 in
+# deploy/prod/ and deploy/dokploy/. All five move together.
 # ==============================================================================
 
 ARG MYCELIUM_GIT_URL=https://github.com/LepistaBioinformatics/mycelium.git
-ARG MYCELIUM_GIT_REF=92ff0230740b497ff5790da7ea87bbdd7660b4c2
+ARG MYCELIUM_GIT_REF=9298ecb44a69ced91cb2d7d3356a716aedca858b
 
 # ? ----------------------------------------------------------------------------
 # ? Build stage

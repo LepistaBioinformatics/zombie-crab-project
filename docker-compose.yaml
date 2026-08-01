@@ -5,20 +5,21 @@
 # Protocol WS channel; crab-shell-proxy speaks that protocol directly in Go):
 #
 #   mycelium-gateway (standalone, :8080, published)
-#     |-- /picoclaw-alpha/v1/*  --\
-#     `-- /picoclaw-beta/v1/*   ----> crab-shell-proxy:8080
-#                                       |  (agent from x-mycelium-service-name,
-#                                       |   user from x-mycelium-profile email)
-#                                       `--> picoclaw-<agent>-<userhash>:18790
-#                                            (spawned on demand, one per user)
+#     |-- /alpha/v1/*       --\
+#     |-- /beta/v1/*        ----> crab-shell-proxy:8080
+#     `-- /hermes-glm/v1/*  --/     |  (agent from x-mycelium-service-name,
+#                                   |   user from the x-mycelium-profile accId)
+#                                   `--> crabshell-<agent>-<hash>:18790
+#                                        (spawned on demand, one per user;
+#                                         hermes agents answer on :8642 instead)
 #
 # mycelium routes by first path segment == the TOML service key (see
-# mycelium/config.standalone.toml), so it's /picoclaw-alpha/... and
-# /picoclaw-beta/..., NOT /alpha/... . It strips that segment before
-# forwarding, but injects x-mycelium-service-name so crab-shell-proxy still
-# knows which agent was addressed. The spawned picoclaw containers and
-# crab-shell-proxy publish no host ports -- mycelium-gateway is the single
-# entry point.
+# deploy/standalone/config.standalone.toml), so callers hit /alpha/..., /beta/...
+# and /hermes-glm/... -- the literal keys, with no "picoclaw-" prefix. It strips
+# that segment before forwarding, but injects x-mycelium-service-name so
+# crab-shell-proxy still knows which agent was addressed. The spawned agent
+# containers publish no host ports, and crab-shell-proxy publishes only the
+# TEMPORARY loopback port below -- mycelium-gateway is the entry point.
 #
 # Two more services sit alongside this for human use: chat-webapp (:3000, a BFF
 # test client -- signin + instance picker + chat) and mycelium-webapp (:8081,
@@ -139,7 +140,11 @@ services:
       context: ./fungi/mycelium
       dockerfile: Dockerfile.standalone
       args:
-        MYCELIUM_GIT_REF: ${MYCELIUM_GIT_REF:-009c771770710ee5e42b119544bbada5953b5d56}
+        # 9.0.0-rc.13. Compose's build arg OVERRIDES the Dockerfile's own ARG
+        # default, so this line -- not the Dockerfile -- decides what standalone
+        # builds. Keep it, deploy/standalone/.env.example, and the prod/dokploy
+        # MYCELIUM_IMAGE_TAG on the same release.
+        MYCELIUM_GIT_REF: ${MYCELIUM_GIT_REF:-9298ecb44a69ced91cb2d7d3356a716aedca858b}
     restart: unless-stopped
     # Fixes L-002 (STATE.md): standalone mode wraps its auto-generated
     # secrets file (/data/.secrets/token_secret.secret) with a key derived

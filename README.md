@@ -146,13 +146,20 @@ scaffold. See [Creating a Custom Agent](./docs/CREATE_CUSTOM_AGENT.md) to shape
 a template, and [Running and resetting from scratch](#running-and-resetting-from-scratch)
 for the self-heal behavior.
 
-**3. Configure `.env`.** Copy the matching `deploy/<mode>/.env.example` (standalone / prod / dokploy) to `.env` and set:
+**3. Configure `.env`.** Copy the matching `deploy/<mode>/.env.example` (standalone / prod / dokploy — see [Deploy modes](#deploy-modes)) to `.env` at the repo root and set:
 
-- `MYC_PICOCLAW_ALPHA_TOKEN` / `MYC_PICOCLAW_BETA_TOKEN` — bearer tokens Mycelium
-  injects and crab-shell-proxy validates per agent.
-- `PICOCLAW_ALPHA_API_KEY` / `PICOCLAW_BETA_API_KEY` — each agent's **own** LLM
-  key, read from the environment (never stored in config or images).
+- `MYC_PICOCLAW_ALPHA_TOKEN` / `MYC_PICOCLAW_BETA_TOKEN` / `MYC_HERMES_GLM_TOKEN`
+  — bearer tokens Mycelium injects and crab-shell-proxy validates per agent.
+- `PICOCLAW_ALPHA_API_KEY` / `PICOCLAW_BETA_API_KEY` / `PROXY_GLM_API_KEY` — each
+  agent's **own** LLM key, read from the environment (never stored in config or
+  images).
 - `MYC_STANDALONE_BOOTSTRAP_SECRET` — gates the one-time Staff bootstrap.
+
+The stack ships three agents: `alpha` and `beta` (picoclaw) and `hermes-glm` (a
+hermes-agent instance from Nous Research, driven over its OpenAI-compatible
+server instead of the Pico Protocol). An agent whose
+token or provider key is unset is auto-disabled by the proxy at startup, so you
+can run only the ones you have keys for.
 
 Which provider/model each agent uses is declared in
 [`crab/crab-shell-proxy/config.yaml`](./crab/crab-shell-proxy/config.yaml) (e.g.
@@ -177,11 +184,14 @@ docker compose logs mycelium-gateway | grep -i bootstrap
 (`http://localhost:${CHAT_WEBAPP_PORT:-3000}`), sign in with your email
 (magic-link, no password), pick an agent, and chat. Your first message
 cold-starts *your own* container; `docker ps` will show
-`picoclaw-alpha-<your-accId>` running as a non-root user.
+`crabshell-alpha-<hash>` running as a non-root user (the hash is the
+tenant + subscription + account triple — a container name has a 63-char limit,
+so the identity lives in the container's labels, not in its name).
 
-> The gateway routes are `protectedByRoles` (roles `alpha` / `beta`), so an
-> account must hold the matching guest-role to reach an instance. Assigning
-> roles is done from **`mycelium-webapp`**
+> The gateway routes are `protectedByRoles` (roles `alpha` / `beta` /
+> `hermes-glm`), so an account must hold the matching guest-role to reach an
+> instance. Roles can be granted from the **chat-webapp admin area**
+> (Members → invite) or from **`mycelium-webapp`**
 > (`http://localhost:${MYCELIUM_WEBAPP_PORT:-8081}`) — Mycelium's own admin UI —
 > via the Staff → tenant → subscription → guest-invite flow.
 
@@ -194,7 +204,7 @@ the on-disk state, and rebuild:
 
 ```bash
 docker compose down
-docker rm -f $(docker ps -aq --filter 'name=picoclaw') 2>/dev/null   # agents spawned outside compose
+docker rm -f $(docker ps -aq --filter 'name=crabshell') 2>/dev/null   # agents spawned outside compose
 
 # on-disk state is owned by the spawned (non-root) agents -> sudo
 sudo rm -rf data/templates data/tenants data/effective-secrets \
@@ -204,9 +214,11 @@ docker compose up -d --build   # --build is REQUIRED: the fallback template is b
 ```
 
 Then sign in and send a message — the proxy re-provisions your user from
-scratch. The Postgres volume (Mycelium accounts/roles) is **separate** and is
-not wiped, so your login survives; add `-v` to `docker compose down` only if you
-also want to reset accounts (you'd then re-run the Staff bootstrap).
+scratch. Accounts and roles live in the named volumes, **not** in `data/`, so
+they are not wiped: in standalone that is `mycelium-data` (Mycelium's SQLite
+database), plus `chat-webapp-postgres-data` for the conversation list. Your
+login survives; add `-v` to `docker compose down` only if you also want to reset
+accounts (you'd then re-run the Staff bootstrap).
 
 **Why no manual recovery is needed:** the proxy **auto-bootstraps** a missing
 `data/templates/<agent>/` from a default template **embedded in its binary**, so
@@ -217,16 +229,106 @@ embedded default, edit
 `crab/crab-shell-proxy/internal/docker/defaulttemplate/<harness>/` (today:
 `picoclaw`) and rebuild.
 
+## Deploy modes
+
+Three profiles live side by side. Each has a directory under `deploy/` holding
+its `.env.example` and the gateway config that mode mounts — copy the matching
+`.env.example` to `.env` at the repo root and use that mode's compose command.
+
+| | **standalone** (default) | **prod** | **dokploy** |
+|---|---|---|---|
+| Compose | `docker compose up -d` | `docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d` | `docker compose -f docker-compose.dokploy.yaml up -d` (or point Dokploy at this repo + file) |
+| Mycelium | built from source (`MYCELIUM_GIT_REF`) | published image (`MYCELIUM_IMAGE_TAG`) | published image (`MYCELIUM_IMAGE_TAG`) |
+| Storage | SQLite in `mycelium-data` | `mycelium-postgres` | `mycelium-postgres` |
+| E-mail | stub — magic links land in the log | real SMTP | real SMTP |
+| Ingress | published host ports | published host ports | Traefik, one domain per service |
+| Agents | alpha · beta · hermes-glm | alpha · beta · hermes-glm | alpha · beta |
+| Gateway config | `deploy/standalone/config.standalone.toml` | `deploy/prod/config.base.toml` | `deploy/dokploy/config.base.toml` |
+| Agent catalog | baked in the proxy image | baked in the proxy image | mounted: `deploy/dokploy/crab-shell-proxy.config.yaml` |
+
+All three pin the **same Mycelium release**: standalone builds the commit tagged
+`9.0.0-rc.13`, prod and dokploy pull `MYCELIUM_IMAGE_TAG=9.0.0-rc.13`. Move them
+together — the gateway config is shared vocabulary, and a version skew between
+what you test and what you deploy is exactly where it breaks.
+
+### One-time database schema (prod and dokploy only)
+
+The Postgres backend has **no embedded migrations** (SQLite does), so the schema
+has to be applied once, after the first `up`. It takes **two steps**: upstream's
+`up.sql`, then the migration scripts `up.sql` does *not* fold in. Get both from
+the mycelium repo at the tag this deploy pins:
+
+```bash
+git clone --depth 1 --branch 9.0.0-rc.13 \
+  https://github.com/LepistaBioinformatics/mycelium.git /tmp/myc
+cd /path/to/zombie-crab-project && set -a; . ./.env; set +a
+
+# 1) base schema
+docker compose -f docker-compose.yaml -f docker-compose.prod.yaml exec -T mycelium-postgres \
+  psql -U "$MYC_DB_USER" -d postgres \
+       -v db_name="$MYC_DB_NAME" -v db_user="$MYC_DB_USER" \
+       -v db_password="$MYC_DB_PASSWORD" -v db_role=service-role-mycelium \
+  < /tmp/myc/adapters/diesel_postgres/sql/up.sql
+
+# 2) the migrations, in filename order
+for m in /tmp/myc/adapters/diesel_postgres/sql/migrations/*.sql; do
+  docker compose -f docker-compose.yaml -f docker-compose.prod.yaml exec -T mycelium-postgres \
+    psql -U "$MYC_DB_USER" -d "$MYC_DB_NAME" < "$m"
+done
+```
+
+Step 1 creates the database if missing, `\c`s into it, then creates the roles and
+tables; it **requires** `-v db_password`. Compose already created the database
+**and** the login role, so `CREATE USER … already exists` is expected and
+harmless — psql keeps going.
+
+Step 2 is not optional at `9.0.0-rc.13`: `up.sql` at this tag ships `kv_artifact`
+and the `message_queue` claim index, but **not** `instance_settings`,
+`resource_audit_log`, or the `tenant.encrypted_dek` / `kek_version` columns
+(envelope encryption) — those exist only as migrations. Verify with `\dt` (you
+should see `instance_settings` and `resource_audit_log`) and
+`\d tenant` (`encrypted_dek`, `kek_version`). For Dokploy, run the same two steps
+via `docker exec` on the `mycelium-postgres` container.
+
+### Before a prod or dokploy deploy
+
+- **`CRAB_HOST_DATA_ROOT`** — must be an absolute **host** path. crab-shell-proxy
+  hands it to the host Docker daemon as the bind-mount source for the agent
+  containers it spawns, so a path inside the proxy won't resolve.
+- **prod / `deploy/prod/config.base.toml`** — set `noreplyEmail` and
+  `supportEmail` to `MYC_SMTP_USERNAME` (Gmail rejects a mismatched `From`).
+  `domainUrl` / `allowedOrigins` ship pointing at the localhost origins this mode
+  actually serves; if you front it with a hostname, change them **together with**
+  `mycelium-webapp`'s `VITE_MYCELIUM_API_URL` build arg — the admin UI is a
+  browser-side SPA that calls the gateway directly, so a mismatch is a CORS wall.
+- **dokploy / `deploy/dokploy/config.base.toml`** — replace the `►►► REPLACE`
+  lines with your real `https://` origins (they must match `MYCELIUM_DOMAIN` and
+  `MYCELIUM_WEBAPP_DOMAIN`), and remember `dokploy-network` must already exist.
+- **Agent catalog** — dokploy mounts `deploy/dokploy/crab-shell-proxy.config.yaml`,
+  so agents can be added or dropped there without rebuilding the proxy image.
+  standalone and prod use the catalog baked into the image
+  (`crab/crab-shell-proxy/config.yaml`).
+- **Account webhook (optional)** — registering mycelium's
+  `subscriptionAccount.created` webhook makes the proxy scaffold a subscription's
+  workspace root up front instead of on the member's first chat. Over JSON-RPC
+  (`POST /_adm/rpc`, Staff token), method `systemManager.webhooks.create`:
+  `{"name": "crab-shell-proxy", "url": "http://crab-shell-proxy:8080/v1/accounts",
+  "trigger": "subscriptionAccount.created", "method": "POST", "secret":
+  {"authorizationHeader": {"headerName": "Authorization", "prefix": "Bearer",
+  "token": "<CRAB_WEBHOOK_SECRET>"}}}`.
+
 ## Day-2 administration
 
-Managing models, shared skills, shared secrets, files, members, and branding is
-done from the **chat-webapp admin area** — see the
+Managing models, shared skills, shared secrets, files, personas, members, and
+branding is done from the **chat-webapp admin area** — see the
 [Admin Guide](./docs/ADMIN_GUIDE.md).
 
 ## What's in this repo
 
 ```
-docker-compose.yaml        # the whole stack (gateway + crab-shell-proxy + webapps + db)
+docker-compose.yaml        # the whole stack, standalone/default (gateway + crab-shell-proxy + webapps + db)
+docker-compose.prod.yaml   # prod overlay: published images + mycelium in Postgres mode (-f with the above)
+docker-compose.dokploy.yaml# self-contained Traefik/Dokploy file (base + prod + ingress already merged)
 deploy/                    # per-mode configs: .env examples + mycelium/proxy configs (standalone / prod / dokploy)
 crab/                      # the crab side (per-user isolation + its chat client)
   crab-shell-proxy/        # git submodule — the Go per-user isolation orchestrator
