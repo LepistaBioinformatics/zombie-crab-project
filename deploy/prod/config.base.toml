@@ -1,14 +1,21 @@
 # ------------------------------------------------------------------------------
-# BASE (POSTGRES) MODE CONFIGURATION -- zombie-crab-project / production
+# BASE (POSTGRES) MODE CONFIGURATION -- zombie-crab-project / PROD (no Traefik)
 #
 # Postgres-backed (mycelium's DEFAULT `postgres-backend` feature -- i.e. the
 # plain published image `ghcr.io/LepistaBioinformatics/mycelium`, NOT the
-# `--features standalone` build). Used ONLY in production, mounted into the
-# official image at /home/config.toml via docker-compose.prod.yaml (SETTINGS_PATH).
+# `--features standalone` build). Used ONLY by the prod profile, mounted into the
+# official image at /home/config.toml via docker-compose.prod.yaml (SETTINGS_PATH):
+#   docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d
 # The default local stack still uses config.standalone.toml (SQLite, no external
 # deps) -- this file changes ONLY the infrastructure sections; the API-gateway
 # routing below is IDENTICAL to config.standalone.toml (crab-shell-proxy:8080,
-# protectedByRoles, the full alpha/beta route set).
+# protectedByRoles, the full alpha/beta/hermes-glm route set).
+#
+# THIS MODE IS NOT THE TRAEFIK ONE. It keeps the base file's PUBLISHED HOST PORTS
+# (gateway :8080, chat-webapp :3000, mycelium-webapp :8081) and terminates no TLS
+# of its own. For Traefik/Dokploy ingress by domain use the self-contained
+# docker-compose.dokploy.yaml with deploy/dokploy/config.base.toml -- the two
+# files are otherwise identical, and the origins below are the difference.
 #
 # Differences vs. standalone, all infra:
 #   - vault disabled; core/jwt/hmac/token secrets resolved from env (base mode
@@ -24,10 +31,16 @@
 #     this stack; revisit if you add a Redis container.
 #
 # ►►► REPLACE BEFORE DEPLOY (plain strings -- NOT env-resolvable, and this file
-#     is mounted so no rebuild is needed): `domainUrl`, `allowedOrigins`, and
-#     `noreplyEmail`. noreplyEmail MUST equal MYC_SMTP_USERNAME (your Gmail
-#     address) -- Gmail rejects a mismatched From. domainUrl/allowedOrigins must
-#     be your real public https:// origins (mycelium + mycelium-webapp).
+#     is mounted so no rebuild is needed): `noreplyEmail` / `supportEmail`, and
+#     `domainUrl` UNLESS this really is a localhost deploy. noreplyEmail MUST
+#     equal MYC_SMTP_USERNAME (your Gmail address) -- Gmail rejects a mismatched
+#     From. domainUrl goes into REAL magic-link emails in this mode (base mode
+#     has no stub transport), so a localhost value there ships unusable links to
+#     anyone not sitting at the host.
+#
+#     `allowedOrigins` is pre-set to the origins this mode actually serves and is
+#     correct as shipped. Change it only together with the webapp build arg --
+#     see its own comment below.
 # ------------------------------------------------------------------------------
 
 vault = "disabled"
@@ -38,7 +51,12 @@ vault = "disabled"
 
 [core.accountLifeCycle]
 domainName = "Zombie Crab"
-domainUrl = "https://mycelium.example.com"                    # ►►► REPLACE
+# ►►► REPLACE unless this is genuinely a localhost deploy. Base URL mycelium
+# writes into the emails it really sends (magic-link, invitations), so it must be
+# the URL a human actually opens -- not an internal service name, and not
+# localhost if the users are anywhere else. The default matches this mode's
+# published gateway port; behind a reverse proxy, put its public https:// URL.
+domainUrl = "http://localhost:8080"
 tokenExpiration = 3600                                                # 1 hour
 noreplyName = "Mycelium"
 noreplyEmail = "your-account@gmail.com"                       # ►►► REPLACE (== MYC_SMTP_USERNAME)
@@ -68,8 +86,12 @@ maxAttempts = 5
 #
 # Schema is NOT auto-provisioned (diesel_postgres has no embedded migrations,
 # unlike SQLite) -- apply it once after first `up` (STATE.md L-009):
-#   psql "$MYC_BASE_DATABASE_URL" -f postgres/sql/up.sql -v db_password=...
-# See README's production section for the exact command.
+#   psql ... -f adapters/diesel_postgres/sql/up.sql -v db_password=... -v db_name=...
+# then every script under adapters/diesel_postgres/sql/migrations/ -- up.sql at
+# rc.13 does NOT include instance_settings, resource_audit_log or the tenant
+# envelope-encryption columns. Both live in the mycelium repo at the tag this
+# deploy pins. See the README's "Deploy modes" section for the exact commands
+# (it also explains the harmless "role already exists" up.sql prints).
 # ------------------------------------------------------------------------------
 
 [diesel]
@@ -124,13 +146,21 @@ servicePort = 8080
 serviceWorkers = 1
 gatewayTimeout = 60
 
-# ►►► REPLACE with your real public origins. The mycelium-webapp SPA calls the
-# gateway directly from the browser, so its origin must be allowed. chat-webapp
-# is a server-side BFF and does NOT need to be listed.
-allowedOrigins = ["https://mycelium.example.com", "https://admin.example.com"]
+# The mycelium-webapp SPA calls the gateway DIRECTLY from the browser, so its
+# origin has to be allowed here -- and it must be the origin the SPA is actually
+# served from. This mode does not override the base file's build arg, so the SPA
+# is built with VITE_MYCELIUM_API_URL=http://localhost:${MYCELIUM_PORT:-8080} and
+# served on http://localhost:${MYCELIUM_WEBAPP_PORT:-8081}: those are the two
+# origins below. Put a public hostname here ONLY together with rebuilding
+# mycelium-webapp against the matching URL (docker-compose.yaml's
+# `mycelium-webapp.build.args.VITE_MYCELIUM_API_URL`) -- changing one and not the
+# other is a CORS failure that looks like a broken admin UI.
+# chat-webapp is a server-side BFF and does NOT need to be listed.
+allowedOrigins = ["http://localhost:8080", "http://localhost:8081"]
 
-# TLS terminates at Traefik (docker-compose.dokploy.yaml); the gateway speaks
-# plain HTTP on the internal network.
+# No TLS terminator in this mode: the gateway serves plain HTTP on its published
+# host port. Front it with a reverse proxy (or use the Dokploy/Traefik profile)
+# before it faces anything but a trusted network.
 tls = "disabled"
 
 [api.cache]
@@ -144,10 +174,12 @@ format = "ansi"
 target = "stdout"
 
 # ==============================================================================
-# API GATEWAY ROUTE CONFIGURATION -- IDENTICAL to config.standalone.toml.
-# See that file's comment block (lines ~117-176) for the full routing, header
-# contract, and protectedByRoles rationale. Kept in sync verbatim: only the
-# infrastructure sections above differ between standalone and base mode.
+# API GATEWAY ROUTE CONFIGURATION -- IDENTICAL to config.standalone.toml,
+# agent for agent (alpha, beta, hermes-glm). See that file's `[api.services]`
+# comment block for the full routing, header contract, and protectedByRoles
+# rationale. Kept in sync verbatim: only the infrastructure sections above
+# differ between standalone and base mode. A route added to one of the three
+# deploy TOMLs has to be added to the others.
 # ==============================================================================
 
 [api.services]

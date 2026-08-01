@@ -19,9 +19,10 @@
 # and deploy/dokploy/.env.example). It is no longer a -f override layered on this file.
 #
 # One-time after the FIRST up (base/Postgres has no auto-migration, L-009):
-#   docker compose ... exec mycelium-postgres \
-#     psql -U "$MYC_DB_USER" -d "$MYC_DB_NAME" -f -   < postgres/sql/up.sql
-#   (or run psql from the host against the DB URL) -- see README production section.
+#   apply upstream's adapters/diesel_postgres/sql/up.sql AND the scripts under
+#   adapters/diesel_postgres/sql/migrations/ (up.sql at rc.13 does not fold them
+#   all in), at the SAME tag this file pins (MYCELIUM_IMAGE_TAG). up.sql needs
+#   -v db_password -- see the README's "Deploy modes" for the exact commands.
 #
 # All values below come from .env -- see deploy/prod/.env.example. `build: !reset null` drops the base file's build so the image is
 # PULLED, never built (a plain `image:` alongside `build:` would still build if
@@ -52,7 +53,7 @@ services:
     # Official published image, base/Postgres build (mycelium's default cargo
     # features). No local build.
     build: !reset null
-    image: ghcr.io/lepistabioinformatics/mycelium:${MYCELIUM_IMAGE_TAG:-9.0.0-rc.7}
+    image: ghcr.io/lepistabioinformatics/mycelium:${MYCELIUM_IMAGE_TAG:-9.0.0-rc.13}
     environment:
       # The official image sets Entrypoint=myc-api but does NOT define
       # SETTINGS_PATH (verified from the image config), so point it at the
@@ -81,6 +82,11 @@ services:
   crab-shell-proxy:
     build: !reset null
     image: ghcr.io/lepistabioinformatics/crab-shell-proxy:${CRAB_SHELL_PROXY_TAG:-latest}
+    # Drop the base file's TEMPORARY 127.0.0.1:18080 publish (direct-to-proxy
+    # testing). `ports` CONCATENATES across -f layers, so without this reset the
+    # port stays live here -- and in production the gateway must be the only
+    # entry point, including on loopback.
+    ports: !reset []
 
   chat-webapp:
     build: !reset null

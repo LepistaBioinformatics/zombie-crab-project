@@ -12,9 +12,12 @@ picoclaw config — that users can chat with through the portal.
 An **agent** is one named picoclaw personality (e.g. `alpha`, `beta`). Two pieces
 define it:
 
-1. **An entry in `crab/crab-shell-proxy/config.yaml`** — the agent's name, which
-   mycelium service routes to it, which LLM model it uses, and which **template**
-   it clones from.
+1. **An entry in the proxy's agent catalog** — the agent's name, which mycelium
+   service routes to it, which LLM model it uses, and which **template** it
+   clones from. The catalog is `crab/crab-shell-proxy/config.yaml`, baked into
+   the proxy image (standalone and prod). The Dokploy deploy **mounts** its own
+   copy instead, `deploy/dokploy/crab-shell-proxy.config.yaml`, so there the
+   catalog is edited without rebuilding.
 2. **A template directory** on disk — the files that get copied into every user's
    private workspace the first time they chat with the agent (persona, skills,
    picoclaw config).
@@ -147,7 +150,7 @@ Add an entry under `agents:` in `crab/crab-shell-proxy/config.yaml`:
 ```yaml
 agents:
   meuagente:
-    serviceName: "picoclaw-meuagente"   # must match the mycelium service key (4.5)
+    serviceName: "meuagente"            # must match the mycelium service key (4.5)
     token: { env: "MYC_PICOCLAW_MEUAGENTE_TOKEN" }
     template: "meuagente"               # -> data/templates/meuagente/
     mode: "continuous"                  # or "scale-to-zero"
@@ -161,12 +164,32 @@ agents:
 > **Mode:** `continuous` keeps the container running so the in-memory session
 > isn't reset between turns; `scale-to-zero` stops it after `idleTimeout`.
 
+> **Harness:** omitting `harness` gives you picoclaw (the default), driven over
+> the Pico Protocol. `harness: hermes` runs a hermes-agent container instead,
+> driven over its OpenAI-compatible API server — see the `hermes-glm` entry in
+> `crab/crab-shell-proxy/config.yaml` for the extra `model` fields it takes
+> (`baseUrl`, `keyEnvName`) and its much longer `startupDeadline`.
+
 ### 4.5 Register the mycelium route
 
-In `deploy/standalone/config.standalone.toml` (and the matching `deploy/<mode>/config.*.toml`), copy the existing `picoclaw-alpha` service
-block and rename it to `picoclaw-meuagente` (the callers hit
-`/picoclaw-meuagente/...`). Keep the same `token = { env = ... }`,
-`healthCheckPath`, and `group` role settings — just change the name.
+Copy the existing `[[alpha]]` service block (its `[[alpha.secret]]` and every
+`[[alpha.path]]`) and rename it to `meuagente`. The service key **is** the first
+path segment, so callers hit `/meuagente/...` — there is no `picoclaw-` prefix.
+Keep the same `token = { env = ... }`, `healthCheckPath`, `group` role settings
+and the full path set — just change the name.
+
+Do it in **every mode you deploy**, they are separate files:
+
+| Mode | File | Agents it declares today |
+|---|---|---|
+| standalone | `deploy/standalone/config.standalone.toml` | alpha, beta, hermes-glm |
+| prod | `deploy/prod/config.base.toml` | alpha, beta, hermes-glm |
+| dokploy | `deploy/dokploy/config.base.toml` | alpha, beta |
+
+The `protectedByRoles` blocks also declare the guest-role: mycelium auto-creates
+a role named after the service at boot, so a new agent brings its own role —
+granting it to an account is still the Staff → tenant → subscription →
+guest-invite flow.
 
 ### 4.6 Set the environment variables
 
@@ -182,14 +205,20 @@ injected into each user's `.security.yml`.
 
 ### 4.7 Rebuild and restart
 
-`config.yaml` is **baked into** the crab-shell-proxy image (a proxy-side agent
-change needs a rebuild), while the mycelium config is now **mounted** from
-`deploy/<mode>/` (config.standalone.toml / config.base.toml), so a route change
-there only needs a restart. The safe catch-all is still a rebuild:
+The mycelium config is **mounted** from `deploy/<mode>/` (config.standalone.toml
+/ config.base.toml), so a route change only needs a restart. The agent catalog
+depends on the mode: `crab/crab-shell-proxy/config.yaml` is **baked into** the
+proxy image (standalone, prod → rebuild), while dokploy mounts
+`deploy/dokploy/crab-shell-proxy.config.yaml` (→ restart). The safe catch-all
+locally is a rebuild:
 
 ```bash
 docker compose up -d --build crab-shell-proxy mycelium-gateway
 ```
+
+In prod/dokploy the proxy runs a **published image**, so a catalog change baked
+into `crab/crab-shell-proxy/config.yaml` only lands after that image is rebuilt
+and pushed — this is exactly why the dokploy deploy mounts its own copy.
 
 The **template files** live in the mounted `/data` volume, so editing them later
 does not need a rebuild — but remember the first-provision rule (section 3).
@@ -202,8 +231,8 @@ does not need a rebuild — but remember the first-provision rule (section 3).
 - [ ] `data/templates/<name>/.security.yml` exists (model_list has your model; no keys)
 - [ ] `data/templates/<name>/workspace/{AGENT.md,SOUL.md,USER.md}` written
 - [ ] Optional `workspace/memory/` and `workspace/skills/<skill>/SKILL.md`
-- [ ] Agent entry added to `crab/crab-shell-proxy/config.yaml` (`template:` points to `<name>`)
-- [ ] Route added to `deploy/standalone/config.standalone.toml` (`picoclaw-<name>`)
+- [ ] Agent entry added to the proxy catalog — `crab/crab-shell-proxy/config.yaml`, plus `deploy/dokploy/crab-shell-proxy.config.yaml` if you deploy with Dokploy (`template:` points to `<name>`)
+- [ ] Route added to the gateway config of every mode you deploy (`[[<name>]]`, callers hit `/<name>/...`)
 - [ ] `.env` has `MYC_PICOCLAW_<NAME>_TOKEN` and `PICOCLAW_<NAME>_API_KEY`
 - [ ] `docker compose up -d --build crab-shell-proxy mycelium-gateway`
 - [ ] Templates finalized **before** users start chatting
@@ -215,8 +244,9 @@ does not need a rebuild — but remember the first-provision rule (section 3).
 - **"My template changes didn't show up."** You (or the user) already chatted
   with the agent — returning users aren't re-seeded. Test with a fresh user, or
   reset that user's data dir.
-- **"I added an agent but requests 404."** The mycelium route (4.5) is missing or
-  the gateway wasn't rebuilt; callers must hit `/picoclaw-<name>/...`.
+- **"I added an agent but requests 404."** The mycelium route (4.5) is missing
+  from the config that mode mounts, or the gateway wasn't restarted; callers must
+  hit `/<name>/...`, the literal service key.
 - **"Model auth fails."** `apiKeyEnv` in `config.yaml` must name a real env var,
   and `model.name` must match a `model_name` in the template's `.security.yml`
   `model_list`.

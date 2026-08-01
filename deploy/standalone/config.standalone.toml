@@ -3,9 +3,10 @@
 #
 # Adapted from mycelium-monorepo's settings/config.standalone.example.toml:
 # zero external runtime dependencies (SQLite instead of Postgres, in-process
-# moka cache instead of Redis, stub/file email transport). Routes two
-# picoclaw+picoclaw-openai-proxy sidecar pairs ("alpha"/"beta", see
-# ../docker-compose.yaml) instead of upstream's single example route.
+# moka cache instead of Redis, stub/file email transport). Declares one service
+# per agent ("alpha", "beta", "hermes-glm"), all routed to the single
+# crab-shell-proxy downstream (see ../../docker-compose.yaml), instead of
+# upstream's single example route.
 #
 # This is a static file, not a template: the per-instance secrets below use
 # mycelium's own field-level env-var secret resolver (`token = { env =
@@ -97,9 +98,10 @@ gatewayTimeout = 60
 # http://localhost:8080 -- mycelium-webapp's own dev-mode default, harmless
 # to leave in. http://localhost:8081 -- this stack's mycelium-webapp service
 # (browser-side SPA, calls the gateway directly -- see docker-compose.yaml).
-# This file is baked into the image at build time (not templated), so if you
-# change MYCELIUM_WEBAPP_PORT in .env you must also update this value and
-# rebuild mycelium-gateway.
+# This file is MOUNTED into the gateway (docker-compose.yaml mounts it at
+# /home/config.toml), not templated and not baked -- so if you change
+# MYCELIUM_WEBAPP_PORT in .env you must update this value too, but a
+# `docker compose restart mycelium-gateway` is enough to pick it up.
 allowedOrigins = ["http://localhost:8080", "http://localhost:8081"]
 
 tls = "disabled"
@@ -117,8 +119,8 @@ target = "stdout"
 # ------------------------------------------------------------------------------
 # API GATEWAY ROUTE CONFIGURATION
 #
-# Two named services -- one per agent (alpha/beta) -- BOTH pointing at the same
-# downstream, crab-shell-proxy:8080, over the compose-internal `zombie_net`
+# One named service per agent (alpha, beta, hermes-glm) -- ALL pointing at the
+# same downstream, crab-shell-proxy:8080, over the compose-internal `zombie_net`
 # network. crab-shell-proxy tells the agents apart via the
 # x-mycelium-service-name header mycelium injects (the service key below,
 # e.g. "alpha"), since the first path segment is stripped before
@@ -130,9 +132,9 @@ target = "stdout"
 #
 # mycelium's router takes the *first path segment* of the request as the
 # service name (adapters/mem_db/src/repositories/shared.rs::extract_path_parts)
-# and matches everything after it against `path` below -- so callers must hit
-# /alpha/... and /beta/... (the literal TOML service keys),
-# NOT /alpha/... or /beta/....
+# and matches everything after it against `path` below -- so callers hit
+# /alpha/..., /beta/... and /hermes-glm/...: the literal TOML service keys, with
+# no "picoclaw-" prefix (an earlier layout used one; the keys were renamed).
 #
 # `token = { env = "VAR_NAME" }` is the field-level env resolver fixed in
 # LepistaBioinformatics/mycelium#166 (SecretResolver<String>, released in
@@ -146,9 +148,10 @@ target = "stdout"
 # at an auth-gated route like /v1/models always fails with "Unable to
 # perform the health check" (every attempt gets a 401, which the dispatcher
 # doesn't treat as a real error, so it falls through all retries with
-# neither a response nor an error recorded). picoclaw-openai-proxy's
-# /healthz is intentionally unauthenticated and also proxies picoclaw's own
-# /health, so one check covers both.
+# neither a response nor an error recorded). crab-shell-proxy's /healthz is
+# intentionally unauthenticated (internal/httpapi/handlers.go) and reports the
+# proxy itself -- the per-user agent containers are checked by the proxy on
+# spawn, not by the gateway.
 #
 # `group = { protectedByRoles = [{ name = "<instance>" }] }`
 # (M3, role-scoped access -- see .specs/project/ROADMAP.md/STATE.md AD-008):
@@ -162,17 +165,16 @@ target = "stdout"
 # matching guest-role, every request 403s ("User does not have permission to
 # perform this action" -- fetch_and_inject_profile_from_token_to_forward.rs).
 #
-# This flips the header contract picoclaw-openai-proxy relies on:
-# "authenticated" injected the caller's verified email as a plain
-# x-mycelium-email header (check_credentials_with_multi_identity_provider).
-# "protectedByRoles" instead calls fetch_and_inject_profile_from_token_to_forward,
-# which injects the full account Profile as x-mycelium-profile -- JSON,
-# zstd-compressed, base64-encoded (compress_and_encode_profile_to_base64).
-# picoclaw-openai-proxy's server.js was updated to decode this and pull the
-# principal owner's email from `profile.owners` instead of reading a plain
-# header -- see that file's own comments. The caller still can't declare
-# "I'm someone else": mycelium builds this header server-side from the
-# verified token, same guarantee "authenticated" gave via x-mycelium-email.
+# This decides which header contract the downstream gets: "authenticated"
+# would inject the caller's verified email as a plain x-mycelium-email header
+# (check_credentials_with_multi_identity_provider), while "protectedByRoles"
+# calls fetch_and_inject_profile_from_token_to_forward, which injects the full
+# account Profile as x-mycelium-profile -- JSON, zstd-compressed,
+# base64-encoded (compress_and_encode_profile_to_base64). crab-shell-proxy
+# decodes that header and keys the user on the profile's accId (not the email,
+# which is mutable) -- see internal/identity/. The caller still can't declare
+# "I'm someone else": mycelium builds the header server-side from the verified
+# token, the same guarantee "authenticated" gave via x-mycelium-email.
 # ------------------------------------------------------------------------------
 
 [api.services]
@@ -183,9 +185,9 @@ target = "stdout"
 # it -- see Service::proxy_address's own doc comment and
 # ports/api/src/router/initialize_downstream_request.rs), a different
 # concept from "this is my sidecar, send requests to it directly".
-# picoclaw-openai-proxy is a plain HTTP service (not a path-embedding
-# forward proxy), so it must be `host`, not `proxyAddress` -- confirmed
-# empirically: `proxyAddress` produced "invalid format" 500s on every
+# crab-shell-proxy is a plain HTTP service (not a path-embedding forward
+# proxy), so it must be `host`, not `proxyAddress` -- confirmed empirically:
+# `proxyAddress` produced "invalid format" 500s on every
 # /v1/chat/completions call.
 host = "crab-shell-proxy:8080"
 protocol = "http"

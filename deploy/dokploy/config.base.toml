@@ -1,14 +1,21 @@
 # ------------------------------------------------------------------------------
-# BASE (POSTGRES) MODE CONFIGURATION -- zombie-crab-project / production
+# BASE (POSTGRES) MODE CONFIGURATION -- zombie-crab-project / DOKPLOY (Traefik)
 #
 # Postgres-backed (mycelium's DEFAULT `postgres-backend` feature -- i.e. the
 # plain published image `ghcr.io/LepistaBioinformatics/mycelium`, NOT the
-# `--features standalone` build). Used ONLY in production, mounted into the
-# official image at /home/config.toml via docker-compose.prod.yaml (SETTINGS_PATH).
+# `--features standalone` build). Mounted into the official image at
+# /home/config.toml by the self-contained docker-compose.dokploy.yaml
+# (SETTINGS_PATH). The no-Traefik production profile uses its own copy,
+# deploy/prod/config.base.toml -- same infra sections, different origins.
+#
 # The default local stack still uses config.standalone.toml (SQLite, no external
 # deps) -- this file changes ONLY the infrastructure sections; the API-gateway
-# routing below is IDENTICAL to config.standalone.toml (crab-shell-proxy:8080,
-# protectedByRoles, the full alpha/beta route set).
+# routing below is the same as config.standalone.toml (crab-shell-proxy:8080,
+# protectedByRoles) with ONE deliberate omission: this mode runs picoclaw only,
+# so there is no `[[hermes-glm]]` service here. That matches
+# deploy/dokploy/crab-shell-proxy.config.yaml, which drops the same agent from
+# the proxy's catalog. Re-adding hermes means editing BOTH files and supplying
+# MYC_HERMES_GLM_TOKEN + PROXY_GLM_API_KEY.
 #
 # Differences vs. standalone, all infra:
 #   - vault disabled; core/jwt/hmac/token secrets resolved from env (base mode
@@ -68,8 +75,12 @@ maxAttempts = 5
 #
 # Schema is NOT auto-provisioned (diesel_postgres has no embedded migrations,
 # unlike SQLite) -- apply it once after first `up` (STATE.md L-009):
-#   psql "$MYC_BASE_DATABASE_URL" -f postgres/sql/up.sql -v db_password=...
-# See README's production section for the exact command.
+#   psql ... -f adapters/diesel_postgres/sql/up.sql -v db_password=... -v db_name=...
+# then every script under adapters/diesel_postgres/sql/migrations/ -- up.sql at
+# rc.13 does NOT include instance_settings, resource_audit_log or the tenant
+# envelope-encryption columns. Both live in the mycelium repo at the tag this
+# deploy pins. See the README's "Deploy modes" section for the exact commands
+# (it also explains the harmless "role already exists" up.sql prints).
 # ------------------------------------------------------------------------------
 
 [diesel]
@@ -144,10 +155,11 @@ format = "ansi"
 target = "stdout"
 
 # ==============================================================================
-# API GATEWAY ROUTE CONFIGURATION -- IDENTICAL to config.standalone.toml.
-# See that file's comment block (lines ~117-176) for the full routing, header
-# contract, and protectedByRoles rationale. Kept in sync verbatim: only the
-# infrastructure sections above differ between standalone and base mode.
+# API GATEWAY ROUTE CONFIGURATION -- the same routes as config.standalone.toml
+# for alpha and beta; hermes-glm is deliberately absent (see the header). See
+# that file's `[api.services]` comment block for the full routing, header
+# contract, and protectedByRoles rationale. A route added to one of the three
+# deploy TOMLs has to be added to the others.
 # ==============================================================================
 
 [api.services]

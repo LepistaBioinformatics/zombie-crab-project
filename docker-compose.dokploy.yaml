@@ -20,7 +20,9 @@
 #     subdirs of this root, which must be pre-seeded with data/templates/<agent>.
 #   - dokploy-network is external (Dokploy owns it) and must already exist.
 #   - After the FIRST up (base/Postgres has no auto-migration): apply mycelium's
-#     postgres/sql/up.sql once against mycelium-postgres -- see README.
+#     adapters/diesel_postgres/sql/up.sql AND its sibling migrations/ scripts
+#     against mycelium-postgres, at the tag MYCELIUM_IMAGE_TAG pins -- exact
+#     commands in the README's "Deploy modes" section.
 #
 # Local/dev and the layered workflow are unchanged: docker-compose.yaml (default)
 # and docker-compose.prod.yaml still exist and are used as before.
@@ -82,17 +84,19 @@ services:
         type: volume
         volume: {}
   crab-shell-proxy:
+    # picoclaw ONLY in this mode -- no MYC_HERMES_GLM_TOKEN / PROXY_GLM_API_KEY,
+    # matching the agent catalog mounted below and the services declared in
+    # deploy/dokploy/config.base.toml. Re-adding hermes means editing both of
+    # those files and adding the two variables back here.
     environment:
       CRAB_CONTAINER_DATA_ROOT: /data
       CRAB_HOST_DATA_ROOT: ${CRAB_HOST_DATA_ROOT:-${PWD}/data}
       CRAB_NETWORK: zombie_net
       CRAB_WEBHOOK_SECRET: ${CRAB_WEBHOOK_SECRET}
-      MYC_HERMES_GLM_TOKEN: ${MYC_HERMES_GLM_TOKEN}
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
       MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
       PICOCLAW_ALPHA_API_KEY: ${PICOCLAW_ALPHA_API_KEY}
       PICOCLAW_BETA_API_KEY: ${PICOCLAW_BETA_API_KEY}
-      PROXY_GLM_API_KEY: ${PROXY_GLM_API_KEY}
     healthcheck:
       interval: 15s
       retries: 10
@@ -135,7 +139,6 @@ services:
         condition: service_healthy
         required: true
     environment:
-      - MYC_HERMES_GLM_TOKEN=${MYC_HERMES_GLM_TOKEN}
       - MYC_PICOCLAW_ALPHA_TOKEN=${MYC_PICOCLAW_ALPHA_TOKEN}
       - MYC_PICOCLAW_BETA_TOKEN=${MYC_PICOCLAW_BETA_TOKEN}
       - MYC_STANDALONE_BOOTSTRAP_SECRET=${MYC_STANDALONE_BOOTSTRAP_SECRET}
@@ -160,7 +163,7 @@ services:
         - http://127.0.0.1:8080/health
       timeout: 5s
     hostname: mycelium-gateway
-    image: ghcr.io/lepistabioinformatics/mycelium:${MYCELIUM_IMAGE_TAG:-9.0.0-rc.7}
+    image: ghcr.io/lepistabioinformatics/mycelium:${MYCELIUM_IMAGE_TAG:-9.0.0-rc.13}
     labels:
       - traefik.enable=true
       - traefik.docker.network=dokploy-network
