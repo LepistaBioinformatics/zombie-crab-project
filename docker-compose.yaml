@@ -104,6 +104,19 @@ services:
       # subscriptionAccount.created webhook). Register the webhook in mycelium
       # with an Authorization: Bearer <this> header -- see README/STATE.
       CRAB_WEBHOOK_SECRET: ${CRAB_WEBHOOK_SECRET}
+      # Signs the bearer token each spawned picoclaw container presents to the
+      # proxy's own MCP endpoint (POST /v1/mcp) to reach its knowledge-graph
+      # memory. The token carries the workspace scope plus an HMAC over it, so
+      # nothing is stored and rotating this revokes every issued token at once.
+      #
+      # UNSET IS SUPPORTED and is the safe default: the memory graph is disabled
+      # (no /v1/mcp route, no MCP block written into any workspace) and everything
+      # else behaves exactly as before. Set it to switch memory on.
+      CRAB_MCP_TOKEN_SECRET: ${CRAB_MCP_TOKEN_SECRET:-}
+      # Origin a spawned container uses to reach this proxy; becomes the `url` of
+      # the injected MCP server. The default matches this service's name on
+      # zombie_net, so it only needs setting if that changes.
+      CRAB_MCP_BASE_URL: ${CRAB_MCP_BASE_URL:-http://crab-shell-proxy:8080}
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
       MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
       # hermes-glm agent (harness: hermes): the same shared bearer mycelium

@@ -267,6 +267,20 @@ acceptInsecureRouting = true
 methods = ["GET", "POST", "DELETE"]
 
 [[alpha.path]]
+# Uploads-tree organisation (create folder, move/rename, delete folder). ONE
+# wildcard block: `*` matches the following segment, and /v1/media itself already
+# has its own block above, so there is no "Multiple routes found" conflict.
+#
+# Same write gate as /v1/media, because these write into the same directory an
+# upload does. DELETE here is a RECURSIVE folder delete — the proxy refuses the
+# uploads root, and the interface names the file count before the member confirms.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/media/*"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST", "DELETE"]
+
+[[alpha.path]]
 # Workspace memory (conversation-enrichment): the user edits MEMORY_CUSTOM.md at
 # the workspace root, write-gated like /v1/media. GET reads it, PUT replaces it.
 group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
@@ -274,6 +288,33 @@ path = "/v1/memory"
 secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "PUT"]
+
+[[alpha.path]]
+# Knowledge-graph memory (memory-graph-mcp): READ-ONLY views of the graph the
+# agent builds through its own native MCP server inside crab-shell-proxy.
+#
+# TWO blocks: mycelium's `*` matches a following segment, so it covers
+# /nodes, /search and /recent but not the bare /v1/memory-graph.
+#
+# Gated `write` like /v1/memory even though every method here is GET. The proxy
+# authorizes these with authorizeSecret -- the same write-access chain -- so a
+# read-only member is refused in-proxy regardless; gating lower here would only
+# move the 403 from the gateway to the proxy.
+#
+# There is deliberately NO /v1/mcp route: the agent reaches that endpoint
+# directly on the container network, never through the gateway.
+path = "/v1/memory-graph"
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
+path = "/v1/memory-graph/*"
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
 
 [[alpha.path]]
 # Self-service restart (restart-control): GET reports whether this member's
@@ -299,6 +340,7 @@ methods = ["GET", "POST"]
 # secretName injects the bearer token so the proxy's resolveAgent anti-bypass
 # still applies. There is deliberately NO /v1/admin/users/files/content route and
 # no user-file write route (FR-7 privacy invariant).
+
 [[alpha.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
 # proxy enforces the exact path+method per route. Collapsed to one
@@ -378,12 +420,53 @@ acceptInsecureRouting = true
 methods = ["GET", "POST", "DELETE"]
 
 [[beta.path]]
+# Uploads-tree organisation (create folder, move/rename, delete folder). ONE
+# wildcard block: `*` matches the following segment, and /v1/media itself already
+# has its own block above, so there is no "Multiple routes found" conflict.
+#
+# Same write gate as /v1/media, because these write into the same directory an
+# upload does. DELETE here is a RECURSIVE folder delete — the proxy refuses the
+# uploads root, and the interface names the file count before the member confirms.
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/media/*"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST", "DELETE"]
+
+[[beta.path]]
 # Workspace memory (see the alpha /v1/memory comment).
 group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
 path = "/v1/memory"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "PUT"]
+
+[[beta.path]]
+# Knowledge-graph memory (memory-graph-mcp): READ-ONLY views of the graph the
+# agent builds through its own native MCP server inside crab-shell-proxy.
+#
+# TWO blocks: mycelium's `*` matches a following segment, so it covers
+# /nodes, /search and /recent but not the bare /v1/memory-graph.
+#
+# Gated `write` like /v1/memory even though every method here is GET. The proxy
+# authorizes these with authorizeSecret -- the same write-access chain -- so a
+# read-only member is refused in-proxy regardless; gating lower here would only
+# move the 403 from the gateway to the proxy.
+#
+# There is deliberately NO /v1/mcp route: the agent reaches that endpoint
+# directly on the container network, never through the gateway.
+path = "/v1/memory-graph"
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+path = "/v1/memory-graph/*"
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
 
 [[beta.path]]
 # Self-service restart (restart-control): GET reports whether this member's
@@ -404,6 +487,7 @@ methods = ["GET", "POST"]
 
 # admin-shared-content (see the alpha /v1/admin comment). `protected`,
 # tier resolved in-proxy; no user-file content/write route (FR-7).
+
 [[beta.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
 # proxy enforces the exact path+method per route. Collapsed to one
@@ -489,11 +573,52 @@ acceptInsecureRouting = true
 methods = ["GET", "POST", "DELETE"]
 
 [[hermes-glm.path]]
+# Uploads-tree organisation (create folder, move/rename, delete folder). ONE
+# wildcard block: `*` matches the following segment, and /v1/media itself already
+# has its own block above, so there is no "Multiple routes found" conflict.
+#
+# Same write gate as /v1/media, because these write into the same directory an
+# upload does. DELETE here is a RECURSIVE folder delete — the proxy refuses the
+# uploads root, and the interface names the file count before the member confirms.
+group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
+path = "/v1/media/*"
+secretName = "hermes-glm-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST", "DELETE"]
+
+[[hermes-glm.path]]
 group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
 path = "/v1/memory"
 secretName = "hermes-glm-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "PUT"]
+
+[[hermes-glm.path]]
+# Knowledge-graph memory (memory-graph-mcp): READ-ONLY views of the graph the
+# agent builds through its own native MCP server inside crab-shell-proxy.
+#
+# TWO blocks: mycelium's `*` matches a following segment, so it covers
+# /nodes, /search and /recent but not the bare /v1/memory-graph.
+#
+# Gated `write` like /v1/memory even though every method here is GET. The proxy
+# authorizes these with authorizeSecret -- the same write-access chain -- so a
+# read-only member is refused in-proxy regardless; gating lower here would only
+# move the 403 from the gateway to the proxy.
+#
+# There is deliberately NO /v1/mcp route: the agent reaches that endpoint
+# directly on the container network, never through the gateway.
+path = "/v1/memory-graph"
+group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
+secretName = "hermes-glm-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[hermes-glm.path]]
+path = "/v1/memory-graph/*"
+group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
+secretName = "hermes-glm-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
 
 [[hermes-glm.path]]
 # Self-service restart (restart-control): GET reports whether this member's
