@@ -93,6 +93,11 @@ services:
       CRAB_HOST_DATA_ROOT: ${CRAB_HOST_DATA_ROOT:-${PWD}/data}
       CRAB_NETWORK: zombie_net
       CRAB_WEBHOOK_SECRET: ${CRAB_WEBHOOK_SECRET}
+      # Signs the per-workspace bearer token for the proxy's native memory-graph
+      # MCP endpoint. Unset disables the memory graph and changes nothing else;
+      # see docker-compose.yaml for the full note.
+      CRAB_MCP_TOKEN_SECRET: ${CRAB_MCP_TOKEN_SECRET:-}
+      CRAB_MCP_BASE_URL: ${CRAB_MCP_BASE_URL:-http://crab-shell-proxy:8080}
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
       MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
       PICOCLAW_ALPHA_API_KEY: ${PICOCLAW_ALPHA_API_KEY}
