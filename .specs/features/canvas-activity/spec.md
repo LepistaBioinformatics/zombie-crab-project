@@ -35,7 +35,10 @@ it again to say anything about it.
   built on. Both smaller than the conversation dots — they annotate the activity rather
   than being it.
 - **CA-3** Work no conversation claims gets its own strip under the lanes rather than
-  being dropped: a run whose marker is missing, and facts the proxy could not attribute
+  being dropped. **Shipped broken and fixed after the fact:** the marks were computed and
+  the strip was never rendered — an edit that silently failed to match, committed and
+  spec'd as if it existed. Found by auditing which i18n keys had no reader.
+  The strip covers: a run whose marker is missing, and facts the proxy could not attribute
   (cron, the heartbeat, two chats in flight at once). **Unattended work with no
   conversation attached is precisely what a member does not already know about.**
 - **CA-4** A lane's preview offers "reference in chat": it hands the lane to the composer
