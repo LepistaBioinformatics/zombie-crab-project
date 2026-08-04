@@ -195,6 +195,54 @@ so the identity lives in the container's labels, not in its name).
 > (`http://localhost:${MYCELIUM_WEBAPP_PORT:-8081}`) — Mycelium's own admin UI —
 > via the Staff → tenant → subscription → guest-invite flow.
 
+## In the chat client
+
+What a signed-in member gets, beyond the conversation itself. The right-hand
+**Workspace** panel holds four sections; the left sidebar switches between
+workspaces and that workspace's conversations.
+
+**Scheduled tasks** (Workspace → Tasks). Ask the agent to do something on a
+schedule — "compile a report every evening at six" — and it will, unattended.
+The panel lists what is scheduled, its cron expression or interval, whether it is
+enabled, and when it last and next runs. Each task expands to its past
+executions (the three most recent, then *show more*), and opening one renders
+that run's whole transcript: the prompt it woke up with, every tool call, and
+what it produced. A **reference in chat** action drops a one-line marker for a
+task or a single run into the composer, so you can ask the agent about it.
+
+Three things about it are worth stating plainly, because they are deliberate and
+a reader would otherwise go looking for controls that do not exist:
+
+- **It is read-only.** Creating, changing, disabling or deleting a task is done
+  by asking the agent. picoclaw owns the job store and holds the live schedule in
+  memory, and whether it reloads a store edited from outside is unverified — so a
+  toggle in the panel could disagree with the timers actually running.
+- **There is no per-run success mark.** No outcome is recorded per execution
+  anywhere. A run shows its instant, how long it took and how much it logged;
+  the task shows picoclaw's own status for its most recent run and nothing more.
+- **Finished one-off tasks are hidden by default**, behind a switch that always
+  says how many rows it is hiding. A recurring task is never hidden, even
+  disabled — disabling is reversible, and hiding it would read as deletion.
+
+**Picking a workspace.** With none selected, the chat area itself becomes the
+picker: one row per tenant, a box per subscription inside it, and the agents you
+can reach as tiles showing their permissions (an eye for read, a pencil for
+write). Clicking one opens a fresh conversation with it.
+
+**The collapsed sidebar.** Collapsing the left sidebar leaves a rail with an icon
+per panel; the active one is filled, and hovering the rail previews the panel
+without pinning it open. The circled arrow is what opens and closes it.
+
+Also on this surface: **workspace memory** (a file the agent reads on every
+message), the **knowledge graph** it builds on its own, and **files** you attach
+from the composer — see the landing page at `/` for what each is for.
+
+> Operator note: these read routes live on crab-shell-proxy at `/v1/cron/*`, so
+> the gateway needs a matching `[[<agent>.path]]` block or it answers
+> `400 "Request path does not match any service"` before the proxy is reached.
+> All three profiles under [`deploy/`](./deploy/) already carry it, one block per
+> agent.
+
 ## Running and resetting from scratch
 
 The walkthrough above brings up a clean stack. To **reset an existing
