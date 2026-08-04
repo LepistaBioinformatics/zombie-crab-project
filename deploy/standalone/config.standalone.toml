@@ -333,6 +333,27 @@ secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST"]
 
+[[alpha.path]]
+# Scheduled tasks (scheduled-tasks): READ-ONLY views of picoclaw's own cron jobs
+# and the per-run transcripts each execution leaves in the sessions dir.
+#
+# ONE wildcard block: mycelium's `*` matches the following segment, which covers
+# both /v1/cron/tasks and /v1/cron/runs. There is deliberately no bare /v1/cron
+# route, because the proxy exposes none — so no "Multiple routes found" conflict.
+#
+# Gated on the role NAME (read), matching /v1/restart: the proxy authorizes these
+# with its read chain, so a member holding only read on the agent can still see
+# what is scheduled and what it produced.
+#
+# GET only, and that is the whole surface: nothing here writes the job store.
+# picoclaw holds the live schedule in memory, so an externally edited store could
+# silently disagree with the timers actually running.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/cron/*"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
 # admin-shared-content (admin-shared-content feature): hierarchical
 # authority-over-target ops. Registered as `protected` (any resolvable member) —
 # NOT role-gated — because the caller's ADMIN tier (tenant/subscription/instance)
@@ -485,6 +506,14 @@ secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST"]
 
+[[beta.path]]
+# Scheduled tasks (see the alpha /v1/cron comment).
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/cron/*"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
 # admin-shared-content (see the alpha /v1/admin comment). `protected`,
 # tier resolved in-proxy; no user-file content/write route (FR-7).
 
@@ -636,6 +665,14 @@ path = "/v1/restart"
 secretName = "hermes-glm-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST"]
+
+[[hermes-glm.path]]
+# Scheduled tasks (see the alpha /v1/cron comment).
+group = { protectedByRoles = [{ name = "hermes-glm" }] }
+path = "/v1/cron/*"
+secretName = "hermes-glm-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
 
 [[hermes-glm.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the

@@ -294,6 +294,27 @@ acceptInsecureRouting = true
 methods = ["GET", "POST"]
 
 [[alpha.path]]
+# Scheduled tasks (scheduled-tasks): READ-ONLY views of picoclaw's own cron jobs
+# and the per-run transcripts each execution leaves in the sessions dir.
+#
+# ONE wildcard block: mycelium's `*` matches the following segment, which covers
+# both /v1/cron/tasks and /v1/cron/runs. There is deliberately no bare /v1/cron
+# route, because the proxy exposes none — so no "Multiple routes found" conflict.
+#
+# Gated on the role NAME (read), matching /v1/restart: the proxy authorizes these
+# with its read chain, so a member holding only read on the agent can still see
+# what is scheduled and what it produced.
+#
+# GET only, and that is the whole surface: nothing here writes the job store.
+# picoclaw holds the live schedule in memory, so an externally edited store could
+# silently disagree with the timers actually running.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/cron/*"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
 # proxy enforces the exact path+method per route. Collapsed to one
 # wildcard (mycelium matches via the wildmatch crate).
@@ -431,6 +452,14 @@ path = "/v1/restart"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST"]
+
+[[beta.path]]
+# Scheduled tasks (see the alpha /v1/cron comment).
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/cron/*"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
 
 [[beta.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
