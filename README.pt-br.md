@@ -197,6 +197,58 @@ então a identidade fica nas labels, não no nome).
 > (`http://localhost:${MYCELIUM_WEBAPP_PORT:-8081}`) — a UI de admin do próprio
 > Mycelium — via o fluxo Staff → tenant → subscription → guest-invite.
 
+## No cliente de chat
+
+O que um membro logado tem, além da conversa em si. O painel **Workspace**, à
+direita, tem quatro seções; a sidebar da esquerda alterna entre os workspaces e as
+conversas daquele workspace.
+
+**Tarefas agendadas** (Workspace → Tarefas). Peça ao agente para fazer algo em
+horário programado — "compile um relatório toda noite às seis" — e ele faz, sem
+você estar lá. O painel lista o que está agendado, a expressão cron ou o
+intervalo, se está habilitada, e quando rodou pela última vez e roda de novo.
+Cada tarefa expande para suas execuções passadas (as três mais recentes, depois
+*mostrar mais*), e abrir uma renderiza o transcript inteiro daquela execução: o
+comando com que ela acordou, cada chamada de ferramenta e o que produziu. A ação
+**referenciar no chat** coloca no composer um marcador de uma linha para a tarefa
+ou para uma execução específica, para você perguntar sobre ela.
+
+Três pontos merecem ser ditos sem rodeio, porque são deliberados e sem isso o
+leitor procura controles que não existem:
+
+- **É somente leitura.** Criar, alterar, desabilitar ou excluir uma tarefa se faz
+  pedindo ao agente. O picoclaw é dono do store de jobs e mantém o agendamento
+  vivo em memória, e não está verificado se ele recarrega um store editado de
+  fora — então um botão no painel poderia discordar dos timers que de fato rodam.
+- **Não há marca de sucesso por execução.** Nenhum resultado é registrado por
+  execução em lugar nenhum. Uma execução mostra o instante, quanto tempo levou e
+  quanto registrou; a tarefa mostra o status que o picoclaw guarda da execução
+  mais recente, e nada além.
+- **Tarefas de uma vez já concluídas ficam ocultas por padrão**, atrás de um
+  switch que sempre diz quantas linhas está escondendo. Uma tarefa recorrente
+  nunca é ocultada, nem desabilitada — desabilitar é reversível, e esconder
+  pareceria que ela foi excluída.
+
+**Escolher um workspace.** Sem nenhum selecionado, a própria área do chat vira o
+seletor: uma linha por tenant, uma box por subscription dentro dela, e os agentes
+que você alcança como quadradinhos com suas permissões (um olho para leitura, um
+lápis para escrita). Clicar em um abre uma conversa nova com ele.
+
+**A sidebar recolhida.** Recolher a sidebar da esquerda deixa um rail com um ícone
+por painel; o ativo fica preenchido, e passar o mouse no rail dá uma prévia do
+painel sem fixá-lo aberto. A seta na bolinha é o que abre e fecha.
+
+Também nessa superfície: a **memória do workspace** (um arquivo que o agente lê
+em toda mensagem), o **grafo de conhecimento** que ele constrói por conta própria,
+e os **arquivos** que você anexa pelo composer — veja a landing em `/` para o que
+serve cada um.
+
+> Nota de operação: essas rotas de leitura ficam no crab-shell-proxy em
+> `/v1/cron/*`, então o gateway precisa de um bloco `[[<agente>.path]]`
+> correspondente, senão ele responde
+> `400 "Request path does not match any service"` antes de o proxy ser
+> alcançado. Os três perfis em [`deploy/`](./deploy/) já têm, um bloco por agente.
+
 ## Rodando e resetando do zero
 
 O passo-a-passo acima sobe uma stack limpa. Para **resetar um ambiente
