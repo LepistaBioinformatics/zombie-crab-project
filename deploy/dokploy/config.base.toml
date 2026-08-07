@@ -243,6 +243,34 @@ acceptInsecureRouting = true
 methods = ["POST", "DELETE"]
 
 [[alpha.path]]
+# Projects (agent-projects): a member carving their own agent into Claude-style
+# projects, each backed by its own picoclaw agent, workspace and AGENT.md.
+#
+# ONE block per path shape, gated on the role NAME only, because the gateway
+# matches routes by path alone and rejects two blocks sharing one path -- the
+# same constraint /v1/restart documents. GET needs only read; POST must require
+# write, and that is enforced in-proxy by the same profile chain /v1/secrets
+# uses. A read-only member reaching a mutation gets a 403 there.
+#
+# Not declared for hermes-glm: a project IS a picoclaw agents.list entry plus a
+# dispatch rule, and the hermes harness never reads config.json. The proxy
+# answers 501 there rather than routing a project chat to the ordinary agent.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/projects"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST"]
+
+[[alpha.path]]
+# Per-project mutations: /v1/projects/<id>. Wildcard because the id is a path
+# segment, mirroring /v1/media/* and /v1/memory-graph/*.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/projects/*"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["PATCH", "DELETE"]
+
+[[alpha.path]]
 group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
 path = "/v1/memory"
 secretName = "alpha-authorization-header"
@@ -401,6 +429,34 @@ path = "/v1/media/*"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["POST", "DELETE"]
+
+[[beta.path]]
+# Projects (agent-projects): a member carving their own agent into Claude-style
+# projects, each backed by its own picoclaw agent, workspace and AGENT.md.
+#
+# ONE block per path shape, gated on the role NAME only, because the gateway
+# matches routes by path alone and rejects two blocks sharing one path -- the
+# same constraint /v1/restart documents. GET needs only read; POST must require
+# write, and that is enforced in-proxy by the same profile chain /v1/secrets
+# uses. A read-only member reaching a mutation gets a 403 there.
+#
+# Not declared for hermes-glm: a project IS a picoclaw agents.list entry plus a
+# dispatch rule, and the hermes harness never reads config.json. The proxy
+# answers 501 there rather than routing a project chat to the ordinary agent.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/projects"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST"]
+
+[[beta.path]]
+# Per-project mutations: /v1/projects/<id>. Wildcard because the id is a path
+# segment, mirroring /v1/media/* and /v1/memory-graph/*.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/projects/*"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["PATCH", "DELETE"]
 
 [[beta.path]]
 group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
