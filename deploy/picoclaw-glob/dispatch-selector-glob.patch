@@ -1,0 +1,276 @@
+diff --git a/docs/guides/routing-guide.md b/docs/guides/routing-guide.md
+index a479843..4827bab 100644
+--- a/docs/guides/routing-guide.md
++++ b/docs/guides/routing-guide.md
+@@ -119,6 +119,39 @@ If no rule matches, PicoClaw falls back to the default agent.
+ 
+ Values must match the normalized runtime shape, not the raw incoming payload.
+ 
++## Wildcards
++
++Every field above except `mentioned` accepts `*`, which matches any sequence of
++characters including an empty one. A value with no `*` is compared exactly, so
++existing rules keep behaving as before.
++
++This is what lets one rule cover a family of chats instead of naming each one —
++useful when chat IDs are created dynamically and a per-chat rule list would grow
++without bound:
++
++```json
++{
++  "name": "project-seedtrial",
++  "agent": "seedtrial",
++  "when": {
++    "channel": "pico",
++    "chat": "direct:pico:p.seedtrial.*"
++  }
++}
++```
++
++`*` is the only special character. `?`, `[`, `]` and `\` are matched literally,
++so a pattern can never be malformed — a rule either matches what you wrote or it
++does not.
++
++Two things to watch:
++
++- A wildcard rule can overlap a narrower one. Rules are evaluated top to bottom,
++  so keep the specific rule above the wildcard (see Rule Ordering below).
++- `"*"` on its own matches everything for that field. As the only constraint in a
++  rule, it makes that rule a catch-all that no later rule can ever be reached
++  past.
++
+ ## Rule Ordering
+ 
+ Put more specific rules before broader rules.
+diff --git a/pkg/routing/route.go b/pkg/routing/route.go
+index 023f35a..2300677 100644
+--- a/pkg/routing/route.go
++++ b/pkg/routing/route.go
+@@ -177,22 +177,22 @@ func (r *RouteResolver) matchDispatchRule(view dispatchView) *config.DispatchRul
+ 
+ func ruleMatchesView(rule config.DispatchRule, view dispatchView) bool {
+ 	when := normalizeDispatchSelector(rule.When)
+-	if when.Channel != "" && when.Channel != view.Channel {
++	if !selectorMatches(when.Channel, view.Channel) {
+ 		return false
+ 	}
+-	if when.Account != "" && when.Account != view.Account {
++	if !selectorMatches(when.Account, view.Account) {
+ 		return false
+ 	}
+-	if when.Space != "" && when.Space != view.Space {
++	if !selectorMatches(when.Space, view.Space) {
+ 		return false
+ 	}
+-	if when.Chat != "" && when.Chat != view.Chat {
++	if !selectorMatches(when.Chat, view.Chat) {
+ 		return false
+ 	}
+-	if when.Topic != "" && when.Topic != view.Topic {
++	if !selectorMatches(when.Topic, view.Topic) {
+ 		return false
+ 	}
+-	if when.Sender != "" && when.Sender != view.Sender {
++	if !selectorMatches(when.Sender, view.Sender) {
+ 		return false
+ 	}
+ 	if when.Mentioned != nil && *when.Mentioned != view.Mentioned {
+@@ -201,6 +201,82 @@ func ruleMatchesView(rule config.DispatchRule, view dispatchView) bool {
+ 	return true
+ }
+ 
++// selectorMatches reports whether one dispatch selector accepts the inbound
++// value. An empty pattern is an unconstrained selector and matches anything.
++//
++// A pattern containing no "*" is compared exactly, which is what every existing
++// configuration relies on. A pattern containing "*" is matched as a glob, so one
++// rule can cover a family of chats instead of naming each one. This matters for
++// deployments that create chats dynamically: without it, routing a group of
++// conversations to an agent needs one rule per conversation.
++//
++// "*" is the only metacharacter. "?", "[", "]" and "\" are ordinary characters.
++// That is a deliberate restriction rather than an oversight:
++//
++//   - filepath.Match would be the obvious reach, but its "*" does not cross the
++//     path separator, and chat identifiers on several channels contain "/".
++//   - A syntax with character classes has malformed patterns, and every way of
++//     handling one is bad here — treating it as no-match silently disables a
++//     rule, treating it as a match silently turns it into a catch-all that
++//     reroutes conversations to the wrong agent. With "*" alone, no pattern can
++//     be malformed.
++//
++// Both sides arrive lowercased (normalizeDispatchSelector and buildDispatchView),
++// so matching stays case-insensitive without extra work here.
++func selectorMatches(pattern, value string) bool {
++	if pattern == "" {
++		return true
++	}
++	if !strings.Contains(pattern, "*") {
++		return pattern == value
++	}
++	return globMatch(pattern, value)
++}
++
++// globMatch matches value against a pattern in which "*" stands for any sequence
++// of characters, including the empty one.
++//
++// Consuming left to right needs no backtracking: with "*" as the only
++// metacharacter, taking the leftmost occurrence of each literal segment is
++// always safe, because anything skipped can be absorbed by the "*" that precedes
++// it.
++func globMatch(pattern, value string) bool {
++	segments := strings.Split(pattern, "*")
++	if len(segments) == 1 {
++		return pattern == value
++	}
++
++	// The text before the first "*" must be a prefix.
++	if first := segments[0]; first != "" {
++		if !strings.HasPrefix(value, first) {
++			return false
++		}
++		value = value[len(first):]
++	}
++
++	// The text after the last "*" must be a suffix of what is left, which is also
++	// what stops a prefix and a suffix from claiming the same characters.
++	if last := segments[len(segments)-1]; last != "" {
++		if !strings.HasSuffix(value, last) {
++			return false
++		}
++		value = value[:len(value)-len(last)]
++	}
++
++	// Every remaining segment must appear in order, without overlapping.
++	for _, segment := range segments[1 : len(segments)-1] {
++		if segment == "" {
++			continue
++		}
++		idx := strings.Index(value, segment)
++		if idx < 0 {
++			return false
++		}
++		value = value[idx+len(segment):]
++	}
++	return true
++}
++
+ func matchedByForRule(rule *config.DispatchRule) string {
+ 	if rule == nil {
+ 		return "default"
+diff --git a/pkg/routing/route_test.go b/pkg/routing/route_test.go
+index 729e880..a1e387a 100644
+--- a/pkg/routing/route_test.go
++++ b/pkg/routing/route_test.go
+@@ -231,3 +231,111 @@ func TestResolveRoute_NoDefaultUsesFirst(t *testing.T) {
+ 		t.Errorf("AgentID = %q, want 'alpha' (first in list)", route.AgentID)
+ 	}
+ }
++
++func TestSelectorMatches(t *testing.T) {
++	tests := []struct {
++		name    string
++		pattern string
++		value   string
++		want    bool
++	}{
++		// An empty selector is unconstrained.
++		{"empty pattern matches anything", "", "direct:pico:abc", true},
++		{"empty pattern matches empty value", "", "", true},
++
++		// No "*" keeps the pre-existing exact comparison.
++		{"literal match", "group:-100123", "group:-100123", true},
++		{"literal mismatch", "group:-100123", "group:-100124", false},
++		{"literal is not a prefix match", "group:-100", "group:-100123", false},
++
++		{"bare star matches anything", "*", "direct:pico:abc", true},
++		{"bare star matches empty value", "*", "", true},
++		{"prefix", "direct:pico:p.demo.*", "direct:pico:p.demo.a1b2", true},
++		{"prefix rejects other prefixes", "direct:pico:p.demo.*", "direct:pico:p.other.a1b2", false},
++		{"prefix matches empty remainder", "direct:pico:p.demo.*", "direct:pico:p.demo.", true},
++		{"suffix", "*.internal", "team.internal", true},
++		{"suffix mismatch", "*.internal", "team.external", false},
++		{"middle", "group:*:staging", "group:eu-west:staging", true},
++		{"middle mismatch", "group:*:staging", "group:eu-west:prod", false},
++		{"several stars", "a*b*c", "axxbyyc", true},
++		{"several stars out of order", "a*b*c", "axxcyyb", false},
++		{"star does not require characters", "ab*", "ab", true},
++		{"prefix and suffix may not overlap", "aa*aa", "aaa", false},
++		{"prefix and suffix exactly adjacent", "aa*aa", "aaaa", true},
++
++		// "*" is the ONLY metacharacter. Everything else is literal, which is what
++		// makes malformed patterns impossible.
++		{"question mark is literal", "a?c", "a?c", true},
++		{"question mark does not match one char", "a?c", "abc", false},
++		{"bracket is literal", "chat[1]", "chat[1]", true},
++		{"unbalanced bracket is literal, not an error", "chat[1", "chat[1", true},
++		// A backslash is an ordinary character: it does not escape the "*", which
++		// still globs, and it is itself required to be present in the value.
++		{"backslash does not escape the star", `a\*b`, `a\xyzb`, true},
++		{"backslash itself must match", `a\*b`, `axyzb`, false},
++	}
++
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			if got := selectorMatches(tt.pattern, tt.value); got != tt.want {
++				t.Errorf("selectorMatches(%q, %q) = %v, want %v",
++					tt.pattern, tt.value, got, tt.want)
++			}
++		})
++	}
++}
++
++// TestResolveRoute_WildcardChatSelector is the reason the glob exists: one rule
++// covering a family of chats, instead of one rule per chat identifier.
++func TestResolveRoute_WildcardChatSelector(t *testing.T) {
++	cfg := testConfig([]config.AgentConfig{
++		{ID: "main", Default: true},
++		{ID: "seedtrial"},
++	})
++	cfg.Agents.Dispatch = &config.DispatchConfig{
++		Rules: []config.DispatchRule{{
++			Name:  "project-seedtrial",
++			Agent: "seedtrial",
++			When: config.DispatchSelector{
++				Channel: "pico",
++				Chat:    "direct:pico:p.seedtrial.*",
++			},
++		}},
++	}
++	r := NewRouteResolver(cfg)
++
++	inbound := func(chatID string) bus.InboundContext {
++		return bus.InboundContext{
++			Channel:  "pico",
++			ChatID:   chatID,
++			ChatType: "direct",
++			SenderID: "pico-user",
++		}
++	}
++
++	// Two distinct conversations sharing the prefix reach the same agent.
++	for _, chatID := range []string{"pico:p.seedtrial.aaa111", "pico:p.seedtrial.bbb222"} {
++		route := r.ResolveRoute(inbound(chatID))
++		if route.AgentID != "seedtrial" {
++			t.Errorf("chat %q: AgentID = %q, want 'seedtrial'", chatID, route.AgentID)
++		}
++		if route.MatchedBy != "dispatch.rule:project-seedtrial" {
++			t.Errorf("chat %q: MatchedBy = %q", chatID, route.MatchedBy)
++		}
++	}
++
++	// A conversation with no project prefix falls through to the default agent.
++	route := r.ResolveRoute(inbound("pico:9f2c4e"))
++	if route.AgentID != "main" {
++		t.Errorf("unprefixed chat: AgentID = %q, want 'main'", route.AgentID)
++	}
++	if route.MatchedBy != "default" {
++		t.Errorf("unprefixed chat: MatchedBy = %q, want 'default'", route.MatchedBy)
++	}
++
++	// A different project's prefix must not be captured by this rule.
++	route = r.ResolveRoute(inbound("pico:p.other.aaa111"))
++	if route.AgentID != "main" {
++		t.Errorf("other project: AgentID = %q, want 'main'", route.AgentID)
++	}
++}
