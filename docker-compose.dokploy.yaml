@@ -92,6 +92,23 @@ services:
       CRAB_CONTAINER_DATA_ROOT: /data
       CRAB_HOST_DATA_ROOT: ${CRAB_HOST_DATA_ROOT:-${PWD}/data}
       CRAB_NETWORK: zombie_net
+      # Harness image for spawned containers.
+      #
+      # Stays on UPSTREAM here, unlike docker-compose.yaml, and the difference is
+      # deliberate. This mode PULLS every image from a registry, while the patched
+      # picoclaw (deploy/picoclaw-glob/) is built locally and exists only on the
+      # dev machine. Defaulting to that tag here would fail the pull on every cold
+      # start of every spawned container.
+      #
+      # Consequence: the agent-projects feature does NOT work in this mode.
+      # Projects can be created, but every project chat is answered by the main
+      # agent, because stock picoclaw matches agents.dispatch selectors by exact
+      # string equality and the wildcard rule never matches.
+      #
+      # To enable it: publish the patched image (ghcr.io/lepistabioinformatics/
+      # picoclaw:0.3.1-glob, alongside the other images this file pulls) and set
+      # CRAB_PICOCLAW_IMAGE to it in the deploy env.
+      CRAB_PICOCLAW_IMAGE: ${CRAB_PICOCLAW_IMAGE:-docker.io/sipeed/picoclaw:latest}
       CRAB_WEBHOOK_SECRET: ${CRAB_WEBHOOK_SECRET}
       # Signs the per-workspace bearer token for the proxy's native memory-graph
       # MCP endpoint. Unset disables the memory graph and changes nothing else;

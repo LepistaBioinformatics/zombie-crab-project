@@ -61,6 +61,21 @@ containerPrefix: "crabshell"
 # file; register the same value with mycelium's webhook (Authorization: Bearer).
 webhookSecret: { env: "CRAB_WEBHOOK_SECRET" }
 
+# Signs the bearer token a spawned agent presents to the proxy's own MCP endpoint
+# (POST /v1/mcp) to reach its knowledge-graph memory.
+#
+# THIS LINE IS REQUIRED FOR THE MEMORY GRAPH, and setting CRAB_MCP_TOKEN_SECRET in
+# the environment is not enough on its own: unlike CRAB_MCP_BASE_URL, which the
+# proxy also reads directly from the environment, this field is only resolved
+# through the `{ env: … }` declaration here. This file overrides the image's baked
+# config.yaml wholesale, so omitting the line silently drops the declaration that
+# file carries — which is exactly how a production deploy ended up with no memory
+# graph and then a hand-edited, duplicate-keyed config that would not parse.
+#
+# Leaving CRAB_MCP_TOKEN_SECRET itself empty is still supported and simply disables
+# the graph; it is the missing DECLARATION that has no recovery.
+mcpTokenSecret: { env: "CRAB_MCP_TOKEN_SECRET" }
+
 agents:
   alpha:
     serviceName: "alpha" # matches x-mycelium-service-name mycelium injects

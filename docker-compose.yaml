@@ -83,9 +83,39 @@ services:
   # stack (it can control the host daemon). Runs as root by necessity
   # (docker.sock + root-owned picoclaw data). Acceptable for this self-host dev
   # stack; revisit for production (see design R2).
+  # Builds the PATCHED picoclaw image the proxy spawns per (agent, user).
+  #
+  # Not a running service. It exists so `docker compose up` produces the image
+  # automatically instead of leaving it as a manual step someone forgets — the
+  # failure mode of forgetting is subtle: projects simply never route, because
+  # stock picoclaw matches agents.dispatch selectors by exact string equality and
+  # the wildcard rule the proxy writes never matches anything.
+  #
+  # It runs /bin/true and exits 0; crab-shell-proxy waits for that completion, so
+  # the image is guaranteed present before anything can spawn a container from it.
+  #
+  # The tag here is FIXED rather than ${CRAB_PICOCLAW_IMAGE}: this service builds
+  # one specific artifact, and pointing the proxy elsewhere (back to upstream,
+  # say) must not silently re-tag that upstream name onto a locally patched build.
+  #
+  # Delete this service, deploy/picoclaw-glob/ and the override below once the
+  # patch is upstream and released. See
+  # crab/crab-shell-proxy/.specs/features/agent-projects/.
+  picoclaw-image:
+    build:
+      context: ./deploy/picoclaw-glob
+      args:
+        PICOCLAW_TAG: ${PICOCLAW_TAG:-v0.3.1}
+    image: zombie-crab/picoclaw:0.3.1-glob
+    entrypoint: ["/bin/true"]
+    restart: "no"
+
   crab-shell-proxy:
     build:
       context: ./crab/crab-shell-proxy
+    depends_on:
+      picoclaw-image:
+        condition: service_completed_successfully
     restart: unless-stopped
     networks:
       - zombie_net
@@ -100,6 +130,20 @@ services:
       CRAB_HOST_DATA_ROOT: ${CRAB_HOST_DATA_ROOT:-${PWD}/data}
       CRAB_CONTAINER_DATA_ROOT: /data
       CRAB_NETWORK: zombie_net
+      # Harness image for spawned containers. Defaults to the PATCHED build from
+      # the picoclaw-image service above, because the agent-projects feature does
+      # not work without it: stock picoclaw matches agents.dispatch selectors by
+      # exact string equality, so the wildcard rule the proxy writes per project
+      # never matches and every project chat is answered by the main agent.
+      #
+      # EnsureImage takes a local image as-is and never tries to pull it
+      # (internal/docker/client.go), which is what lets an unpublished local tag
+      # work here. That is also why the dokploy/prod files do NOT default to it —
+      # they pull from a registry.
+      #
+      # Set it back to docker.io/sipeed/picoclaw:latest to run stock picoclaw
+      # (projects stop working; nothing else changes).
+      CRAB_PICOCLAW_IMAGE: ${CRAB_PICOCLAW_IMAGE:-zombie-crab/picoclaw:0.3.1-glob}
       # Shared secret authenticating POST /v1/accounts (the mycelium
       # subscriptionAccount.created webhook). Register the webhook in mycelium
       # with an Authorization: Bearer <this> header -- see README/STATE.
