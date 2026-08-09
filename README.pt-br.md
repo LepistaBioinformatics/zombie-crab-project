@@ -423,3 +423,29 @@ Ajustado para ser fácil de ler e rodar localmente, não endurecido de fábrica:
 - **Rotacione os segredos** no `.env` (bearer tokens, chaves LLM, bootstrap
   secret) antes de compartilhar esta stack; os valores reais são gitignored —
   mantenha assim.
+
+## Licença
+
+Licenciado sob uma destas, à sua escolha:
+
+- Apache License, Versão 2.0 ([`LICENSE-APACHE`](./LICENSE-APACHE) ou
+  <http://www.apache.org/licenses/LICENSE-2.0>)
+- Licença MIT ([`LICENSE-MIT`](./LICENSE-MIT) ou
+  <http://opensource.org/licenses/MIT>)
+
+A menos que você declare explicitamente o contrário, qualquer contribuição
+submetida intencionalmente para inclusão neste projeto por você, conforme
+definido na licença Apache-2.0, será duplamente licenciada como acima, sem
+termos ou condições adicionais.
+
+Isso cobre **o conteúdo deste repositório** — os arquivos de compose, os
+configs de deploy, a documentação e os overlays de build em `fungi/`. Os dois
+submódulos sob `crab/` carregam suas próprias cópias da mesma licença dupla. Os
+componentes de terceiros que esta stack constrói e executa estão sob seus
+próprios termos e **não** são relicenciados por nada aqui — em particular o
+[mycelium](https://github.com/LepistaBioinformatics/mycelium) e sua UI de
+administração, que os Dockerfiles em `fungi/` baixam do upstream no momento do
+build da imagem, são distribuídos sob a Apache License 2.0 **com a Commons
+Clause**, que é mais restritiva que qualquer uma das licenças acima. Verifique
+cada projeto upstream antes de redistribuir ou oferecer comercialmente a stack
+montada.

@@ -408,3 +408,29 @@ Tuned to be easy to read and run locally, not hardened out of the box:
   internet, and re-enable `chat-webapp`'s `Secure` session cookie.
 - **Rotate secrets** in `.env` (bearer tokens, LLM keys, bootstrap secret)
   before sharing this stack; real values are gitignored — keep them that way.
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([`LICENSE-APACHE`](./LICENSE-APACHE) or
+  <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([`LICENSE-MIT`](./LICENSE-MIT) or
+  <http://opensource.org/licenses/MIT>)
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in this project by you, as defined in the Apache-2.0 license,
+shall be dual licensed as above, without any additional terms or conditions.
+
+This covers **this repository's own contents** — the compose files, the deploy
+configs, the docs, and the `fungi/` build overlays. The two submodules under
+`crab/` carry their own copies of the same dual license. The third-party
+components this stack builds and runs are under their own terms and are *not*
+relicensed by anything here — in particular
+[mycelium](https://github.com/LepistaBioinformatics/mycelium) and its admin UI,
+which the `fungi/` Dockerfiles fetch from upstream at image-build time, are
+distributed under the Apache License 2.0 **with the Commons Clause**, which is
+more restrictive than either license above. Check each upstream project before
+redistributing or offering the assembled stack commercially.
