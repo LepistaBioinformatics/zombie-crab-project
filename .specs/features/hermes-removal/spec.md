@@ -528,6 +528,17 @@ pointer bump depends on the proxy and webapp merges.
 | HRM-48..51 | operational residue | P3 | Tasks | Pending |
 | HRM-52..58 | drift (§H) | P1 / P2 | Tasks | Pending |
 
+### ⚠️ One acceptance criterion is NOT fully met
+
+P1 story 2, criterion 2 requires `implementation-notes.md` to record, among other things, **"the
+`state.db` session/message schema"**. It does **not**. The proxy never opened that file, so nothing
+in the codebase or its history records the schema, and the execution session had no running Hermes
+container to inspect. Rather than write a plausible-sounding shape that a future reader would trust
+without re-deriving — which would defeat the document's entire purpose — the file states that the
+schema was never recorded and gives the command to obtain it (`sqlite3 <userDir>/state.db .schema`)
+on a re-add. **Every other item in that criterion is recorded.** Treat this as a known, deliberate
+gap, not an oversight.
+
 **Coverage:** 58 requirements. Under ED-1 (Option A), **HRM-23 is out of scope entirely**, and
 HRM-21/22/26/27 apply in their comment-only form. See `tasks.md` for the ID→task map.
 **Blocked on:** nothing. OD-1 resolved (ED-1).

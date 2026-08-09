@@ -155,6 +155,20 @@ failures and "green" would have been the wrong target:
 | webapp `next build` | succeeds |
 | landing page | untouched in both locales — no file under `lib/i18n/landing.ts`, `components/landing/` or `landing.module.css` is in the diff |
 
-**Not run in this environment:** the live stack boot (compose up, sign in, chat with `alpha` through
-the gateway, confirm no picoclaw container was recreated). That gate requires a running deployment and
-must be exercised before merge.
+Also checked after the change: `gofmt -l` in the proxy lists **exactly the same 5 pre-existing files**
+as before (none of them touched by this work); the three deploy TOMLs were re-parsed with `tomllib`;
+and no `.env` file was committed (TRAP-6 — `deploy/standalone/.env` is gitignored and holds a real
+z.ai key). The webapp has no ESLint configuration and CI builds images only, so there is no lint gate
+to run.
+
+## Known gaps
+
+1. **The live stack boot was NOT run** — compose up, sign in, chat with `alpha` through the gateway,
+   confirm no picoclaw container was recreated. That gate needs a running deployment and **must be
+   exercised before merge.**
+2. **The `state.db` schema is not recorded**, though P1 story 2 criterion 2 asks for it. The proxy
+   never opened that file, so neither the code nor its history holds the schema, and there was no
+   running Hermes container to inspect. `implementation-notes.md` says so explicitly and gives the
+   command to get it, rather than guessing at a shape a future reader would trust.
+3. **`deploy/standalone/.env` still holds the dead `MYC_HERMES_GLM_TOKEN` / `PROXY_GLM_API_KEY`
+   vars** (HRM-34). Operator-owned local hygiene; harmless, and never to be committed.

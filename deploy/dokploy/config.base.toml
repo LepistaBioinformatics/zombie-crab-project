@@ -272,7 +272,7 @@ methods = ["POST", "DELETE"]
 #
 # A project IS a picoclaw agents.list entry plus a dispatch rule, written into
 # the user's config.json — so this route only means anything for an agent that
-# answers 501 there rather than routing a project chat to the ordinary agent.
+# reads it.
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/projects"
 secretName = "alpha-authorization-header"
@@ -478,7 +478,7 @@ methods = ["POST", "DELETE"]
 #
 # A project IS a picoclaw agents.list entry plus a dispatch rule, written into
 # the user's config.json — so this route only means anything for an agent that
-# answers 501 there rather than routing a project chat to the ordinary agent.
+# reads it.
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/projects"
 secretName = "beta-authorization-header"
