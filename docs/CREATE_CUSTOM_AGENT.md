@@ -164,11 +164,12 @@ agents:
 > **Mode:** `continuous` keeps the container running so the in-memory session
 > isn't reset between turns; `scale-to-zero` stops it after `idleTimeout`.
 
-> **Harness:** omitting `harness` gives you picoclaw (the default), driven over
-> the Pico Protocol. `harness: hermes` runs a hermes-agent container instead,
-> driven over its OpenAI-compatible API server — see the `hermes-glm` entry in
-> `crab/crab-shell-proxy/config.yaml` for the extra `model` fields it takes
-> (`baseUrl`, `keyEnvName`) and its much longer `startupDeadline`.
+> **Harness:** leave `harness` out. Picoclaw is the only runtime the proxy
+> orchestrates, and it is what an omitted `harness` defaults to. Any other value
+> makes the proxy **refuse to start** — deliberately, so a stale config fails loudly
+> rather than handing a user a picoclaw container under a role provisioned for
+> something else. A second harness was built once and withdrawn; see
+> `.specs/features/hermes-removal/DECISION.md`.
 
 ### 4.5 Register the mycelium route
 
@@ -182,8 +183,8 @@ Do it in **every mode you deploy**, they are separate files:
 
 | Mode | File | Agents it declares today |
 |---|---|---|
-| standalone | `deploy/standalone/config.standalone.toml` | alpha, beta, hermes-glm |
-| prod | `deploy/prod/config.base.toml` | alpha, beta, hermes-glm |
+| standalone | `deploy/standalone/config.standalone.toml` | alpha, beta |
+| prod | `deploy/prod/config.base.toml` | alpha, beta |
 | dokploy | `deploy/dokploy/config.base.toml` | alpha, beta |
 
 The `protectedByRoles` blocks also declare the guest-role: mycelium auto-creates

@@ -12,10 +12,10 @@
 # deps) -- this file changes ONLY the infrastructure sections; the API-gateway
 # routing below is the same as config.standalone.toml (crab-shell-proxy:8080,
 # protectedByRoles) with ONE deliberate omission: this mode runs picoclaw only,
-# so there is no `[[hermes-glm]]` service here. That matches
+# so there is one service block per agent here. That matches
 # deploy/dokploy/crab-shell-proxy.config.yaml, which drops the same agent from
-# the proxy's catalog. Re-adding hermes means editing BOTH files and supplying
-# MYC_HERMES_GLM_TOKEN + PROXY_GLM_API_KEY.
+# the proxy's catalog. Adding an agent means editing BOTH files and supplying its
+# MYC_<AGENT>_TOKEN.
 #
 # Differences vs. standalone, all infra:
 #   - vault disabled; core/jwt/hmac/token secrets resolved from env (base mode
@@ -156,7 +156,7 @@ target = "stdout"
 
 # ==============================================================================
 # API GATEWAY ROUTE CONFIGURATION -- the same routes as config.standalone.toml
-# for alpha and beta; hermes-glm is deliberately absent (see the header). See
+# for alpha and beta. See
 # that file's `[api.services]` comment block for the full routing, header
 # contract, and protectedByRoles rationale. A route added to one of the three
 # deploy TOMLs has to be added to the others.
@@ -203,8 +203,8 @@ methods = ["GET"]
 # GET needs only read; every mutation must require write, and that is enforced
 # in-proxy by the same profile chain /v1/secrets uses.
 #
-# Not declared for hermes-glm: a personal model IS a picoclaw model_list entry,
-# and the hermes harness never reads config.json. The proxy answers 501 there.
+# A personal model IS a picoclaw model_list entry, written into the user's
+# config.json — so this route only means anything for an agent that reads it.
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/models/*"
 secretName = "alpha-authorization-header"
@@ -270,8 +270,8 @@ methods = ["POST", "DELETE"]
 # write, and that is enforced in-proxy by the same profile chain /v1/secrets
 # uses. A read-only member reaching a mutation gets a 403 there.
 #
-# Not declared for hermes-glm: a project IS a picoclaw agents.list entry plus a
-# dispatch rule, and the hermes harness never reads config.json. The proxy
+# A project IS a picoclaw agents.list entry plus a dispatch rule, written into
+# the user's config.json — so this route only means anything for an agent that
 # answers 501 there rather than routing a project chat to the ordinary agent.
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/projects"
@@ -409,8 +409,8 @@ methods = ["GET"]
 # GET needs only read; every mutation must require write, and that is enforced
 # in-proxy by the same profile chain /v1/secrets uses.
 #
-# Not declared for hermes-glm: a personal model IS a picoclaw model_list entry,
-# and the hermes harness never reads config.json. The proxy answers 501 there.
+# A personal model IS a picoclaw model_list entry, written into the user's
+# config.json — so this route only means anything for an agent that reads it.
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/models/*"
 secretName = "beta-authorization-header"
@@ -476,8 +476,8 @@ methods = ["POST", "DELETE"]
 # write, and that is enforced in-proxy by the same profile chain /v1/secrets
 # uses. A read-only member reaching a mutation gets a 403 there.
 #
-# Not declared for hermes-glm: a project IS a picoclaw agents.list entry plus a
-# dispatch rule, and the hermes harness never reads config.json. The proxy
+# A project IS a picoclaw agents.list entry plus a dispatch rule, written into
+# the user's config.json — so this route only means anything for an agent that
 # answers 501 there rather than routing a project chat to the ordinary agent.
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/projects"

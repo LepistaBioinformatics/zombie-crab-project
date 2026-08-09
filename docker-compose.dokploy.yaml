@@ -84,10 +84,9 @@ services:
         type: volume
         volume: {}
   crab-shell-proxy:
-    # picoclaw ONLY in this mode -- no MYC_HERMES_GLM_TOKEN / PROXY_GLM_API_KEY,
-    # matching the agent catalog mounted below and the services declared in
-    # deploy/dokploy/config.base.toml. Re-adding hermes means editing both of
-    # those files and adding the two variables back here.
+    # One token variable per agent, matching the catalog mounted below and the
+    # services declared in deploy/dokploy/config.base.toml. Adding an agent means
+    # editing both of those files and adding its variable here.
     environment:
       CRAB_CONTAINER_DATA_ROOT: /data
       CRAB_HOST_DATA_ROOT: ${CRAB_HOST_DATA_ROOT:-${PWD}/data}
@@ -147,7 +146,7 @@ services:
         bind:
           create_host_path: true
       # Deploy-owned agent catalog, overriding the image's baked config.yaml so
-      # operators can customize agents (e.g. drop hermes-glm) without a rebuild.
+      # operators can add or drop agents without a rebuild.
       - type: bind
         source: ./deploy/dokploy/crab-shell-proxy.config.yaml
         target: /etc/crab-shell-proxy/config.yaml

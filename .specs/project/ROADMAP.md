@@ -123,6 +123,16 @@ Telegram / MS Teams channels.
 
 - Production hardening (TLS termination, secret rotation, Docker-socket privilege — see AD-009 R2)
 - Per-user (not just per-agent) lifecycle mode overrides
+- **multi-harness support (DEFERRED — withdrawn 2026-08-09)** — orchestrating a
+  non-picoclaw agent runtime behind the same proxy. Hermes Agent (Nous Research)
+  was implemented and **verified working end-to-end**, then withdrawn for current
+  infrastructure compatibility: a 180s startup deadline against a 35s global
+  health-wait, and turns sitting near mycelium's 60s `gatewayTimeout` (never
+  solved). The generic harness seam is kept dormant, so a re-add is "write the
+  profile". Decision: `.specs/features/hermes-removal/DECISION.md`. Design record:
+  `.specs/features/multi-harness-support/`. **Start from**
+  `crab/crab-shell-proxy/.specs/features/multi-harness-support/implementation-notes.md`
+  — the runtime findings from the live E2E.
 - **conversation-tree-view** (PLANNED) — optional "Tree" view mode in the chat
   sidebar: a vertical time-ordered spine where each conversation is a colored
   lane and each message is a dot, reconciling the agent's continuous per-session

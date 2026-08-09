@@ -9,7 +9,7 @@
 # The default local stack still uses config.standalone.toml (SQLite, no external
 # deps) -- this file changes ONLY the infrastructure sections; the API-gateway
 # routing below is IDENTICAL to config.standalone.toml (crab-shell-proxy:8080,
-# protectedByRoles, the full alpha/beta/hermes-glm route set).
+# protectedByRoles, the full alpha/beta route set).
 #
 # THIS MODE IS NOT THE TRAEFIK ONE. It keeps the base file's PUBLISHED HOST PORTS
 # (gateway :8080, chat-webapp :3000, mycelium-webapp :8081) and terminates no TLS
@@ -175,7 +175,7 @@ target = "stdout"
 
 # ==============================================================================
 # API GATEWAY ROUTE CONFIGURATION -- IDENTICAL to config.standalone.toml,
-# agent for agent (alpha, beta, hermes-glm). See that file's `[api.services]`
+# agent for agent (alpha, beta). See that file's `[api.services]`
 # comment block for the full routing, header contract, and protectedByRoles
 # rationale. Kept in sync verbatim: only the infrastructure sections above
 # differ between standalone and base mode. A route added to one of the three
@@ -223,8 +223,8 @@ methods = ["GET"]
 # GET needs only read; every mutation must require write, and that is enforced
 # in-proxy by the same profile chain /v1/secrets uses.
 #
-# Not declared for hermes-glm: a personal model IS a picoclaw model_list entry,
-# and the hermes harness never reads config.json. The proxy answers 501 there.
+# A personal model IS a picoclaw model_list entry, written into the user's
+# config.json — so this route only means anything for an agent that reads it.
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/models/*"
 secretName = "alpha-authorization-header"
@@ -290,8 +290,8 @@ methods = ["POST", "DELETE"]
 # write, and that is enforced in-proxy by the same profile chain /v1/secrets
 # uses. A read-only member reaching a mutation gets a 403 there.
 #
-# Not declared for hermes-glm: a project IS a picoclaw agents.list entry plus a
-# dispatch rule, and the hermes harness never reads config.json. The proxy
+# A project IS a picoclaw agents.list entry plus a dispatch rule, written into
+# the user's config.json — so this route only means anything for an agent that
 # answers 501 there rather than routing a project chat to the ordinary agent.
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/projects"
@@ -429,8 +429,8 @@ methods = ["GET"]
 # GET needs only read; every mutation must require write, and that is enforced
 # in-proxy by the same profile chain /v1/secrets uses.
 #
-# Not declared for hermes-glm: a personal model IS a picoclaw model_list entry,
-# and the hermes harness never reads config.json. The proxy answers 501 there.
+# A personal model IS a picoclaw model_list entry, written into the user's
+# config.json — so this route only means anything for an agent that reads it.
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/models/*"
 secretName = "beta-authorization-header"
@@ -496,8 +496,8 @@ methods = ["POST", "DELETE"]
 # write, and that is enforced in-proxy by the same profile chain /v1/secrets
 # uses. A read-only member reaching a mutation gets a 403 there.
 #
-# Not declared for hermes-glm: a project IS a picoclaw agents.list entry plus a
-# dispatch rule, and the hermes harness never reads config.json. The proxy
+# A project IS a picoclaw agents.list entry plus a dispatch rule, written into
+# the user's config.json — so this route only means anything for an agent that
 # answers 501 there rather than routing a project chat to the ordinary agent.
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/projects"
@@ -580,162 +580,5 @@ methods = ["GET"]
 group = "protected"
 path = "/v1/admin/*"
 secretName = "beta-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET", "POST", "PUT", "DELETE"]
-
-# ------------------------------------------------------------------------------
-# hermes-glm: a Nous Research hermes-agent instance (harness = "hermes" in
-# crab-shell-proxy/config.yaml), routed to the same crab-shell-proxy downstream.
-# crab-shell-proxy tells it apart via x-mycelium-service-name = "hermes-glm" and
-# drives the container over its OpenAI-compatible API server (:8642) instead of
-# the Pico Protocol. Same auth/role contract as the picoclaw services above: the
-# "hermes-glm" guest-role is auto-declared here; granting it to an account still
-# needs the Staff -> tenant -> subscription -> guest-invite chain (M3).
-# ------------------------------------------------------------------------------
-
-[[hermes-glm]]
-host = "crab-shell-proxy:8080"
-protocol = "http"
-healthCheckPath = "/healthz"
-discoverable = true
-serviceType = "rest-api"
-isContextApi = false
-openapiPath = "/doc/openapi.json"
-capabilities = ["chat"]
-description = "Hermes-agent (Nous Research, GLM via z.ai) - an OpenAI-compatible personal chat agent. Each user gets an isolated container; send chat via POST /v1/chat/completions."
-
-[[hermes-glm.secret]]
-name = "hermes-glm-authorization-header"
-authorizationHeader = { headerName = "Authorization", prefix = "Bearer", token = { env = "MYC_HERMES_GLM_TOKEN" } }
-
-[[hermes-glm.path]]
-group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
-path = "/v1/chat/completions"
-secretName = "hermes-glm-authorization-header"
-acceptInsecureRouting = true
-methods = ["POST"]
-
-[[hermes-glm.path]]
-group = { protectedByRoles = [{ name = "hermes-glm" }] }
-path = "/v1/models"
-secretName = "hermes-glm-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET"]
-
-[[hermes-glm.path]]
-group = { protectedByRoles = [{ name = "hermes-glm" }] }
-path = "/v1/sessions/history"
-secretName = "hermes-glm-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET"]
-
-[[hermes-glm.path]]
-group = { protectedByRoles = [{ name = "hermes-glm" }] }
-path = "/v1/sessions/resolve"
-secretName = "hermes-glm-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET"]
-
-[[hermes-glm.path]]
-group = "protected"
-path = "/v1/subscriptions"
-secretName = "hermes-glm-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET"]
-
-[[hermes-glm.path]]
-group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
-path = "/v1/secrets"
-secretName = "hermes-glm-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET", "POST", "DELETE"]
-
-[[hermes-glm.path]]
-group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
-path = "/v1/media"
-secretName = "hermes-glm-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET", "POST", "DELETE"]
-
-[[hermes-glm.path]]
-# Uploads-tree organisation (create folder, move/rename, delete folder). ONE
-# wildcard block: `*` matches the following segment, and /v1/media itself already
-# has its own block above, so there is no "Multiple routes found" conflict.
-#
-# Same write gate as /v1/media, because these write into the same directory an
-# upload does. DELETE here is a RECURSIVE folder delete — the proxy refuses the
-# uploads root, and the interface names the file count before the member confirms.
-group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
-path = "/v1/media/*"
-secretName = "hermes-glm-authorization-header"
-acceptInsecureRouting = true
-methods = ["POST", "DELETE"]
-
-[[hermes-glm.path]]
-group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
-path = "/v1/memory"
-secretName = "hermes-glm-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET", "PUT"]
-
-[[hermes-glm.path]]
-# Knowledge-graph memory (memory-graph-mcp): READ-ONLY views of the graph the
-# agent builds through its own native MCP server inside crab-shell-proxy.
-#
-# TWO blocks: mycelium's `*` matches a following segment, so it covers
-# /nodes, /search and /recent but not the bare /v1/memory-graph.
-#
-# Gated `write` like /v1/memory even though every method here is GET. The proxy
-# authorizes these with authorizeSecret -- the same write-access chain -- so a
-# read-only member is refused in-proxy regardless; gating lower here would only
-# move the 403 from the gateway to the proxy.
-#
-# There is deliberately NO /v1/mcp route: the agent reaches that endpoint
-# directly on the container network, never through the gateway.
-path = "/v1/memory-graph"
-group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
-secretName = "hermes-glm-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET"]
-
-[[hermes-glm.path]]
-path = "/v1/memory-graph/*"
-group = { protectedByRoles = [{ name = "hermes-glm", permission = "write" }] }
-secretName = "hermes-glm-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET"]
-
-[[hermes-glm.path]]
-# Self-service restart (restart-control): GET reports whether this member's
-# instance still needs a bounce (and when an admin scheduled one); POST performs
-# it for the caller's OWN container only.
-#
-# ONE block covering both methods, gated on the role NAME (read), even though
-# POST must require write. The gateway matches routes by path alone and errors
-# with "Multiple routes found for the specified path" when two blocks share one
-# path -- so GET and POST cannot be gated differently here. The write requirement
-# for POST is enforced in-proxy instead, by the same profile chain /v1/secrets
-# uses; a read-only member reaching POST gets a 403 from the proxy.
-group = { protectedByRoles = [{ name = "hermes-glm" }] }
-path = "/v1/restart"
-secretName = "hermes-glm-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET", "POST"]
-
-[[hermes-glm.path]]
-# Scheduled tasks (see the alpha /v1/cron comment).
-group = { protectedByRoles = [{ name = "hermes-glm" }] }
-path = "/v1/cron/*"
-secretName = "hermes-glm-authorization-header"
-acceptInsecureRouting = true
-methods = ["GET"]
-
-[[hermes-glm.path]]
-# All /v1/admin/* endpoints share group=protected + this secret; the
-# proxy enforces the exact path+method per route. Collapsed to one
-# wildcard (mycelium matches via the wildmatch crate).
-group = "protected"
-path = "/v1/admin/*"
-secretName = "hermes-glm-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST", "PUT", "DELETE"]

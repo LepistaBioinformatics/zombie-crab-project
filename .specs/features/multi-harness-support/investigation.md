@@ -1,5 +1,23 @@
 # multi-harness-support — Feasibility Investigation
 
+> **⚠️ WITHDRAWN — implemented, verified live, then removed.**
+>
+> The Hermes (Nous Research `hermes-agent`) harness described here **shipped and worked
+> end-to-end** against a real z.ai/GLM deployment, and was then removed for **current
+> infrastructure compatibility**: a 180s startup deadline against a 35s global health-wait, turns
+> sitting near mycelium's 60s `gatewayTimeout` (never solved), a heavyweight per-user image, and a
+> second code branch no deployment exercised.
+>
+> This document is kept as the **future-implementation record** — it is not a description of the
+> current stack. Nothing below is in the shipped surface today. The generic harness seam *is* kept
+> dormant, so a re-add is "write the profile".
+>
+> - **The decision, and exactly what was withdrawn:** `../hermes-removal/DECISION.md`
+>   (with the operational residue list) and `../hermes-removal/spec.md`.
+> - **What was learned by running it** — read this first on a re-add:
+>   `crab/crab-shell-proxy/.specs/features/multi-harness-support/implementation-notes.md`.
+> - **Recovery SHAs:** `d2f0a9a`, `748e0fe`, `3e9e95c`.
+
 **Status:** Investigation (pre-spec). No implementation committed.
 **Question:** Can `crab-shell-proxy` orchestrate agent runtimes *other than* picoclaw, and
 specifically what does it take to run **Nous Research's Hermes Agent** (`nousresearch/hermes-agent`)?

@@ -148,18 +148,15 @@ for the self-heal behavior.
 
 **3. Configure `.env`.** Copy the matching `deploy/<mode>/.env.example` (standalone / prod / dokploy — see [Deploy modes](#deploy-modes)) to `.env` at the repo root and set:
 
-- `MYC_PICOCLAW_ALPHA_TOKEN` / `MYC_PICOCLAW_BETA_TOKEN` / `MYC_HERMES_GLM_TOKEN`
-  — bearer tokens Mycelium injects and crab-shell-proxy validates per agent.
-- `PICOCLAW_ALPHA_API_KEY` / `PICOCLAW_BETA_API_KEY` / `PROXY_GLM_API_KEY` — each
-  agent's **own** LLM key, read from the environment (never stored in config or
-  images).
+- `MYC_PICOCLAW_ALPHA_TOKEN` / `MYC_PICOCLAW_BETA_TOKEN` — bearer tokens Mycelium
+  injects and crab-shell-proxy validates per agent.
+- `PICOCLAW_ALPHA_API_KEY` / `PICOCLAW_BETA_API_KEY` — each agent's **own** LLM
+  key, read from the environment (never stored in config or images).
 - `MYC_STANDALONE_BOOTSTRAP_SECRET` — gates the one-time Staff bootstrap.
 
-The stack ships three agents: `alpha` and `beta` (picoclaw) and `hermes-glm` (a
-hermes-agent instance from Nous Research, driven over its OpenAI-compatible
-server instead of the Pico Protocol). An agent whose
-token or provider key is unset is auto-disabled by the proxy at startup, so you
-can run only the ones you have keys for.
+The stack ships two agents, `alpha` and `beta`, both picoclaw. Each needs its
+token and its LLM key set, or the proxy will not start — add or remove agents in
+the proxy's `config.yaml` together with the matching Gateway service block.
 
 Which provider/model each agent uses is declared in
 [`crab/crab-shell-proxy/config.yaml`](./crab/crab-shell-proxy/config.yaml) (e.g.
@@ -188,8 +185,8 @@ cold-starts *your own* container; `docker ps` will show
 tenant + subscription + account triple — a container name has a 63-char limit,
 so the identity lives in the container's labels, not in its name).
 
-> The gateway routes are `protectedByRoles` (roles `alpha` / `beta` /
-> `hermes-glm`), so an account must hold the matching guest-role to reach an
+> The gateway routes are `protectedByRoles` (roles `alpha` / `beta`), so an
+> account must hold the matching guest-role to reach an
 > instance. Roles can be granted from the **chat-webapp admin area**
 > (Members → invite) or from **`mycelium-webapp`**
 > (`http://localhost:${MYCELIUM_WEBAPP_PORT:-8081}`) — Mycelium's own admin UI —
@@ -290,7 +287,7 @@ its `.env.example` and the gateway config that mode mounts — copy the matching
 | Storage | SQLite in `mycelium-data` | `mycelium-postgres` | `mycelium-postgres` |
 | E-mail | stub — magic links land in the log | real SMTP | real SMTP |
 | Ingress | published host ports | published host ports | Traefik, one domain per service |
-| Agents | alpha · beta · hermes-glm | alpha · beta · hermes-glm | alpha · beta |
+| Agents | alpha · beta | alpha · beta | alpha · beta |
 | Gateway config | `deploy/standalone/config.standalone.toml` | `deploy/prod/config.base.toml` | `deploy/dokploy/config.base.toml` |
 | Agent catalog | baked in the proxy image | baked in the proxy image | mounted: `deploy/dokploy/crab-shell-proxy.config.yaml` |
 
