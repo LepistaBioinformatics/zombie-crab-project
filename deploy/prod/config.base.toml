@@ -214,6 +214,24 @@ acceptInsecureRouting = true
 methods = ["GET"]
 
 [[alpha.path]]
+# user-owned-models: a member registering their own model, testing it, and
+# choosing between it and the one their administrator provides.
+#
+# ONE wildcard block (mycelium matches with the wildmatch crate, so `*` spans
+# `mine`, `mine/test` and `mine/selection`), gated on the role NAME only —
+# /v1/models above already has its own block, so there is no route conflict.
+# GET needs only read; every mutation must require write, and that is enforced
+# in-proxy by the same profile chain /v1/secrets uses.
+#
+# Not declared for hermes-glm: a personal model IS a picoclaw model_list entry,
+# and the hermes harness never reads config.json. The proxy answers 501 there.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/models/*"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST", "PUT", "DELETE"]
+
+[[alpha.path]]
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/sessions/history"
 secretName = "alpha-authorization-header"
@@ -400,6 +418,24 @@ path = "/v1/models"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
+
+[[beta.path]]
+# user-owned-models: a member registering their own model, testing it, and
+# choosing between it and the one their administrator provides.
+#
+# ONE wildcard block (mycelium matches with the wildmatch crate, so `*` spans
+# `mine`, `mine/test` and `mine/selection`), gated on the role NAME only —
+# /v1/models above already has its own block, so there is no route conflict.
+# GET needs only read; every mutation must require write, and that is enforced
+# in-proxy by the same profile chain /v1/secrets uses.
+#
+# Not declared for hermes-glm: a personal model IS a picoclaw model_list entry,
+# and the hermes harness never reads config.json. The proxy answers 501 there.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/models/*"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST", "PUT", "DELETE"]
 
 [[beta.path]]
 group = { protectedByRoles = [{ name = "beta" }] }
