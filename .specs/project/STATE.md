@@ -22,6 +22,37 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 
 ## Recent Decisions (Last 60 days)
 
+### AD-014: the Hermes harness is withdrawn; the seam stays dormant (2026-08-09)
+
+**Decision (user-directed).** Hermes (Nous Research `hermes-agent`) is removed from every
+shipped artifact and demoted to a future implementation. **It was not removed because it
+failed** — it was implemented and verified end-to-end against a real z.ai/GLM deployment.
+It is removed for **current infrastructure compatibility**: a 180s startup deadline against
+the proxy's 35s global health-wait, a heavyweight per-user image (71 skills + chromium under
+s6), and — the actual blocker — turns sitting **near mycelium's 60s `gatewayTimeout`**, which
+was never solved. Carrying it meant every layer kept a second branch no deployment exercised.
+
+**OD-1 resolved as Option A:** the *profile* goes, the *generic harness seam* stays dormant.
+`Agent.Harness` (validated, `picoclaw` the only accepted value), `turn.Request`/`turn.Sink`,
+the `Turner` interface, `Target.Harness` and the admin API's `harness` field are all kept —
+picoclaw flows through them, `harness` is a live API contract the webapp branches on, and
+`chat-progress-events` built `turn.Sink` on top of them. Accepted cost: a discriminator with
+one legal value.
+
+**Three consequences worth remembering:**
+- A stale `harness: hermes` config now **fails at `Load`** rather than defaulting to picoclaw
+  — defaulting would hand a user a picoclaw container under a role provisioned for Hermes.
+- `Config.DisabledAgents` died with it (both append sites were inside Hermes branches). Its
+  *behaviour* — an agent self-disabling when its deployment lacks its secrets — is worth
+  restoring on any re-add, ideally not tied to one harness.
+- Test fixtures were rewritten against a **synthetic** non-picoclaw harness value rather than
+  deleted, in both the proxy and the webapp: the picoclaw-only filters are still live code and
+  those were the only tests of their false branch.
+
+**Full record:** `.specs/features/hermes-removal/DECISION.md`.
+**Recovery SHAs:** `d2f0a9a`, `748e0fe`, `3e9e95c`.
+**The expensive knowledge:** `crab/crab-shell-proxy/.specs/features/multi-harness-support/implementation-notes.md`.
+
 ### AD-013: one proxy-level model inventory is the single source of truth (2026-07-26)
 
 **Decision (user-directed).** Model selection had **two** systems writing
@@ -55,9 +86,12 @@ it clobbered. Both are deleted. `internal/registry` (bbolt at
    read-modify-write, so without pruning every model a workspace ever used keeps its key
    forever. `PublicModel` has no key field at all, so leaking one requires adding a field.
 5. **`config.yaml`'s `agent.Model` is now a migration seed with no runtime effect.** Editing
-   it after the migration does nothing. **Hermes still reads it** — its key is injected as a
-   container env var under `keyEnvName`, a different mechanism — so "single source of truth"
-   holds for picoclaw agents only until that is folded in.
+   it after the migration does nothing. This is **unconditionally** true as of 2026-08-09:
+   it was previously qualified with "Hermes still reads it" (its key was injected as a
+   container env var under `keyEnvName`, a different mechanism), and the Hermes harness has
+   since been withdrawn — see `.specs/features/hermes-removal/DECISION.md`. `keyEnvName` is
+   gone with it, so "single source of truth" now holds for every agent. The caveat that the
+   field is a seed and not a live setting still stands, and still surprises people.
 6. **Boot migration** imports `config.yaml`, `registered-models/*.json` and the old override
    files, then reads **every existing workspace's own `config.json`** to record what it is
    running. Without that step every existing user reads as unassigned and the first

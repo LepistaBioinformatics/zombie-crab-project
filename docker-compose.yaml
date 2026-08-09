@@ -5,17 +5,16 @@
 # Protocol WS channel; crab-shell-proxy speaks that protocol directly in Go):
 #
 #   mycelium-gateway (standalone, :8080, published)
-#     |-- /alpha/v1/*       --\
-#     |-- /beta/v1/*        ----> crab-shell-proxy:8080
-#     `-- /hermes-glm/v1/*  --/     |  (agent from x-mycelium-service-name,
-#                                   |   user from the x-mycelium-profile accId)
-#                                   `--> crabshell-<agent>-<hash>:18790
-#                                        (spawned on demand, one per user;
-#                                         hermes agents answer on :8642 instead)
+#     |-- /alpha/v1/*  --\
+#     `-- /beta/v1/*   ----> crab-shell-proxy:8080
+#                              |  (agent from x-mycelium-service-name,
+#                              |   user from the x-mycelium-profile accId)
+#                              `--> crabshell-<agent>-<hash>:18790
+#                                   (spawned on demand, one per user)
 #
 # mycelium routes by first path segment == the TOML service key (see
-# deploy/standalone/config.standalone.toml), so callers hit /alpha/..., /beta/...
-# and /hermes-glm/... -- the literal keys, with no "picoclaw-" prefix. It strips
+# deploy/standalone/config.standalone.toml), so callers hit /alpha/... and
+# /beta/... -- the literal keys, with no "picoclaw-" prefix. It strips
 # that segment before forwarding, but injects x-mycelium-service-name so
 # crab-shell-proxy still knows which agent was addressed. The spawned agent
 # containers publish no host ports, and crab-shell-proxy publishes only the
@@ -163,17 +162,11 @@ services:
       CRAB_MCP_BASE_URL: ${CRAB_MCP_BASE_URL:-http://crab-shell-proxy:8080}
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
       MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
-      # hermes-glm agent (harness: hermes): the same shared bearer mycelium
-      # injects and the proxy validates.
-      MYC_HERMES_GLM_TOKEN: ${MYC_HERMES_GLM_TOKEN}
       # Per-instance LLM API keys (referenced by config.yaml's per-agent
       # model.apiKeyEnv). Real values live only in .env (gitignored) or your
       # secrets manager -- never in config.yaml or the image.
       PICOCLAW_ALPHA_API_KEY: ${PICOCLAW_ALPHA_API_KEY}
       PICOCLAW_BETA_API_KEY: ${PICOCLAW_BETA_API_KEY}
-      # z.ai/GLM key for hermes-glm (config.yaml model.apiKeyEnv). The proxy
-      # injects it into the hermes container as GLM_API_KEY (model.keyEnvName).
-      PROXY_GLM_API_KEY: ${PROXY_GLM_API_KEY}
     # TEMPORARY (direct-to-proxy testing of tenant-scoped-workspaces): the proxy
     # normally publishes no host port (mycelium-gateway is the only entry). This
     # exposes it on :18080 so first calls can be driven directly with a
@@ -224,7 +217,6 @@ services:
       # only in .env (gitignored), never in the committed TOML.
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
       MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
-      MYC_HERMES_GLM_TOKEN: ${MYC_HERMES_GLM_TOKEN}
       MYC_STANDALONE_BOOTSTRAP_SECRET: ${MYC_STANDALONE_BOOTSTRAP_SECRET}
     volumes:
       - mycelium-data:/data

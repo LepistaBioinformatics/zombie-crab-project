@@ -150,18 +150,16 @@ para o comportamento de auto-recuperação.
 
 **3. Configure o `.env`.** Copie o `deploy/<modo>/.env.example` correspondente (standalone / prod / dokploy — veja [Modos de deploy](#modos-de-deploy)) para `.env` na raiz do repositório e defina:
 
-- `MYC_PICOCLAW_ALPHA_TOKEN` / `MYC_PICOCLAW_BETA_TOKEN` / `MYC_HERMES_GLM_TOKEN`
+- `MYC_PICOCLAW_ALPHA_TOKEN` / `MYC_PICOCLAW_BETA_TOKEN`
   — bearer tokens que o Mycelium injeta e o crab-shell-proxy valida por agente.
-- `PICOCLAW_ALPHA_API_KEY` / `PICOCLAW_BETA_API_KEY` / `PROXY_GLM_API_KEY` — a
-  chave LLM **própria** de cada agente, lida do ambiente (nunca guardada em
-  config ou imagem).
+- `PICOCLAW_ALPHA_API_KEY` / `PICOCLAW_BETA_API_KEY` — a chave LLM **própria** de
+  cada agente, lida do ambiente (nunca guardada em config ou imagem).
 - `MYC_STANDALONE_BOOTSTRAP_SECRET` — libera o bootstrap único de Staff.
 
-A stack traz três agentes: `alpha` e `beta` (picoclaw) e `hermes-glm` (uma
-instância do hermes-agent, da Nous Research, conduzida pelo servidor
-OpenAI-compatível dele em vez do Pico Protocol). Um agente cujo token ou chave de
-provider esteja vazio é auto-desabilitado pelo proxy no startup, então dá para
-rodar só os que você tem chave.
+A stack traz dois agentes, `alpha` e `beta`, ambos picoclaw. Cada um precisa do
+seu token e da sua chave LLM definidos, ou o proxy não sobe — para adicionar ou
+remover agentes, edite o `config.yaml` do proxy junto com o bloco de serviço
+correspondente no Gateway.
 
 Qual provider/model cada agente usa é declarado em
 [`crab/crab-shell-proxy/config.yaml`](./crab/crab-shell-proxy/config.yaml) (ex.:
@@ -190,8 +188,8 @@ o cold-start do *seu próprio* container; o `docker ps` mostrará
 tenant + subscription + conta — nome de container tem limite de 63 caracteres,
 então a identidade fica nas labels, não no nome).
 
-> As rotas do gateway são `protectedByRoles` (papéis `alpha` / `beta` /
-> `hermes-glm`), então uma conta precisa ter o guest-role correspondente para
+> As rotas do gateway são `protectedByRoles` (papéis `alpha` / `beta`), então uma
+> conta precisa ter o guest-role correspondente para
 > alcançar uma instância. Os papéis podem ser concedidos pela **área de admin do
 > chat-webapp** (Membros → convidar) ou pelo **`mycelium-webapp`**
 > (`http://localhost:${MYCELIUM_WEBAPP_PORT:-8081}`) — a UI de admin do próprio
@@ -297,7 +295,7 @@ modo.
 | Armazenamento | SQLite no `mycelium-data` | `mycelium-postgres` | `mycelium-postgres` |
 | E-mail | stub — os magic-links caem no log | SMTP real | SMTP real |
 | Entrada | portas publicadas no host | portas publicadas no host | Traefik, um domínio por serviço |
-| Agentes | alpha · beta · hermes-glm | alpha · beta · hermes-glm | alpha · beta |
+| Agentes | alpha · beta | alpha · beta | alpha · beta |
 | Config do gateway | `deploy/standalone/config.standalone.toml` | `deploy/prod/config.base.toml` | `deploy/dokploy/config.base.toml` |
 | Catálogo de agentes | embutido na imagem do proxy | embutido na imagem do proxy | montado: `deploy/dokploy/crab-shell-proxy.config.yaml` |
 

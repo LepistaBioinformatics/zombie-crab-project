@@ -1,13 +1,11 @@
 # =============================================================================
 # crab-shell-proxy config for the DOKPLOY deploy (mounted, overrides the image's
 # baked /etc/crab-shell-proxy/config.yaml). Edit THIS file to customize the agent
-# catalog for your deployment. The upstream default's `hermes-glm` agent has been
-# REMOVED here (this deploy runs picoclaw only); add a hermes block back if you
-# want the hermes harness.
+# catalog for your deployment.
 #
-# Note: a hermes agent is also auto-disabled at startup when its token/provider
-# key are unset (see crab-shell-proxy internal/config.Load), so leaving one in
-# without its secrets is harmless too.
+# Every agent declared here needs a matching mycelium service in
+# deploy/dokploy/config.base.toml and a token in .env — an agent declared in only
+# one of the three is either unroutable or advertised without a bearer.
 #
 # Kept in sync with crab/crab-shell-proxy/config.yaml (the upstream default).
 # Machine-specific fields still come from env (CRAB_HOST_DATA_ROOT, CRAB_NETWORK).

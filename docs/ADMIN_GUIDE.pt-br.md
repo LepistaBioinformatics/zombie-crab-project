@@ -19,7 +19,7 @@ A área de admin fica acessível pelo **chat-webapp** para contas que gerenciam 
 - **Tenant** — tudo dentro de um tenant.
 - **Subscription** — uma conta de subscription dentro de um tenant.
 
-A tela é **agent-first**: você escolhe o agente (`alpha`, `beta`, `hermes-glm`, …)
+A tela é **agent-first**: você escolhe o agente (`alpha`, `beta`, …)
 antes de qualquer tenant ou subscription, porque os agentes vêm da configuração do
 proxy deste deploy e existem antes de qualquer tenant. Depois você escolhe o
 escopo na trilha lateral, e cada seção age sobre esse par **(agente, escopo)**. As
@@ -215,7 +215,7 @@ escopo.
 ## 10. Como os papéis liberam o acesso a um agente
 
 Alcançar um agente é assunto do **mycelium**. As rotas do gateway são
-`protectedByRoles` (um papel por agente: `alpha`, `beta`, `hermes-glm`, …), então
+`protectedByRoles` (um papel por agente: `alpha`, `beta`, …), então
 uma conta precisa do guest-role correspondente para falar com aquele agente, com
 `write` para o chat em si. Conceder isso é a aba **Membros** acima (que fala com o
 mycelium por JSON-RPC no seu lugar) ou o **mycelium-webapp** — a UI de admin do

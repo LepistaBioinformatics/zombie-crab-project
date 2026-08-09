@@ -168,11 +168,12 @@ agents:
 > ser reiniciada entre turnos; `scale-to-zero` para o container após o
 > `idleTimeout`.
 
-> **Harness:** sem `harness` você tem picoclaw (o padrão), conduzido pelo Pico
-> Protocol. `harness: hermes` roda um container hermes-agent, conduzido pelo
-> servidor de API OpenAI-compatível dele — veja a entrada `hermes-glm` no
-> `crab/crab-shell-proxy/config.yaml` para os campos extras de `model`
-> (`baseUrl`, `keyEnvName`) e o `startupDeadline` bem mais longo que ele exige.
+> **Harness:** deixe `harness` de fora. Picoclaw é o único runtime que o proxy
+> orquestra, e é o padrão quando `harness` é omitido. Qualquer outro valor faz o
+> proxy **recusar o boot** — de propósito, para que uma config obsoleta falhe de
+> forma explícita em vez de entregar um container picoclaw sob um papel provisionado
+> para outra coisa. Um segundo harness foi construído uma vez e retirado; veja
+> `.specs/features/hermes-removal/DECISION.md`.
 
 ### 4.5 Registre a rota no mycelium
 
@@ -187,8 +188,8 @@ Faça isso em **todo modo que você implanta**, são arquivos separados:
 
 | Modo | Arquivo | Agentes que ele declara hoje |
 |---|---|---|
-| standalone | `deploy/standalone/config.standalone.toml` | alpha, beta, hermes-glm |
-| prod | `deploy/prod/config.base.toml` | alpha, beta, hermes-glm |
+| standalone | `deploy/standalone/config.standalone.toml` | alpha, beta |
+| prod | `deploy/prod/config.base.toml` | alpha, beta |
 | dokploy | `deploy/dokploy/config.base.toml` | alpha, beta |
 
 Os blocos `protectedByRoles` também declaram o guest-role: o mycelium cria no

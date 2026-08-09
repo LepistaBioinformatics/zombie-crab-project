@@ -20,7 +20,7 @@ The admin area is reachable from **chat-webapp** to accounts that manage a
 - **Subscription** — one subscription account under a tenant.
 
 The screen is **agent-first**: you choose the agent (`alpha`, `beta`,
-`hermes-glm`, …) before any tenant or subscription, because agents come from the
+…) before any tenant or subscription, because agents come from the
 deployment's proxy configuration and exist before any tenant does. Then you pick
 the scope in the rail, and every section acts on that **(agent, scope)** pair.
 Changes cascade down to the agent containers of the users in that scope.
@@ -212,7 +212,7 @@ chat sidebar, and the app icon. This tab is **staff-only** and is not per-scope.
 ## 10. How roles gate access to an agent
 
 Reaching an agent at all is a **mycelium** concern. The gateway routes are
-`protectedByRoles` (one role per agent: `alpha`, `beta`, `hermes-glm`, …), so an
+`protectedByRoles` (one role per agent: `alpha`, `beta`, …), so an
 account must hold the matching guest-role to talk to that agent, with `write` for
 chat itself. Granting it is either the **Members** tab above (which drives
 mycelium over JSON-RPC for you) or **mycelium-webapp** — Mycelium's own admin UI
