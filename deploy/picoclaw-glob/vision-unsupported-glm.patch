@@ -1,0 +1,154 @@
+diff --git a/pkg/agent/llm_media.go b/pkg/agent/llm_media.go
+index 6e27a39..25d1bff 100644
+--- a/pkg/agent/llm_media.go
++++ b/pkg/agent/llm_media.go
+@@ -68,6 +68,28 @@ func isVisionUnsupportedError(err error) bool {
+ 		return true
+ 	}
+ 
++	// ZhipuAI / GLM reject the multipart payload by enumerating the content types
++	// they accept, and never mention images at all:
++	//
++	//   {"error":{"code":"1210",
++	//     "message":"messages.content.type is invalid, allowed values: ['text']"}}
++	//
++	// None of the checks above can see that: the closest one needs the literal
++	// "image_url" beside "invalid", and this message names "messages.content.type"
++	// instead. Without this case the call falls through to the generic retry path,
++	// the turn ends with no answer, and — because the media reference stays in the
++	// session history — every later turn in that conversation fails the same way.
++	//
++	// The enumeration is matched WHOLE, not by looking for "text" inside it: a
++	// provider answering allowed values: ['text','image_url'] accepts images and is
++	// complaining about something else entirely. Beyond that this is safe because
++	// every caller checks hasMediaRefs first, so the question is only ever asked
++	// about a request that did carry media.
++	if strings.Contains(msg, "content.type") &&
++		strings.Contains(msg, "allowed values: ['text']") {
++		return true
++	}
++
+ 	return false
+ }
+ 
+diff --git a/pkg/agent/llm_media_test.go b/pkg/agent/llm_media_test.go
+new file mode 100644
+index 0000000..6acbeab
+--- /dev/null
++++ b/pkg/agent/llm_media_test.go
+@@ -0,0 +1,115 @@
++package agent
++
++import (
++	"errors"
++	"testing"
++)
++
++// isVisionUnsupportedError decides whether a failed call is "this model cannot see
++// images" — the one classification that turns an opaque provider 400 into an
++// actionable message naming image_model. Getting it wrong in either direction is
++// expensive: a false negative ends the turn with no answer at all, and because the
++// media reference stays in the session history, every later turn in that
++// conversation fails the same way.
++//
++// Every caller checks hasMediaRefs before asking, so all of these are questions
++// about a request that did carry media.
++func TestIsVisionUnsupportedError(t *testing.T) {
++	cases := []struct {
++		name string
++		err  error
++		want bool
++	}{
++		{"nil", nil, false},
++
++		// Semantic refusals: the provider says so in words.
++		{
++			"openrouter",
++			errors.New("No endpoints found that support image input"),
++			true,
++		},
++		{
++			"does not support image input",
++			errors.New("model gpt-x does not support image input"),
++			true,
++		},
++		{
++			"does not support vision",
++			errors.New("this model does not support vision"),
++			true,
++		},
++		{
++			"unsupported content type",
++			errors.New("unsupported content type: image_url"),
++			true,
++		},
++
++		// Schema-level refusals: the provider rejects the field, not the idea.
++		{
++			"generic invalid naming image_url",
++			errors.New("invalid request: image_url is not permitted here"),
++			true,
++		},
++		{
++			"deepseek unknown variant",
++			errors.New(`unknown variant "image_url", expected one of "text"`),
++			true,
++		},
++
++		// ZhipuAI / GLM: enumerates the allowed content types and never mentions
++		// images. This is the case that used to fall through.
++		{
++			"glm 1210",
++			errors.New(`API request failed:
++  Status: 400
++  Body: {"error":{"code":"1210","message":"messages.content.type is invalid, allowed values: ['text']"}}`),
++			true,
++		},
++		{
++			"glm bare message",
++			errors.New("messages.content.type is invalid, allowed values: ['text']"),
++			true,
++		},
++
++		// Must NOT fire. A vision misclassification hides the real fault: the turn
++		// is abandoned with advice about image_model instead of being retried.
++		{
++			"rate limit",
++			errors.New("429 rate limit exceeded"),
++			false,
++		},
++		{
++			"context length",
++			errors.New("context_length_exceeded: too many tokens"),
++			false,
++		},
++		{
++			"unrelated invalid",
++			errors.New("invalid request: temperature must be <= 2"),
++			false,
++		},
++		// The enumeration is matched WHOLE, so a provider that allows more than text
++		// is not read as blind by that rule.
++		{
++			"allowed values includes another modality",
++			errors.New("messages.content.type is invalid, allowed values: ['text','input_audio']"),
++			false,
++		},
++		// Allowing image_url IS caught, but by the older generic rule above
++		// ("image_url" beside "invalid"), not by the enumeration rule. Asserted so a
++		// future tightening of either one has to decide about this case on purpose.
++		{
++			"allowed values includes image_url",
++			errors.New("messages.content.type is invalid, allowed values: ['text','image_url']"),
++			true,
++		},
++	}
++
++	for _, c := range cases {
++		t.Run(c.name, func(t *testing.T) {
++			if got := isVisionUnsupportedError(c.err); got != c.want {
++				t.Errorf("isVisionUnsupportedError(%v) = %v, want %v", c.err, got, c.want)
++			}
++		})
++	}
++}
