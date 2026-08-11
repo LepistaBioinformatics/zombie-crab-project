@@ -1,6 +1,11 @@
 .env
 data/
 
+# Installed dependencies, at the root and inside anything that isn't a submodule
+# (each submodule ignores its own). No leading slash, so the pattern matches at
+# every level rather than only here.
+node_modules/
+
 # Real deploy env files with secrets (deploy/<mode>/.env) — never commit
 deploy/**/.env
 
