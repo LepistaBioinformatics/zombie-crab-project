@@ -93,7 +93,7 @@ jwtSecret = "replaced-at-boot-by-standalone-secret-resolution"
 serviceIp = "0.0.0.0"
 servicePort = 8080
 serviceWorkers = 1
-gatewayTimeout = 60
+gatewayTimeout = 600
 
 # http://localhost:8080 -- mycelium-webapp's own dev-mode default, harmless
 # to leave in. http://localhost:8081 -- this stack's mycelium-webapp service

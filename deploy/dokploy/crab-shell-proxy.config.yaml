@@ -51,7 +51,16 @@ picoclawHome: "/data"
 # Kept comfortably under mycelium's [api] gatewayTimeout (60s) so a cold start
 # never races the gateway's own 504.
 startupDeadline: 35s
-turnTimeout: 120s
+
+# How long the harness may stay SILENT before the turn is declared dead. NOT a
+# cap on how long a turn may take -- it resets on every frame, so a long
+# tool-using turn runs as long as the HTTP layer allows (sse.go's turnTimeout,
+# 10m).
+#
+# Renamed from `turnTimeout`, which capped TOTAL duration and cut long turns
+# mid-work while picoclaw kept going -- the chat froze and the answer only showed
+# up on reload. Load rejects the old key rather than silently defaulting.
+turnIdleTimeout: 120s
 containerPrefix: "crabshell"
 
 # Shared secret authenticating the mycelium subscriptionAccount.created webhook
