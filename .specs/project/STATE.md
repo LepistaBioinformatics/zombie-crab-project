@@ -22,6 +22,56 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 
 ## Recent Decisions (Last 60 days)
 
+### AD-015: picoclaw-as-library investigated; topology A chosen, no implementation (2026-08-12)
+
+**Investigation only** — `.specs/features/picoclaw-as-library/investigation.md`. Question: can
+the WS→REST translation be replaced by *extending* picoclaw, leaving zombie-crab holding only
+extension code?
+
+**Verdict:** feasible for the turn surface, not for the rest. picoclaw v0.3.1 ships a public,
+tested out-of-tree channel API — `config.RegisterChannelSettings` (whose test comment names the
+out-of-tree use case verbatim), `channels.RegisterFactory`, and `channels.WebhookHandler`, which
+mounts a channel's HTTP routes on the gateway's shared server. MIT, all runtime in importable
+`pkg/`; `gateway.Run` is public. But it **deletes 404 of the proxy's 23,422 non-test lines (1.7%)
+and rewrites ~400–900 more** in `internal/httpapi`. The rest orchestrates picoclaw *from outside*
+— `internal/docker` 8.9k, admin httpapi, registry, identity/authz — and has no seam by
+construction.
+
+**Inherited constraint, verified in `pkg/agent/agent.go:180-245`:** picoclaw serializes turns per
+session key, caps parallel turns at `agents.defaults.max_parallel_turns` (**default 1**), and
+folds a second message for an already-active session into the running turn as a *steering
+message* rather than answering it separately. Distinct conversations do run concurrently, so
+holding an SSE writer per conversation is sound — but an OpenAI-compatible surface must decide
+what to do with same-conversation concurrent requests.
+
+**Topology decided (user, this session): A — in-container extension.** A new module imports
+`picoclaw/pkg`, registers a REST channel, and its binary replaces the stock picoclaw image per
+user. Proxy keeps orchestration, drops `internal/pico`. Isolation model untouched.
+**B (embed picoclaw inside the proxy process) is rejected**: it is the "shared process + hash
+key" model `crab-shell-proxy/README.md` rejects explicitly, and would reverse the project's
+stated security posture.
+
+**The real argument, and it is not line count:** `internal/pico/turn.go` infers end-of-turn from
+typing.start/stop plus a `graceWindow = 500ms` its own header calls "empirically-tuned". In
+process that event is `bus.Streamer.Finalize` — exact, not tuned. **The code grows, it does not
+shrink**: ~1,100–1,700 new lines against 404 deleted, in a new build artefact this project must
+own. If the goal is genuinely "less code in zombie-crab", this does not deliver it — settle that
+before writing a spec.
+
+**Two residuals `extension only` cannot absorb:** (1) both `deploy/picoclaw-glob/` patches touch
+*unexported* functions (`routing.ruleMatchesView`, `agent.isVisionUnsupportedError`) — verified,
+no exported hook for either; the migration does improve their home, via a `go.mod` `replace` to a
+thin fork instead of `git apply` in a Dockerfile. (2) picoclaw sessions stay in-memory and reset
+on restart, so `internal/history`'s `durable/` fold-forward stays regardless.
+
+**Reuses the dormant seam from AD-014:** a REST runner is a second `Turner` implementation behind
+`Agent.harness`, so both can run side by side and `internal/pico` is deleted only after a live
+comparison. None of Hermes' withdrawal reasons apply — the runtime is still picoclaw.
+
+**Not started.** Next step is a spec, if approved; §9 lists the open questions (turn concurrency
+and cancellation in `pkg/channels/manager.go`, byte-identical OpenAI surface, where
+`/v1/sessions/history` lives, upstream PR posture, where the image is built).
+
 ### AD-014: the Hermes harness is withdrawn; the seam stays dormant (2026-08-09)
 
 **Decision (user-directed).** Hermes (Nous Research `hermes-agent`) is removed from every
