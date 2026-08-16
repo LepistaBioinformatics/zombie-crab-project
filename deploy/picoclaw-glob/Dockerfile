@@ -52,6 +52,20 @@
 # on an upgrade, which is exactly what should happen: the ~15 changed lines need
 # to be re-checked against the new upstream, not silently skipped or
 # fuzzy-applied. Bump PICOCLAW_TAG deliberately, and re-run the routing tests.
+#
+# WHERE THE PUBLISHED IMAGE COMES FROM
+#
+# This image no longer has to be built by hand:
+# .github/workflows/release-picoclaw-glob.yml publishes it to
+# ghcr.io/lepistabioinformatics/picoclaw as `<version>-glob` (plus `latest`), so a
+# deploy that pulls every other image can pull this one too. The workflow always
+# passes PICOCLAW_TAG explicitly -- resolving "latest" to a concrete release tag
+# first, never handing a moving ref to the clone below.
+#
+# The ARG default therefore governs only a local `docker build` and a rebuild
+# triggered by editing the patches. That case wants the pin, not the newest
+# release: a patch edit must be validated against the bytes the patch was written
+# for. Keep it a concrete tag.
 
 ARG PICOCLAW_TAG=v0.3.1
 
