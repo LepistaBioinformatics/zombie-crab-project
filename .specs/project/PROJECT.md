@@ -42,4 +42,11 @@
 ## Constraints
 
 - Local/dev-oriented stack; no production deployment target yet
-- Docker builds in this sandbox need `--network=host` for anything touching the internet
+- Docker builds that touch the internet run with `network: host`, declared per service in
+  `docker-compose.yaml` rather than remembered as a flag. A build container does NOT get
+  the host's resolvers: BuildKit hands it the uplink DNS plus an IPv6 link-local scoped
+  to a *host* link index (`fe80::1%3`), which names nothing inside that namespace — so
+  it has one usable resolver and no fallback, and a burst of parallel builds over one
+  uplink can kill it with a DNS timeout. Host netns gives it systemd-resolved's caching
+  stub instead. This is a build-time setting only; the services still join `zombie_net`,
+  and CI is unaffected (it builds through `docker/build-push-action`, not compose).
