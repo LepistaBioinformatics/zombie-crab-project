@@ -1,6 +1,9 @@
 # resume-turn-after-reload — Spec
 
-**Status:** Specified. Not implemented.
+**Status:** Implemented on both sides — verified 2026-08-18 while speccing
+`background-turn-dock`: `handlers.go:284` + `handleTurnsActive`, `turn_registry.go:113`
+(`Active`), `app/api/chat/[instance]/active/route.ts`, and `chat-view.tsx:424`
+(`resumeIfActive`). This header read "Specified. Not implemented." long after the fact.
 **Spans:** `crab-shell-proxy` (new endpoint) + `crab-exoskeleton-webapp` (resume on mount).
 **Date:** 2026-08-13.
 
