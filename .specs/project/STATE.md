@@ -1,7 +1,23 @@
 # State
 
-**Last Updated:** 2026-07-26T00:00:00-03:00
-**Current Work:** four features implemented across both submodules (see AD-012):
+**Last Updated:** 2026-08-18T00:00:00-03:00
+**Current Work:** `background-turn-dock` IMPLEMENTED, T-01..T-09 (AD-016). Proxy:
+`turnRegistry` gained a first-seen timestamp and `List(scope)`, plus `GET /v1/turns/running`
+— `go build`/`go vet` clean, `go test -race ./internal/httpapi/` green. Webapp:
+`dockStateOf`/`dockedTurns`/`useActiveTurns` in the turn store, `turn-restore.ts`,
+`dock-segments.ts`, `turn-dock.tsx`, `/api/chat/[instance]/running`, `dock` i18n in both
+locales, mounted in `chat-shell` — 89 test files / 1176 tests pass, `next build` clean.
+**The BFF route `/api/chat/[instance]/running` has NO tests** (the repo has no route-test
+harness; tasks.md records this rather than implying coverage).
+**T-10 (operator verification against a live stack) has NOT been run**, and it is the only
+check that can falsify the feature end to end; the five steps are in its tasks.md.
+**One SPEC_DEVIATION:** the mobile dock sits BELOW the composer, not above it — the composer
+lives inside `ChatView`, which unmounts on a workspace switch, so DEC-11's placement
+contradicted the dock's whole reason to exist. DEC-11's goal is met by document order plus
+hiding the bar on mobile while a text field has focus.
+**Nothing is committed.**
+
+**Previously:** four features implemented across both submodules (see AD-012):
 `per-agent-injection-scope` + `native-secrets-admin-only` (proxy + webapp),
 `start-at-signin-env` and `pwa-installability` (webapp). Proxy `go build`/`go vet` clean, new
 cascade/bind/native tests pass; webapp `next build` + `tsc` clean, 55 vitest tests pass.
@@ -21,6 +37,67 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-016: background-turn-dock specified; the premise it started from was wrong (2026-08-18)
+
+**Spec only, not implemented** — `.specs/features/background-turn-dock/`
+(spec + design + tasks). Request as posed: "turns do not keep running when the member
+navigates away, so keep a minimized window alive in a bottom bar".
+
+**The premise is wrong and that is the finding.** Turns already survive navigation:
+`turn-store.ts` is module-scope *for that reason* (its header names the lost-reply symptom
+as fixed), `parkFlush` parks a burst on chat switch, `long-turn-resilience` FR-10 states
+recovery survives navigation, and the proxy runs turns on a background context so a
+disconnect cannot cut them. What is missing is **visibility, not persistence** — nothing
+enumerates the store (`useTurn(sid)` exists; nothing lists), so the feature is a read-out
+over state that already exists.
+
+**`resume-turn-after-reload` is implemented, its own spec said otherwise.** Verified live:
+`handlers.go:284`, `turn_registry.go:113`, `app/api/chat/[instance]/active/route.ts`,
+`chat-view.tsx:424`. The stale "Not implemented" header was corrected in place. Worth
+remembering as a class of error: a spec's status line is not evidence.
+
+**Four decisions taken with the maintainer:** reload survival IS in scope (which is the
+only reason `crab-shell-proxy` is touched at all — `/v1/turns/active` takes one
+`session_id`, so it confirms but cannot discover); mobile gets a compact strip above the
+composer rather than the desktop bar; only conversations the member *left* dock; a finished
+chip waits to be opened rather than auto-dismissing.
+
+**Three hazards found by reading, each now a requirement:**
+- `turns` is **never pruned** — `clearCompleted` blanks fields and leaves the entry. A dock
+  built on `turns.keys()` fills with corpses; membership must be a field predicate.
+- The restore fan-out must **not** pass `active: () => true` to `resumeIfActive`, however
+  obvious that optimisation looks. The listing probe precedes the transcript baseline, so
+  short-circuiting reinstates the exact ordering defect `resume-turn-after-reload` FR-7
+  removed: a turn landing during the probe is baselined with its own reply, never grows,
+  and reports `turn_lost` after eleven minutes — success shown as failure.
+- `setWorkspace` **deliberately deletes `p`**, so navigating to a docked *project*
+  conversation needs one hash write carrying workspace + project + sid; doing it in two
+  writes points every per-project fetch at the agent root for a frame.
+
+**Two more found while reviewing the spec, both from reading the code rather than reasoning
+about it:** (1) `parkFlush` only clears the debounce timer, and `bumpFlush`-on-typing is its
+only re-arm — so hitting send and navigating away inside 500ms leaves a message that will
+never be POSTed until the member returns and types. It gets its own dock state (*unsent*),
+not a spinner. (2) There is **no turn-start field** in `TurnState`, and none is needed:
+`long-turn-resilience` FR-12's readout was never a total duration — `TurnProgress` measures
+*time since the last event*. A restored chip must not read `recoveringSince` either, since
+`recover()` stamps it at resume time and would show a nine-minute turn as fresh; that is
+what the server-side `since` is for.
+
+**Two things learned in the build, neither in the spec:**
+- `setPainter` needed no companion after all, but `clearCompleted` turned out to retire a
+  *ready* chip for free (it blanks the bands, so the entry stops qualifying). The
+  acknowledged-sid set is therefore only ever needed for *failed* — the one state
+  `clearCompleted` deliberately preserves.
+- The dock's snapshot signature has to bucket `lastEventAt` **to the second**. Excluding it
+  leaves a chip counting up from a stale event; including it raw re-renders the bar on every
+  content delta. `emit()` fires up to `REVEAL_MAX_STEPS` times per reply.
+
+**One thing ruled out rather than deferred:** no stop control on a chip. `stopTurn` returns
+the unanswered text because picoclaw's abort deletes the member's own message, and from the
+dock there is no composer to give it back to.
+
 
 ### AD-015: picoclaw-as-library investigated; topology A chosen, no implementation (2026-08-12)
 
@@ -749,6 +826,63 @@ gateway-native (not proxied) endpoint without checking it accepts HEAD first.
 | #   | Description                                                        | Date       | Commit  | Status  |
 | --- | -------------------------------------------------------------------- | ---------- | ------- | ------- |
 | 001 | Removed unused `picoclaw-harness-in-docker-main/` reference dir + stale `.gitignore`/compose comments | 2026-07-12 | pending | Done |
+| 002 | Build DNS: `network: host` on every compose build (see the section below) | 2026-08-18 | pending | Done |
+
+---
+
+## Build DNS — `network: host` on every compose build (2026-08-18)
+
+`docker compose --env-file deploy/standalone/.env up -d --build` died on the picoclaw
+stage:
+
+```
+fatal: unable to access 'https://github.com/sipeed/picoclaw.git/':
+Could not resolve host: github.com (Timeout while contacting DNS servers)
+```
+
+**Not the Dockerfile, the URL or the tag.** The exact clone, run in isolation with no
+flags, succeeds in 2.9s. Host DNS resolves; a `docker run` container resolves; a plain
+`docker build` resolves.
+
+**The difference is what BuildKit writes into the build container's `/etc/resolv.conf`.**
+Measured side by side on this machine:
+
+| | `docker run` | `docker build` |
+| --- | --- | --- |
+| resolvers | `192.168.0.1` | `192.168.0.1` **+ `fe80::1%3`** |
+
+`%3` is the HOST's link index (`wlp0s20f3`, the wifi link). Inside the build namespace it
+names nothing. The runtime path filters that entry out; BuildKit does not. So a build has
+ONE usable resolver and no fallback, and it is the router, over wifi.
+
+That is why the failure needs load to appear: five images building at once (`cargo
+install --git`, two `yarn install`, `go mod download`, the clone) saturating one uplink,
+and the clone dies on a **12.02s** timeout — a full musl resolver window, not an
+NXDOMAIN. `crab-shell-proxy` showing `CANCELED` is downstream: compose cancelled the
+other targets when this one failed.
+
+**Fix:** `network: host` in the `build:` block of all five building services in
+`docker-compose.yaml`. In the host netns the build gets systemd-resolved's stub
+(`127.0.0.53`), which caches — a burst of identical lookups costs one query — and carries
+the host's own fallback behaviour. Verified: the build container then sees only
+`127.0.0.53`, and `docker compose build --no-cache picoclaw-image` completed (exit 0,
+image rebuilt 73.9MB, the patched binary runs).
+
+Build-time only — the services still join `zombie_net`. CI is unaffected:
+`release-picoclaw-glob.yml` builds through `docker/build-push-action` with the context
+directly, never through compose. `docker-compose.dokploy.yaml`'s own build is deliberately
+left alone — that one runs on the Dokploy host, whose network is not this one.
+`crab-shell-proxy`'s build-time `go test ./...` binds no fixed port, so host netns creates
+no collision there.
+
+**PROJECT.md's constraint was overstated and is corrected.** It said builds "need"
+`--network=host`; they do not — an isolated build passes without it. What is missing is
+DNS *redundancy*, which is what breaks under parallel load.
+
+**Not applied, needs root:** there is no `/etc/docker/daemon.json` on this machine. A
+`{"dns": ["192.168.0.1", "1.1.1.1"]}` there would fix every container and build rather
+than this compose file alone. `1.1.1.1` and `8.8.8.8` were both verified reachable from
+the host.
 
 ---
 

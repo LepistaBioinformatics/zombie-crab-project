@@ -105,6 +105,31 @@ services:
       context: ./deploy/picoclaw-glob
       args:
         PICOCLAW_TAG: ${PICOCLAW_TAG:-v0.3.1}
+      # DNS. Every RUN step below fetches from the internet, and a build container's
+      # resolvers are NOT the host's: BuildKit hands it
+      #
+      #   nameserver 192.168.0.1      <- whatever the host's uplink DNS happens to be
+      #   nameserver fe80::1%3        <- an IPv6 link-local scoped to a HOST link index,
+      #                                  which names nothing inside this namespace
+      #
+      # so the build has exactly ONE usable resolver and no fallback. With five images
+      # building in parallel over a single uplink, that resolver lost a burst of UDP and
+      # the clone died on a 12s DNS timeout:
+      #
+      #   fatal: unable to access 'https://github.com/sipeed/picoclaw.git/':
+      #   Could not resolve host: github.com (Timeout while contacting DNS servers)
+      #
+      # `network: host` puts the build in the host's netns, where /etc/resolv.conf is
+      # systemd-resolved's stub (127.0.0.53) -- which caches, so a burst of identical
+      # lookups costs one query, and which has the host's own fallback behaviour. This
+      # is the same thing .specs/project/PROJECT.md already records as required in this
+      # sandbox ("docker builds need --network=host for anything touching the internet");
+      # putting it here means `docker compose up --build` needs no remembered flag.
+      #
+      # NOT inherited by the running container -- this is build-time only, and the
+      # services still join zombie_net. CI is unaffected: the release workflow builds
+      # through docker/build-push-action with the context directly, never through compose.
+      network: host
     image: zombie-crab/picoclaw:0.3.1-glob
     entrypoint: ["/bin/true"]
     restart: "no"
@@ -112,6 +137,9 @@ services:
   crab-shell-proxy:
     build:
       context: ./crab/crab-shell-proxy
+      # Same reason as picoclaw-image above: this build fetches from the internet,
+      # and a build container has one usable resolver and no fallback.
+      network: host
     depends_on:
       picoclaw-image:
         condition: service_completed_successfully
@@ -195,6 +223,9 @@ services:
         # builds. Keep it, deploy/standalone/.env.example, and the prod/dokploy
         # MYCELIUM_IMAGE_TAG on the same release.
         MYCELIUM_GIT_REF: ${MYCELIUM_GIT_REF:-9298ecb44a69ced91cb2d7d3356a716aedca858b}
+      # Same reason as picoclaw-image above: this build fetches from the internet,
+      # and a build container has one usable resolver and no fallback.
+      network: host
     restart: unless-stopped
     # Fixes L-002 (STATE.md): standalone mode wraps its auto-generated
     # secrets file (/data/.secrets/token_secret.secret) with a key derived
@@ -268,6 +299,9 @@ services:
   chat-webapp:
     build:
       context: ./crab/crab-exoskeleton-webapp
+      # Same reason as picoclaw-image above: this build fetches from the internet,
+      # and a build container has one usable resolver and no fallback.
+      network: host
     restart: unless-stopped
     networks:
       - zombie_net
@@ -298,6 +332,9 @@ services:
       context: ./fungi/mycelium-webapp
       args:
         VITE_MYCELIUM_API_URL: http://localhost:${MYCELIUM_PORT:-8080}
+      # Same reason as picoclaw-image above: this build fetches from the internet,
+      # and a build container has one usable resolver and no fallback.
+      network: host
     restart: unless-stopped
     networks:
       - zombie_net
