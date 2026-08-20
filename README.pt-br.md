@@ -39,40 +39,7 @@ Em vez de enfiar multi-tenancy no PicoClaw, a stack é composta por **três
 camadas, cada uma fazendo exatamente um trabalho** — uma separação deliberada que
 é o cerne do projeto:
 
-```mermaid
-flowchart TB
-    client(["Cliente<br/>curl · Open WebUI · SDK · chat-webapp"])
-
-    subgraph edge [1 — Borda: identidade e acesso]
-        myc["mycelium-gateway<br/>:8080 · a única porta publicada<br/>auth · RBAC · injeta profile verificado"]
-    end
-
-    subgraph orch [2 — Orquestração: isolamento real]
-        crab["crab-shell-proxy (Go)<br/>agente ← service-name · usuário ← accId do profile<br/>cria / reusa um container por usuário<br/>OpenAI HTTP ⇄ Pico Protocol"]
-    end
-
-    subgraph agents [3 — Agentes: sandbox, um por usuário]
-        direction LR
-        u1["picoclaw-alpha-&lt;accId-A&gt;<br/>volume próprio · não-root"]
-        u2["picoclaw-alpha-&lt;accId-B&gt;<br/>volume próprio · não-root"]
-        u3["picoclaw-beta-&lt;accId-A&gt;<br/>volume próprio · não-root"]
-    end
-
-    client -->|HTTPS + JWT| myc
-    myc -->|profile injetado<br/>+ bearer token| crab
-    crab -->|Docker API| u1
-    crab -->|Docker API| u2
-    crab -->|Docker API| u3
-
-    classDef gateway fill:#2b6cb0,color:#fff,stroke:#1a365d,stroke-width:2px;
-    classDef orchStyle fill:#805ad5,color:#fff,stroke:#44337a,stroke-width:2px;
-    classDef clientStyle fill:#f6ad55,color:#1a202c,stroke:#c05621,stroke-width:2px;
-    classDef agentStyle fill:#edf2f7,stroke:#a0aec0,color:#1a202c;
-    class myc gateway;
-    class crab orchStyle;
-    class client clientStyle;
-    class u1,u2,u3 agentStyle;
-```
+![Arquitetura do Zombie Crab Project](./docs/drawio/architecture.drawio.png)
 
 | Camada | Componente | Seu único trabalho |
 |---|---|---|
