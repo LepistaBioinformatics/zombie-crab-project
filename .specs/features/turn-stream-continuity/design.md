@@ -145,6 +145,13 @@ is last in the build order.
 Heartbeats bypass this entirely (FR-6): they are written per-subscriber, on each
 subscriber's own schedule, and never enter the log.
 
+**One turn per key — an assumption, not an invariant (spec OQ-4).** Keying the log like
+the registry is right for today, but "at most one turn in flight per conversation" holds
+because the webapp queues the second message, not because the proxy refuses it. A
+concurrent POST would already be folded by picoclaw as a steering message
+(`steering-messages/investigation.md`). **Decide at T-09 whether to key by turn instead** —
+it is a field and a lookup now, and a migration later.
+
 **Bounding (FR-17).** A cap on retained bytes per turn, not on frame count — one content
 frame can be the whole reply. On overflow, drop from the front and mark the log
 *truncated*; a re-attach asking for a sequence below the retained floor is refused with a

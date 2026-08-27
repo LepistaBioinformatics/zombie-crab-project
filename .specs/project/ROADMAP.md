@@ -171,3 +171,15 @@ Telegram / MS Teams channels.
   `deploy/picoclaw-glob/` + `release-picoclaw-glob` means a change is a third patch, not a
   fork. Answers "should we implement an HTTP connection in picoclaw?" — **no**, wrong hop.
   See `.specs/features/picoclaw-incremental-streaming/investigation.md`.
+- **steering-messages** (INVESTIGATION) — picoclaw folds a message that arrives mid-turn
+  into the running turn (`enqueueSteeringMessage`, `turn_coord.go:115`), and **this stack
+  never reaches that path**: the webapp queues the second message client-side and POSTs it
+  only after the first turn's reveal has drained (`turn-store.ts` `drain`/`awaitDrained`).
+  The proxy imposes nothing — only the browser prevents it. Worth having on long turns (a
+  correction ten seconds in, instead of a wasted five-minute answer), but it renegotiates
+  the turn boundary: two POSTs for one turn with undefined wire semantics, and it stresses
+  the proxy's 500ms `graceWindow` race directly. Deferred to after
+  `turn-stream-continuity`, read together with `picoclaw-incremental-streaming`. **One
+  thing it constrains now:** that feature's Group C frame log is keyed per conversation,
+  which is only safe while the webapp queue holds — see its OQ-4. See
+  `.specs/features/steering-messages/investigation.md`.

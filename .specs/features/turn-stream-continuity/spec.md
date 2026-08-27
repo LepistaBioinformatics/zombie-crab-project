@@ -86,6 +86,14 @@ for being idle — by any hop, including the ones we will never instrument.
 - **Not making picoclaw stream.** That is the right fix for the *silence* and the wrong
   scope for this spec. See `picoclaw-incremental-streaming/investigation.md`, written in
   parallel with this one, and DEC-8.
+- **Not using picoclaw's steering messages.** picoclaw folds a message that arrives
+  mid-turn into the running turn (`enqueueSteeringMessage`), and this stack never reaches
+  that path — the webapp queues the second message client-side and POSTs it only after the
+  first turn's reveal has drained. Worth having, and **not here**: this feature is about
+  bytes staying on the wire, steering is about what a message *means* when one is already
+  running, and it lands directly on the completion heuristic this spec's Non-goals protect.
+  See `steering-messages/investigation.md`, and OQ-4 below for the one part of it that
+  constrains Group C.
 - **Not making a failed turn survive a reload.** Still `turn-failure-visible`'s
   limitation; picoclaw does not persist errors. Inherited, not fixed.
 
@@ -368,6 +376,14 @@ which says how much was lost.
 FR-7 is written as a hypothesis for exactly this reason. `fetchMycelium` passes no
 dispatcher, so the answer is the runtime's default, and this spec does not assert what
 that default is on `node:24-alpine`. T-04 measures it before anything is changed.
+
+**OQ-4 — Should Group C's frame log be keyed by turn rather than by conversation?**
+FR-10/FR-11 key it `memgraph.Scope → sessionID`, like `turnRegistry`, which assumes at most
+one turn in flight per conversation. That is true today **only because the webapp queues a
+second message client-side** — nothing in the proxy enforces it, and a concurrent POST
+would already be folded by picoclaw as a steering message. If steering is ever adopted, a
+conversation-keyed log has two writers. Deciding this before T-09 is cheap; retrofitting it
+after is not. See `steering-messages/investigation.md` §5.
 
 **OQ-3 — Does every hop forward SSE comment lines untouched?**
 The SSE spec says they are legal and ignorable, and this repo already relies on that

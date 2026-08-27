@@ -169,6 +169,9 @@ answers the complaint as it was filed.
 - **Reuses:** `scopeOf(key)` and the registry's keying, deliberately, so the two structures
   cannot disagree about what a turn is. Also its `now func() time.Time` field, for the
   same reason: the retention test must not sleep.
+- **Decide first:** key by conversation (like the registry) or by turn? Spec OQ-4 — the
+  single-turn assumption holds only because the webapp queues, and steering would break it.
+  A field and a lookup now; a migration later.
 - **Done when:** `append` performs only non-blocking sends and drops a full subscriber
   (FR-14a). If it selects with a timeout, or waits on anything, it is wrong — that is the
   line between "the delivery path changed" and "the turn's execution changed", and the
