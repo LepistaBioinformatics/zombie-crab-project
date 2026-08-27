@@ -38,6 +38,69 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 
 ## Recent Decisions (Last 60 days)
 
+### AD-017: the chat's cut-stream problem is answered by PREVENTION, not more recovery (2026-08-27)
+
+**Feature:** `.specs/features/turn-stream-continuity/` (spec + context + design + tasks).
+**Companion:** `.specs/features/picoclaw-incremental-streaming/investigation.md`.
+
+Three features already answer "the chat stops representing a running turn", and all three
+are recovery or visibility: `long-turn-resilience` (poll the durable transcript),
+`resume-turn-after-reload` (ask the proxy on mount), `background-turn-dock` (show what runs
+elsewhere). **Two of the three are deployed**, verified commit-by-commit against
+`CHAT_WEBAPP_TAG=sha-d8f9aa7` — so the complaint is being filed against a build that has
+them, and recovery is not the missing half.
+
+What nothing in this stack does is **prevent the cut**. Both specs that noticed said so and
+declined it as out-of-repo: `long-turn-resilience` ("keep-alive frames from the proxy… it
+belongs in the proxy repo") and `multi-harness-support/implementation-notes.md` §9 ("treat
+this as the first problem to solve, not the last"). Nobody built it.
+
+**The chain, joined up for the first time:** picoclaw answers in one terminal frame
+(measured: 51s of complete silence, `chat-responsiveness` OQ-1) → `sse.go` writes nothing
+of its own, so the SSE is genuinely idle for minutes → that idle stream crosses four hops,
+and the one we cannot see or configure is the member's own connection. A stream that is
+never idle cannot be dropped for being idle, by any hop.
+
+**Three findings worth keeping regardless of whether the feature ships:**
+
+1. **The heartbeat must be an SSE comment, not a data frame.** `background-turn-dock`
+   DEC-12 made the band's elapsed readout and the dock's chips both derive from
+   `lastEventAt`. A heartbeat shaped as an empty-delta `x_crab_progress` — the obvious
+   shape — would stamp it every 10s and silently delete `long-turn-resilience`
+   FR-11/FR-12. `consumeStream` filters non-`data:` lines *before* any callback, so a
+   comment cannot. **Group A therefore needs no webapp change at all.**
+2. **The BFF may be cutting its own upstream.** `fetchMycelium` calls bare `fetch` with no
+   dispatcher, so the streaming route inherits the runtime's default inactivity behaviour
+   on a body that is legitimately quiet for minutes. Stated as a hypothesis to measure
+   (spec OQ-2, T-04), not a finding.
+3. **The proxy is already a streaming consumer.** `internal/pico/turn.go:179` handles
+   `message.update` with cumulative-content bookkeeping and emits only the new suffix — so
+   if picoclaw sent deltas, they would already reach the browser with no code change
+   anywhere. picoclaw exposes `StreamingCapable`/`bus.Streamer` and its pico channel
+   implements it. The gap is unexplained and might be a config key.
+
+**Decisions taken with the maintainer:**
+- Scope includes the expensive re-attach path (resumable SSE, `Last-Event-ID`), over the
+  cheaper "hold it as a gated follow-up" reading. The disagreement is recorded honestly in
+  DEC-2 and resolved by build order: **A → B+D → measure (T-08) → C**.
+- Deploying `background-turn-dock` and running its never-run T-10 was a **prerequisite**
+  (P-0), because the build deployed at spec time predated the dock and any before/after
+  judgement taken then would have measured its absence too. **Satisfied 2026-08-27**: the
+  dock is deployed, T-10 confirmed by the maintainer, and that feature is **finished**.
+  What remains of P-0 is the *baseline* — the pre-heartbeat count of how often recovery
+  fires, which must be taken on the dock-carrying build and can never be taken again once
+  T-02 ships.
+- The picoclaw question ("implement an HTTP connection there") is answered **no** — wrong
+  hop, server-to-server inside the Docker network. The real picoclaw item is incremental
+  streaming, investigated in parallel.
+
+**Delivery note that lowers the picoclaw cost:** this stack already ships its own patched
+picoclaw (`deploy/picoclaw-glob/`, two patches, `release-picoclaw-glob` workflow,
+`0.3.1-glob` in production). A picoclaw-side change is a third patch in a tested pipeline,
+not a fork.
+
+Nothing implemented. P-0 first.
+
 ### AD-016: background-turn-dock specified; the premise it started from was wrong (2026-08-18)
 
 **Spec only, not implemented** — `.specs/features/background-turn-dock/`

@@ -148,3 +148,38 @@ Telegram / MS Teams channels.
   conversation-tree-view; no proxy change). Feel-first prototype validated
   (Timeline chosen over Deck/Tree metaphors). See
   `.specs/features/canvas-timeline-view/`.
+- **turn-stream-continuity** (SPEC READY) — the *prevention* half of the cut-stream
+  problem, which `long-turn-resilience`, `resume-turn-after-reload` and
+  `background-turn-dock` all pointed at and all declined. Four groups: a 10s SSE
+  **heartbeat** from the proxy (an SSE *comment*, so it cannot stamp `lastEventAt` and
+  cannot break the band's elapsed readout — Group A therefore needs no webapp change and
+  ships as a proxy-only release); removing the BFF's own inactivity bound on the streaming
+  route (measure first, spec OQ-2); **re-attach to a live turn** via sequenced frames and
+  a `Last-Event-ID` endpoint, with today's transcript-growth poll kept underneath as the
+  floor; and waking a wait on `online`/`visibilitychange` instead of polling blind.
+  Prerequisite P-0: the dock deploy + T-10 half is **done** (2026-08-27); what remains is
+  the pre-heartbeat baseline, which gates T-02 and cannot be taken after it. Build order is
+  A → B+D → measure → C, with T-08 as a real gate. See
+  `.specs/features/turn-stream-continuity/` and STATE.md AD-017.
+- **picoclaw-incremental-streaming** (INVESTIGATION) — the cause, not the symptom.
+  picoclaw answers in one terminal frame (51s of measured silence), which is what makes the
+  SSE idle in the first place and what makes the webapp's typewriter a simulation. The
+  proxy **already** consumes deltas correctly (`internal/pico/turn.go:179` handles
+  `message.update` cumulatively), and picoclaw exposes `StreamingCapable`/`bus.Streamer`
+  which its pico channel implements — so the one-frame behaviour is unexplained and might
+  be a config key. Cheapest high-value hour near this problem. Delivery is already solved:
+  `deploy/picoclaw-glob/` + `release-picoclaw-glob` means a change is a third patch, not a
+  fork. Answers "should we implement an HTTP connection in picoclaw?" — **no**, wrong hop.
+  See `.specs/features/picoclaw-incremental-streaming/investigation.md`.
+- **steering-messages** (INVESTIGATION) — picoclaw folds a message that arrives mid-turn
+  into the running turn (`enqueueSteeringMessage`, `turn_coord.go:115`), and **this stack
+  never reaches that path**: the webapp queues the second message client-side and POSTs it
+  only after the first turn's reveal has drained (`turn-store.ts` `drain`/`awaitDrained`).
+  The proxy imposes nothing — only the browser prevents it. Worth having on long turns (a
+  correction ten seconds in, instead of a wasted five-minute answer), but it renegotiates
+  the turn boundary: two POSTs for one turn with undefined wire semantics, and it stresses
+  the proxy's 500ms `graceWindow` race directly. Deferred to after
+  `turn-stream-continuity`, read together with `picoclaw-incremental-streaming`. **One
+  thing it constrains now:** that feature's Group C frame log is keyed per conversation,
+  which is only safe while the webapp queue holds — see its OQ-4. See
+  `.specs/features/steering-messages/investigation.md`.
