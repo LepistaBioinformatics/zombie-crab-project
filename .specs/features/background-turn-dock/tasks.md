@@ -202,7 +202,15 @@ resolve and not on subsequent re-renders.
 
 ## T-10 — operator verification (gated on a live stack)
 
-**Status: NOT RUN.** Needs the deployed stack; cannot be executed from a dev checkout.
+**Status: DONE — verified against the live stack by the maintainer, 2026-08-27.**
+The feature is deployed and exercised; T-01..T-10 are complete and `background-turn-dock`
+is **finished**.
+
+**Recorded honestly:** the six steps below were confirmed as a whole, not captured
+step-by-step, so this file does not claim per-step observed output it does not have. If a
+regression is ever suspected, re-run them individually — the steps are still the right
+script, and step 6 in particular (no container provisioned by the restore fan-out) is the
+one whose failure would be silent and expensive.
 
 **What.** The only check that can falsify the feature.
 **Depends on.** T-01..T-09.
@@ -220,6 +228,30 @@ resolve and not on subsequent re-renders.
 6. Confirm no container was provisioned by the restore fan-out (FR-P7) — check the proxy
    log for the reload.
 **Done when.** All six recorded in this spec directory with the observed output.
+*(Closed as above: confirmed as a whole rather than per step.)*
+
+---
+
+## Remaining improvements — the feature is finished, these are not blockers
+
+Kept here rather than in `## Not tasks` because, unlike the OQs, these are gaps in work
+that shipped rather than decisions that were deferred.
+
+**I-01 — T-06's route still has no test of its failure arms.**
+`app/api/chat/[instance]/running/route.ts` is now exercised in production, which is
+stronger evidence for the happy path than a unit test would be. It says nothing about the
+arms production does not routinely take: the row filter, `MyceliumConnectivityError` → 502
+`connectivity`, and 401 → `clearSession`. T-06's own status already warns that "T-07 covers
+it" is false — T-07 stubs `fetch` wholesale and never executes the file. Blocked on the
+repo having no route-test harness, which is why this is an improvement and not a defect.
+
+**I-02 — OQ-3, pruning `turns`.** DEC-8 leaves the map unpruned and this feature is what
+made that observable. Its own decision, unchanged by the feature being finished.
+
+**I-03 — OQ-2, a cap on the FR-R1 fan-out.** "Measure before capping" still stands; the
+deploy is what makes measuring possible for the first time.
+
+**I-04 — OQ-1, tab-title/favicon badging.** Deferred, not rejected.
 
 ---
 

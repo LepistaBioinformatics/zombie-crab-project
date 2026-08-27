@@ -1,7 +1,8 @@
 # background-turn-dock — Spec
 
-**Status:** Implemented 2026-08-18, T-01..T-09. T-10 (operator verification against a
-live stack) NOT run — it is the only check that can falsify the feature end to end.
+**Status:** **FINISHED.** Implemented 2026-08-18 (T-01..T-09); T-10, the operator
+verification against a live stack, run and confirmed by the maintainer 2026-08-27. The
+feature is deployed. Four non-blocking improvements are listed at the end of `tasks.md`.
 One deviation, recorded in `tasks.md`: the mobile dock sits BELOW the composer, not above
 it (DEC-11 / FR-U8), because the composer lives inside the component the dock must
 outlive. FR-U1a amends the segment styling after first use (lane colours from the tree).

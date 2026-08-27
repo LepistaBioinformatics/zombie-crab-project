@@ -148,3 +148,26 @@ Telegram / MS Teams channels.
   conversation-tree-view; no proxy change). Feel-first prototype validated
   (Timeline chosen over Deck/Tree metaphors). See
   `.specs/features/canvas-timeline-view/`.
+- **turn-stream-continuity** (SPEC READY) — the *prevention* half of the cut-stream
+  problem, which `long-turn-resilience`, `resume-turn-after-reload` and
+  `background-turn-dock` all pointed at and all declined. Four groups: a 10s SSE
+  **heartbeat** from the proxy (an SSE *comment*, so it cannot stamp `lastEventAt` and
+  cannot break the band's elapsed readout — Group A therefore needs no webapp change and
+  ships as a proxy-only release); removing the BFF's own inactivity bound on the streaming
+  route (measure first, spec OQ-2); **re-attach to a live turn** via sequenced frames and
+  a `Last-Event-ID` endpoint, with today's transcript-growth poll kept underneath as the
+  floor; and waking a wait on `online`/`visibilitychange` instead of polling blind.
+  Prerequisite P-0: the dock deploy + T-10 half is **done** (2026-08-27); what remains is
+  the pre-heartbeat baseline, which gates T-02 and cannot be taken after it. Build order is
+  A → B+D → measure → C, with T-08 as a real gate. See
+  `.specs/features/turn-stream-continuity/` and STATE.md AD-017.
+- **picoclaw-incremental-streaming** (INVESTIGATION) — the cause, not the symptom.
+  picoclaw answers in one terminal frame (51s of measured silence), which is what makes the
+  SSE idle in the first place and what makes the webapp's typewriter a simulation. The
+  proxy **already** consumes deltas correctly (`internal/pico/turn.go:179` handles
+  `message.update` cumulatively), and picoclaw exposes `StreamingCapable`/`bus.Streamer`
+  which its pico channel implements — so the one-frame behaviour is unexplained and might
+  be a config key. Cheapest high-value hour near this problem. Delivery is already solved:
+  `deploy/picoclaw-glob/` + `release-picoclaw-glob` means a change is a third patch, not a
+  fork. Answers "should we implement an HTTP connection in picoclaw?" — **no**, wrong hop.
+  See `.specs/features/picoclaw-incremental-streaming/investigation.md`.
