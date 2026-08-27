@@ -9,14 +9,15 @@
 #   - crab-shell-proxy and chat-webapp run their OFFICIAL published GHCR images
 #     (built+pushed by each repo's .github/workflows/release-image.yml);
 #   - mycelium-webapp is still BUILT here (it's a static PWA whose API URL is
-#     baked at build time, so it can't be a generic prebuilt image -- see
-#     docker-compose.dokploy.yaml, which sets its VITE_MYCELIUM_API_URL).
+#     baked at build time, so it can't be a generic prebuilt image -- a
+#     domain-fronted deployment must set its VITE_MYCELIUM_API_URL).
 #
 # Bring it up (base + Postgres, no Traefik):
 #   docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d
-# For Traefik ingress (Dokploy) use the SELF-CONTAINED docker-compose.dokploy.yaml
-# instead -- it already merges base + prod + dokploy into ONE file (see its header
-# and deploy/dokploy/.env.example). It is no longer a -f override layered on this file.
+# There is no Traefik/domain profile in this repo any more: the self-contained
+# docker-compose.dokploy.yaml was removed (see README, "Deploy modes"). Start from
+# this file and add your own ingress; `git log -- docker-compose.dokploy.yaml` has
+# the version that was maintained here.
 #
 # One-time after the FIRST up (base/Postgres has no auto-migration, L-009):
 #   apply upstream's adapters/diesel_postgres/sql/up.sql AND the scripts under

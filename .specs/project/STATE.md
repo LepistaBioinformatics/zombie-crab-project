@@ -38,6 +38,56 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 
 ## Recent Decisions (Last 60 days)
 
+### AD-018: the `dokploy` deploy profile is removed from this repo (2026-08-27)
+
+**Removed:** `docker-compose.dokploy.yaml`, `deploy/dokploy/{config.base.toml,
+crab-shell-proxy.config.yaml,.env.example}`. Two deploy modes remain, standalone and
+prod.
+
+**Why (maintainer-directed).** The real Dokploy deploy runs from
+`zombie-crab-project-mkt/deploy/dokploy/`, not from these files. They were being
+maintained on faith against a deployment that had stopped reading them.
+
+**What this is NOT: a move.** The two are different stacks and the difference is the
+part worth remembering —
+
+| | this repo's removed profile | `zombie-crab-project-mkt` |
+|---|---|---|
+| Scope | the WHOLE stack, mycelium included | the CRAB half only |
+| mycelium | a service in the same compose | a separate Dokploy application |
+| Also carries | — | the landing, and mkt-specific Traefik labels/domains |
+| Agent catalog | mounted (`deploy/dokploy/crab-shell-proxy.config.yaml`) | mounted (its own copy) |
+
+So this removes the product's only self-contained Dokploy recipe. Anyone deploying
+the product on Dokploy now starts from `prod` and adds their own Traefik labels and
+the external `dokploy-network`. `git log -- docker-compose.dokploy.yaml
+deploy/dokploy/` still has the original. Recorded because "it moved to mkt" is the
+wrong summary and would send someone to a file that cannot serve them.
+
+**The removal was the small half.** Eleven other files pointed at these four, and a
+half-removal — files gone, pointers left — is worse than none:
+
+- `README.md` / `README.pt-br.md` — the Deploy modes table drops a column; the
+  "prod and dokploy only" schema section, the pre-deploy checklist and the repo tree
+  all lose their dokploy arm. Both carry a short note saying what went and why, since
+  a table quietly becoming two columns explains nothing.
+- `docs/CREATE_CUSTOM_AGENT.md` / `.pt-br.md` — the mounted-vs-baked catalog
+  distinction was explained THROUGH dokploy. Rewritten as the general mechanism (bind
+  over `/etc/crab-shell-proxy/config.yaml`), which is what it always was.
+- `docker-compose.prod.yaml` actively told the reader to use the file that is now
+  gone. `deploy/prod/{.env.example,config.base.toml}`, `docker-compose.yaml`,
+  `deploy/standalone/.env.example`, `fungi/mycelium/Dockerfile.standalone` and the
+  `release-picoclaw-glob` workflow all cited it in comments.
+
+Verified after: `docker compose config` clean for standalone, and for
+`-f docker-compose.yaml -f docker-compose.prod.yaml`.
+
+**Left alone deliberately:** the historical `.specs` (`hermes-removal`,
+`model-registry-source-of-truth`, `scheduled-tasks`) still cite
+`deploy/dokploy/config.base.toml`. They are a record of what was true then, and
+editing them would falsify it. `turn-stream-continuity` is unaffected — it cites the
+mkt paths, which are the live ones.
+
 ### AD-017: the chat's cut-stream problem is answered by PREVENTION, not more recovery (2026-08-27)
 
 **Feature:** `.specs/features/turn-stream-continuity/` (spec + context + design + tasks).

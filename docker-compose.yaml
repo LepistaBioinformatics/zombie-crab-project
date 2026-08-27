@@ -165,8 +165,8 @@ services:
       #
       # EnsureImage takes a local image as-is and never tries to pull it
       # (internal/docker/client.go), which is what lets an unpublished local tag
-      # work here. That is also why the dokploy/prod files do NOT default to it —
-      # they pull from a registry.
+      # work here. That is also why the prod file does NOT default to it — it
+      # pulls from a registry.
       #
       # Set it back to docker.io/sipeed/picoclaw:latest to run stock picoclaw
       # (projects stop working; nothing else changes).
@@ -220,7 +220,7 @@ services:
       args:
         # 9.0.0-rc.13. Compose's build arg OVERRIDES the Dockerfile's own ARG
         # default, so this line -- not the Dockerfile -- decides what standalone
-        # builds. Keep it, deploy/standalone/.env.example, and the prod/dokploy
+        # builds. Keep it, deploy/standalone/.env.example, and prod's
         # MYCELIUM_IMAGE_TAG on the same release.
         MYCELIUM_GIT_REF: ${MYCELIUM_GIT_REF:-9298ecb44a69ced91cb2d7d3356a716aedca858b}
       # Same reason as picoclaw-image above: this build fetches from the internet,
