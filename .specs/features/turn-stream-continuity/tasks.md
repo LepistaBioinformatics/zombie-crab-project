@@ -66,6 +66,14 @@ feature is finished. Nothing further is required here.
 - **Tests:** existing `sse_progress_test.go` unchanged and green under `-race`.
 - **Covers:** FR-5.
 
+**Status: done** — `crab-shell-proxy#34`, `ccb215b`.
+
+Note for anyone reading the design: its literal wording ("all five write sites take
+the mutex") **deadlocks**. `done()` calls `writeChunk` and Go mutexes are not
+reentrant. Shipped as `emit*` (unlocked bodies) + `write*` (locking wrappers), with
+`done()` taking the lock once across both terminal frames — which is also what keeps
+a ping from landing between them.
+
 ### T-02 — the heartbeat
 - **What:** `const heartbeatInterval = 10 * time.Second` beside `turnTimeout`; a ticker
   goroutine started after the initial role chunk flushes, cancelled before `done()`,
@@ -76,6 +84,31 @@ feature is finished. Nothing further is required here.
   frames — `defer cancel()` alone is not enough; see design "Lifetime".
 - **Tests:** design 1, 2, 3, 4.
 - **Covers:** FR-1, FR-2, FR-3, FR-4, FR-6.
+
+**Status: done** — `crab-shell-proxy#34`, `ccb215b`.
+
+`stopHeartbeat()` **waits** for the goroutine to exit rather than only cancelling:
+signalling without waiting would let a ping be written after `streamTurn` returns, to
+a `ResponseWriter` that is no longer valid. The design said "a `context.WithCancel`
+derived from `turnCtx`, cancelled by a `defer`, is enough" — it is not.
+
+The cadence seam is an unexported `Server.heartbeatEvery`, a field rather than a
+package var for the same reason `turnRegistry.now` is one: the tests run
+`t.Parallel()`.
+
+**Two tests were inert on the first pass and are recorded because the pattern
+recurs.** The comment-shape test searched for the word "ping", so reshaping the
+heartbeat made it fail with "nothing to assert on" — it detected the mutation while
+misidentifying it; it now counts data frames instead. And the recorder locked its own
+`Write`, which *substitutes* for `writeMu` rather than isolating it (every frame is
+one `Write` call), so removing the mutex produced no race and no failure; the
+recorder is now deliberately unsynchronized and that mutation reports `DATA RACE`.
+
+**One property is not covered, by construction.** "No ping between `finish_reason`
+and `[DONE]`" cannot be provoked from outside: the window is microseconds, and
+widening it with a blocking `Write` does not help because the sleep runs while
+`writeMu` is held. Removing both guards still passed five runs of five. The guarantee
+is structural and visible in `sse.go`; the test is a smoke test over it.
 
 ### T-03 — verify a comment frame survives the whole path (operator, OQ-3)
 - **What:** with T-02 deployed, watch real long turns from the browser and confirm the
@@ -105,6 +138,16 @@ feature is finished. Nothing further is required here.
   A measured absence closes FR-7 with no code, and that is a good outcome, not a wasted
   task.
 
+**Status: done** — **300.8s, `UND_ERR_BODY_TIMEOUT`, on Node v24.18.0.** Full output in
+`spec.md` OQ-2. undici's default `bodyTimeout` is 300s; the proxy's `turnTimeout` is
+600s. For the five minutes between them our own BFF was aborting turns that were still
+running upstream.
+
+Rig: `scratchpad/t04-rig.mjs` — a stub upstream sending SSE headers plus a role chunk
+and then nothing, read back through the global `fetch`. Deliberately no Next, no auth,
+no mycelium: the BFF's own read of `res.body` is the question, everything else is
+noise.
+
 ### T-05 — remove the bound, if there is one
 - **What:** whichever shape T-04 points at (per-call dispatcher, or `node:http` for this
   route). Scoped to the streaming route only; every other `fetchMycelium` caller keeps
@@ -114,11 +157,33 @@ feature is finished. Nothing further is required here.
 - **Skip if:** T-04 found no bound. Say so here rather than deleting the task.
 - **Covers:** FR-7, FR-9.
 
+**Status: done** — `crab-exoskeleton-webapp#49`, `567650e`. `lib/mycelium-stream.ts`,
+undici's own `fetch` with `Agent{bodyTimeout: 0, headersTimeout: 0}`.
+
+**Both shapes were measured, as design.md asked, rather than picked.** undici's fetch
+and `node:http` with `setTimeout(0)` both ran clean at 310s against the silent stub.
+undici wins because it returns a standard `Response`, leaving the route's auth and
+error paths untouched; `node:http` would have meant rewriting them by hand. Recorded
+because a reviewer objecting to the dependency has a validated alternative here.
+
+**It lives in its own module, and that is not tidiness.** Putting it in
+`lib/mycelium.ts` first pulled undici into the BROWSER bundle — that file is imported
+by 52 files including `"use client"` components (`app/admin/user-models-panel.tsx`) —
+and the build failed with a wall of `UnhandledSchemeError: Reading from "node:assert"`.
+
+**And the control run says it is currently belt-and-braces:** the same rig with a 10s
+heartbeat ran the full 330s and ended cleanly, so Group A already makes this bound
+unreachable. It ships because the heartbeat MASKS the bound rather than removing it —
+a cadence change or a proxy predating the heartbeat brings the 300s cut straight back,
+silently, five minutes into a turn nobody is watching.
+
 ### T-06 — `X-Accel-Buffering: no`
 - **What:** one header on the streaming response, beside `Cache-Control`, with a comment
   naming what it guards against.
 - **Where:** `app/api/chat/[instance]/route.ts`.
 - **Covers:** FR-8.
+
+**Status: done** — `crab-exoskeleton-webapp`, `a0c232b`.
 
 ---
 
@@ -139,6 +204,17 @@ answers the complaint as it was filed.
   false, never to conclude the network is fine (it reports a captive portal as online).
 - **Tests:** design 17, 18.
 - **Covers:** FR-20, FR-21, FR-22, FR-23.
+
+**Status: done** — `crab-exoskeleton-webapp`, `a0c232b`.
+
+The tests live in their own file with an `@vitest-environment jsdom` pragma, and that
+is load-bearing rather than tidiness: the listeners register at module scope behind
+`typeof window !== "undefined"`, which is **false at import time** under the suite's
+default `node` environment. `vi.stubGlobal("window", …)` cannot stand in — it runs
+long after the import — so under `node` the wiring would not exist and the tests
+would pass against nothing.
+
+Mutation-checked: reverting the poll to the blind `sleep` fails both wake tests.
 
 ---
 
@@ -261,4 +337,15 @@ Neither suite can reach these. Record the outcome here.
 
 ## Status
 
-Not started. P-0 first.
+**Group A: done** (T-01, T-02) — `crab-shell-proxy#34`. Ships proxy-only, as designed.
+**T-03 (operator): not run.** It is what closes Group A.
+**Group B: done** (T-04, T-05, T-06) — `crab-exoskeleton-webapp#49`. T-04 found a real
+bound and it was ours: **300.8s, `UND_ERR_BODY_TIMEOUT`**, against the proxy's 600s.
+**Group D: done** (T-07).
+**Group C: not started, and correctly so** — T-08 gates it, and P-0b's baseline has
+not been taken.
+
+The one thing that is now urgent and is not code: **P-0b**. Once T-02 reaches
+production the pre-heartbeat count can never be taken again, and without it T-08 —
+the gate that decides whether Group C is built at all — produces one figure and
+nothing to compare it against.

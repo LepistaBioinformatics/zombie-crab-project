@@ -69,10 +69,15 @@ never idle cannot be dropped for being idle, by any hop.
    shape — would stamp it every 10s and silently delete `long-turn-resilience`
    FR-11/FR-12. `consumeStream` filters non-`data:` lines *before* any callback, so a
    comment cannot. **Group A therefore needs no webapp change at all.**
-2. **The BFF may be cutting its own upstream.** `fetchMycelium` calls bare `fetch` with no
-   dispatcher, so the streaming route inherits the runtime's default inactivity behaviour
-   on a body that is legitimately quiet for minutes. Stated as a hypothesis to measure
-   (spec OQ-2, T-04), not a finding.
+2. **The BFF WAS cutting its own upstream — measured 2026-08-27, and the hypothesis was
+   right.** `fetchMycelium` called bare `fetch` with no dispatcher, so the streaming route
+   inherited undici's default `bodyTimeout` of **300s** on a body that is legitimately
+   quiet for minutes, against the proxy's `turnTimeout` of **600s**. For the five minutes
+   between them our own BFF aborted turns that were still running upstream, and the member
+   read it as their internet dropping. `long-turn-resilience` recovered the reply, which is
+   why it was survivable and therefore invisible. Rig and output in the feature's
+   `spec.md` OQ-2. **It does not close OQ-1** — it explains the long quiet turn and nothing
+   else.
 3. **The proxy is already a streaming consumer.** `internal/pico/turn.go:179` handles
    `message.update` with cumulative-content bookkeeping and emits only the new suffix — so
    if picoclaw sent deltas, they would already reach the browser with no code change
@@ -99,7 +104,26 @@ picoclaw (`deploy/picoclaw-glob/`, two patches, `release-picoclaw-glob` workflow
 `0.3.1-glob` in production). A picoclaw-side change is a third patch in a tested pipeline,
 not a fork.
 
-Nothing implemented. P-0 first.
+**Implemented 2026-08-27: Groups A, B and D.** `crab-shell-proxy#34` (heartbeat),
+`crab-exoskeleton-webapp#49` (BFF bound, `X-Accel-Buffering`, network-aware waiting).
+Group C is deliberately NOT started: T-08 gates it and P-0b's baseline has not been
+taken.
+
+**Two things learned in the doing, both worth more than the code:**
+
+- **The design's literal wording for T-01 deadlocks.** "All five write sites take the
+  mutex" cannot work — `done()` calls `writeChunk` and Go mutexes are not reentrant.
+  Shipped as unlocked `emit*` bodies plus locking `write*` wrappers, with `done()`
+  holding the lock once across both terminal frames.
+- **Two tests were inert on the first pass, in the same way twice:** an assertion that
+  looked for a specific shape ("ping") and a harness that synchronized what it was
+  supposed to observe (a locked recorder standing in for `writeMu`). Both were caught by
+  deliberately mutating the implementation rather than by reading the tests. The habit is
+  the finding.
+
+**Now urgent and not code: P-0b.** Once the heartbeat is deployed the pre-heartbeat
+recovery-rate count can never be taken again, and without it T-08 — the gate that decides
+whether Group C is built at all — produces one figure and nothing to compare it against.
 
 ### AD-016: background-turn-dock specified; the premise it started from was wrong (2026-08-18)
 
