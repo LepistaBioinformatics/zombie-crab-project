@@ -2,7 +2,7 @@
 #
 # Until now this image existed only on whichever machine ran `docker build`, which
 # is why every published-image deploy had to fall back to stock picoclaw and lose
-# the agent-projects feature (see docker-compose.dokploy.yaml's note on
+# the agent-projects feature (see docker-compose.yaml's note on
 # CRAB_PICOCLAW_IMAGE). Publishing it removes that fork in the road.
 #
 # WHY NOT `push: branches: [main]`, LIKE THE WEBAPP'S WORKFLOW
@@ -103,7 +103,8 @@ jobs:
             exit 1
           fi
 
-          # v0.3.1 -> 0.3.1-glob, the name docker-compose.dokploy.yaml already cites.
+          # v0.3.1 -> 0.3.1-glob, the name docker-compose.yaml already cites as its
+          # CRAB_PICOCLAW_IMAGE default.
           echo "tag=${TAG}"              >> "$GITHUB_OUTPUT"
           echo "image_tag=${TAG#v}-glob" >> "$GITHUB_OUTPUT"
 

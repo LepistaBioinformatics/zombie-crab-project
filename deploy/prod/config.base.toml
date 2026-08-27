@@ -13,9 +13,9 @@
 #
 # THIS MODE IS NOT THE TRAEFIK ONE. It keeps the base file's PUBLISHED HOST PORTS
 # (gateway :8080, chat-webapp :3000, mycelium-webapp :8081) and terminates no TLS
-# of its own. For Traefik/Dokploy ingress by domain use the self-contained
-# docker-compose.dokploy.yaml with deploy/dokploy/config.base.toml -- the two
-# files are otherwise identical, and the origins below are the difference.
+# of its own. There is no domain-ingress profile in this repo any more (the
+# dokploy one was removed -- see README, "Deploy modes"); to front this by domain,
+# change the origins below together with mycelium-webapp's VITE_MYCELIUM_API_URL.
 #
 # Differences vs. standalone, all infra:
 #   - vault disabled; core/jwt/hmac/token secrets resolved from env (base mode
@@ -159,8 +159,8 @@ gatewayTimeout = 60
 allowedOrigins = ["http://localhost:8080", "http://localhost:8081"]
 
 # No TLS terminator in this mode: the gateway serves plain HTTP on its published
-# host port. Front it with a reverse proxy (or use the Dokploy/Traefik profile)
-# before it faces anything but a trusted network.
+# host port. Front it with a reverse proxy before it faces anything but a trusted
+# network.
 tls = "disabled"
 
 [api.cache]

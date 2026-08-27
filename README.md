@@ -113,7 +113,7 @@ scaffold. See [Creating a Custom Agent](./docs/CREATE_CUSTOM_AGENT.md) to shape
 a template, and [Running and resetting from scratch](#running-and-resetting-from-scratch)
 for the self-heal behavior.
 
-**3. Configure `.env`.** Copy the matching `deploy/<mode>/.env.example` (standalone / prod / dokploy — see [Deploy modes](#deploy-modes)) to `.env` at the repo root and set:
+**3. Configure `.env`.** Copy the matching `deploy/<mode>/.env.example` (standalone / prod — see [Deploy modes](#deploy-modes)) to `.env` at the repo root and set:
 
 - `MYC_PICOCLAW_ALPHA_TOKEN` / `MYC_PICOCLAW_BETA_TOKEN` — bearer tokens Mycelium
   injects and crab-shell-proxy validates per agent.
@@ -243,27 +243,41 @@ embedded default, edit
 
 ## Deploy modes
 
-Three profiles live side by side. Each has a directory under `deploy/` holding
-its `.env.example` and the gateway config that mode mounts — copy the matching
+Two profiles live side by side. Each has a directory under `deploy/` holding its
+`.env.example` and the gateway config that mode mounts — copy the matching
 `.env.example` to `.env` at the repo root and use that mode's compose command.
 
-| | **standalone** (default) | **prod** | **dokploy** |
-|---|---|---|---|
-| Compose | `docker compose up -d` | `docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d` | `docker compose -f docker-compose.dokploy.yaml up -d` (or point Dokploy at this repo + file) |
-| Mycelium | built from source (`MYCELIUM_GIT_REF`) | published image (`MYCELIUM_IMAGE_TAG`) | published image (`MYCELIUM_IMAGE_TAG`) |
-| Storage | SQLite in `mycelium-data` | `mycelium-postgres` | `mycelium-postgres` |
-| E-mail | stub — magic links land in the log | real SMTP | real SMTP |
-| Ingress | published host ports | published host ports | Traefik, one domain per service |
-| Agents | alpha · beta | alpha · beta | alpha · beta |
-| Gateway config | `deploy/standalone/config.standalone.toml` | `deploy/prod/config.base.toml` | `deploy/dokploy/config.base.toml` |
-| Agent catalog | baked in the proxy image | baked in the proxy image | mounted: `deploy/dokploy/crab-shell-proxy.config.yaml` |
+| | **standalone** (default) | **prod** |
+|---|---|---|
+| Compose | `docker compose up -d` | `docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d` |
+| Mycelium | built from source (`MYCELIUM_GIT_REF`) | published image (`MYCELIUM_IMAGE_TAG`) |
+| Storage | SQLite in `mycelium-data` | `mycelium-postgres` |
+| E-mail | stub — magic links land in the log | real SMTP |
+| Ingress | published host ports | published host ports |
+| Agents | alpha · beta | alpha · beta |
+| Gateway config | `deploy/standalone/config.standalone.toml` | `deploy/prod/config.base.toml` |
+| Agent catalog | baked in the proxy image | baked in the proxy image |
 
-All three pin the **same Mycelium release**: standalone builds the commit tagged
-`9.0.0-rc.13`, prod and dokploy pull `MYCELIUM_IMAGE_TAG=9.0.0-rc.13`. Move them
-together — the gateway config is shared vocabulary, and a version skew between
-what you test and what you deploy is exactly where it breaks.
+Both pin the **same Mycelium release**: standalone builds the commit tagged
+`9.0.0-rc.13`, prod pulls `MYCELIUM_IMAGE_TAG=9.0.0-rc.13`. Move them together —
+the gateway config is shared vocabulary, and a version skew between what you test
+and what you deploy is exactly where it breaks.
 
-### One-time database schema (prod and dokploy only)
+> **There was a third profile, `dokploy`, and it was removed.** It is worth knowing
+> what went with it. It was a self-contained Traefik/Dokploy compose file carrying
+> the **whole** stack, mycelium included, plus its own gateway config and a mounted
+> agent catalog. It was dropped because the deployment it was written for stopped
+> using it: that stack lives in a separate repository, deploys only the CRAB half
+> (mycelium runs as its own Dokploy application there), and had drifted into being
+> the real source of truth while this copy was maintained on faith.
+>
+> **So this is a removal, not a move.** If you are deploying this product on Dokploy
+> yourself, nothing here replaces it — start from `prod`, which is the closest
+> profile, and add the Traefik labels and the `dokploy-network` external network
+> your installation needs. `git log -- docker-compose.dokploy.yaml deploy/dokploy/`
+> still has the original if you want it as a starting point.
+
+### One-time database schema (prod only)
 
 The Postgres backend has **no embedded migrations** (SQLite does), so the schema
 has to be applied once, after the first `up`. It takes **two steps**: upstream's
@@ -299,10 +313,11 @@ and the `message_queue` claim index, but **not** `instance_settings`,
 `resource_audit_log`, or the `tenant.encrypted_dek` / `kek_version` columns
 (envelope encryption) — those exist only as migrations. Verify with `\dt` (you
 should see `instance_settings` and `resource_audit_log`) and
-`\d tenant` (`encrypted_dek`, `kek_version`). For Dokploy, run the same two steps
-via `docker exec` on the `mycelium-postgres` container.
+`\d tenant` (`encrypted_dek`, `kek_version`). On any Postgres deployment that is
+not driven by this repo's compose, run the same two steps via `docker exec` on the
+`mycelium-postgres` container.
 
-### Before a prod or dokploy deploy
+### Before a prod deploy
 
 - **`CRAB_HOST_DATA_ROOT`** — must be an absolute **host** path. crab-shell-proxy
   hands it to the host Docker daemon as the bind-mount source for the agent
@@ -313,13 +328,11 @@ via `docker exec` on the `mycelium-postgres` container.
   actually serves; if you front it with a hostname, change them **together with**
   `mycelium-webapp`'s `VITE_MYCELIUM_API_URL` build arg — the admin UI is a
   browser-side SPA that calls the gateway directly, so a mismatch is a CORS wall.
-- **dokploy / `deploy/dokploy/config.base.toml`** — replace the `►►► REPLACE`
-  lines with your real `https://` origins (they must match `MYCELIUM_DOMAIN` and
-  `MYCELIUM_WEBAPP_DOMAIN`), and remember `dokploy-network` must already exist.
-- **Agent catalog** — dokploy mounts `deploy/dokploy/crab-shell-proxy.config.yaml`,
-  so agents can be added or dropped there without rebuilding the proxy image.
-  standalone and prod use the catalog baked into the image
-  (`crab/crab-shell-proxy/config.yaml`).
+- **Agent catalog** — both modes use the catalog baked into the proxy image
+  (`crab/crab-shell-proxy/config.yaml`), so adding or dropping an agent means
+  rebuilding it. Mounting a catalog instead is possible and the removed dokploy
+  profile did exactly that; if you want it, bind your own file over
+  `/etc/crab-shell-proxy/config.yaml`.
 - **Account webhook (optional)** — registering mycelium's
   `subscriptionAccount.created` webhook makes the proxy scaffold a subscription's
   workspace root up front instead of on the member's first chat. Over JSON-RPC
@@ -340,8 +353,7 @@ branding is done from the **chat-webapp admin area** — see the
 ```
 docker-compose.yaml        # the whole stack, standalone/default (gateway + crab-shell-proxy + webapps + db)
 docker-compose.prod.yaml   # prod overlay: published images + mycelium in Postgres mode (-f with the above)
-docker-compose.dokploy.yaml# self-contained Traefik/Dokploy file (base + prod + ingress already merged)
-deploy/                    # per-mode configs: .env examples + mycelium/proxy configs (standalone / prod / dokploy)
+deploy/                    # per-mode configs: .env examples + mycelium/proxy configs (standalone / prod)
 crab/                      # the crab side (per-user isolation + its chat client)
   crab-shell-proxy/        # git submodule — the Go per-user isolation orchestrator
   crab-exoskeleton-webapp/ # git submodule — the Next.js chat client (BFF)

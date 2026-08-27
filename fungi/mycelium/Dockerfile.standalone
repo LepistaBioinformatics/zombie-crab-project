@@ -26,7 +26,7 @@
 # here has to be mirrored in docker-compose.yaml and deploy/standalone/.env.example
 # (and in the operator's own .env, which overrides both). The published-image
 # modes pin the SAME release by tag instead: MYCELIUM_IMAGE_TAG=9.0.0-rc.13 in
-# deploy/prod/ and deploy/dokploy/. All five move together.
+# deploy/prod/. All of them move together.
 # ==============================================================================
 
 ARG MYCELIUM_GIT_URL=https://github.com/LepistaBioinformatics/mycelium.git
@@ -89,7 +89,7 @@ COPY --from=builder /src/ports/api/src/openapi/redoc.config.json /home/redoc.con
 # This project's own config (two picoclaw+proxy routes) is NOT baked here
 # anymore -- it is MOUNTED at runtime onto SETTINGS_PATH (/home/config.toml)
 # from deploy/standalone/config.standalone.toml by docker-compose.yaml, matching
-# how prod/dokploy mount their config. Per-instance secrets are resolved by
+# how prod mounts its config. Per-instance secrets are resolved by
 # myc-api at startup from env vars (SecretResolver<HttpSecret>::Env).
 
 ENV UTOIPA_REDOC_CONFIG_FILE=/home/redoc.config.json

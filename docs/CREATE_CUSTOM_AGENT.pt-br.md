@@ -16,9 +16,10 @@ peças o definem:
 1. **Uma entrada no catálogo de agentes do proxy** — o nome do agente, qual
    serviço do mycelium roteia até ele, qual modelo LLM ele usa e de qual
    **template** ele é clonado. O catálogo é o `crab/crab-shell-proxy/config.yaml`,
-   embutido na imagem do proxy (standalone e prod). O deploy Dokploy **monta** a
-   própria cópia, `deploy/dokploy/crab-shell-proxy.config.yaml`, então lá o
-   catálogo é editado sem rebuild.
+   embutido na imagem do proxy, então mudá-lo exige rebuild. (Um deploy pode montar
+   o próprio catálogo por cima de `/etc/crab-shell-proxy/config.yaml` e editá-lo sem
+   rebuild; o perfil dokploy removido fazia isso, e o deploy no
+   `zombie-crab-project-mkt` ainda faz.)
 2. **Um diretório de template** no disco — os arquivos copiados para o workspace
    privado de cada usuário na primeira vez que ele conversa com o agente (persona,
    skills, config do picoclaw).
@@ -190,7 +191,6 @@ Faça isso em **todo modo que você implanta**, são arquivos separados:
 |---|---|---|
 | standalone | `deploy/standalone/config.standalone.toml` | alpha, beta |
 | prod | `deploy/prod/config.base.toml` | alpha, beta |
-| dokploy | `deploy/dokploy/config.base.toml` | alpha, beta |
 
 Os blocos `protectedByRoles` também declaram o guest-role: o mycelium cria no
 boot um papel com o nome do serviço, então um agente novo já traz o papel dele —
@@ -213,19 +213,18 @@ no `.security.yml` de cada usuário.
 
 O config do mycelium é **montado** de `deploy/<modo>/` (config.standalone.toml /
 config.base.toml), então uma mudança de rota só precisa de restart. O catálogo de
-agentes depende do modo: o `crab/crab-shell-proxy/config.yaml` é **embutido** na
-imagem do proxy (standalone, prod → rebuild), enquanto o dokploy monta o
-`deploy/dokploy/crab-shell-proxy.config.yaml` (→ restart). Localmente, o atalho
-seguro é rebuildar:
+agentes, o `crab/crab-shell-proxy/config.yaml`, é **embutido** na imagem do proxy
+nos dois modos, então precisa de rebuild — a menos que o seu deploy monte o próprio
+catálogo, caso em que basta um restart. Localmente, o atalho seguro é rebuildar:
 
 ```bash
 docker compose up -d --build crab-shell-proxy mycelium-gateway
 ```
 
-Em prod/dokploy o proxy roda uma **imagem publicada**, então uma mudança de
-catálogo embutida no `crab/crab-shell-proxy/config.yaml` só chega depois que essa
-imagem for rebuildada e publicada — é exatamente por isso que o deploy dokploy
-monta a própria cópia.
+Em prod o proxy roda uma **imagem publicada**, então uma mudança de catálogo
+embutida no `crab/crab-shell-proxy/config.yaml` só chega depois que essa imagem for
+rebuildada e publicada — que é exatamente por que um deploy pode preferir montar a
+própria cópia.
 
 Os **arquivos do template** vivem no volume montado `/data`, então editá-los
 depois não exige rebuild — mas lembre da regra do primeiro provisionamento
@@ -239,7 +238,7 @@ depois não exige rebuild — mas lembre da regra do primeiro provisionamento
 - [ ] `data/templates/<nome>/.security.yml` existe (model_list tem seu modelo; sem keys)
 - [ ] `data/templates/<nome>/workspace/{AGENT.md,SOUL.md,USER.md}` escritos
 - [ ] Opcional: `workspace/memory/` e `workspace/skills/<skill>/SKILL.md`
-- [ ] Entrada do agente adicionada no catálogo do proxy — `crab/crab-shell-proxy/config.yaml`, mais o `deploy/dokploy/crab-shell-proxy.config.yaml` se você implanta com Dokploy (`template:` aponta para `<nome>`)
+- [ ] Entrada do agente adicionada no catálogo do proxy — `crab/crab-shell-proxy/config.yaml` (`template:` aponta para `<nome>`), mais o catálogo montado do seu deploy, se ele tiver um
 - [ ] Rota adicionada na config do gateway de todo modo que você implanta (`[[<nome>]]`, chamadores acessam `/<nome>/...`)
 - [ ] `.env` tem `MYC_PICOCLAW_<NOME>_TOKEN` e `PICOCLAW_<NOME>_API_KEY`
 - [ ] `docker compose up -d --build crab-shell-proxy mycelium-gateway`
