@@ -164,7 +164,8 @@ re-attach replay ten minutes of pings.
 ### Group B — the BFF stops cutting its own upstream (crab-exoskeleton-webapp)
 
 **FR-7 — The streaming route must not impose an inactivity bound shorter than the
-proxy's own turn bound.**
+proxy's own turn bound. CONFIRMED BY MEASUREMENT — see OQ-2: 300s against the proxy's
+600s.**
 `fetchMycelium` calls bare `fetch` with no dispatcher (`lib/mycelium.ts:79`), so the
 streaming POST inherits whatever the runtime's default inactivity behaviour is. If that
 default is shorter than `turnTimeout` (10 min, `sse.go:19`), then **our own BFF aborts the
@@ -372,10 +373,29 @@ stream that was pinging ten seconds ago is a much narrower event than a cut on a
 silent for a minute; and after Group C, a re-attach reports the sequence it resumed from,
 which says how much was lost.
 
-**OQ-2 — Does the BFF impose an inactivity bound on the upstream body at all?**
-FR-7 is written as a hypothesis for exactly this reason. `fetchMycelium` passes no
-dispatcher, so the answer is the runtime's default, and this spec does not assert what
-that default is on `node:24-alpine`. T-04 measures it before anything is changed.
+**OQ-2 — ANSWERED (2026-08-27, measured): yes. 300 seconds, and it is ours.**
+
+Rig: a stub upstream that sends SSE headers plus one role chunk and then goes silent,
+read back through the runtime's global `fetch` — no Next, no auth, no mycelium, so the
+BFF's own read of `res.body` is the only thing under test. On **Node v24.18.0**, the
+version the runtime image pins:
+
+```
+[   0.0s] headers ok: 200
+[   0.0s] chunk: "data: {"choices":[{"delta":{"role":"assistant","content":""}}]}"
+[ 300.8s] THREW: TypeError / terminated / cause=UND_ERR_BODY_TIMEOUT
+```
+
+**The hypothesis in FR-7 was right, and the number matters:** undici's default
+`bodyTimeout` is 300s, while the proxy's `turnTimeout` is **600s**. So for the five
+minutes between them, a turn that is legitimately still running upstream has its body
+aborted **by our own BFF** — and the member's "the internet dropped" was never the
+internet. The abort surfaces to the client as a mid-stream failure, which
+`long-turn-resilience` correctly treats as a cut and recovers from; that is why this
+has been survivable and therefore invisible.
+
+This does not retire OQ-1. It explains one specific, reproducible cut — the long quiet
+turn — and says nothing about cuts on short turns or flaky connections.
 
 **OQ-4 — Should Group C's frame log be keyed by turn rather than by conversation?**
 FR-10/FR-11 key it `memgraph.Scope → sessionID`, like `turnRegistry`, which assumes at most
