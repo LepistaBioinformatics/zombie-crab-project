@@ -108,6 +108,28 @@ jobs:
           echo "tag=${TAG}"              >> "$GITHUB_OUTPUT"
           echo "image_tag=${TAG#v}-glob" >> "$GITHUB_OUTPUT"
 
+      # The image's description label names which patches are in the build, and it
+      # used to spell them out by hand -- so adding a third patch published an image
+      # whose own metadata still claimed there were two. Nothing failed; the label
+      # was just quietly wrong, which is the worst way for provenance to be wrong.
+      # Derived from the directory instead, so it cannot drift again.
+      - name: List applied patches
+        id: patches
+        run: |
+          set -euo pipefail
+          LIST="$(ls deploy/picoclaw-glob/*.patch \
+            | xargs -n1 basename \
+            | sed 's/\.patch$//' \
+            | sort \
+            | paste -sd'+' - \
+            | sed 's/+/ + /g')"
+          if [ -z "${LIST}" ]; then
+            echo "no patches found in deploy/picoclaw-glob/ -- this image is the whole reason they exist" >&2
+            exit 1
+          fi
+          echo "applied patches: ${LIST}"
+          echo "list=${LIST}" >> "$GITHUB_OUTPUT"
+
       - name: Decide tags
         id: tags
         env:
@@ -160,7 +182,7 @@ jobs:
           tags: ${{ steps.tags.outputs.list }}
           labels: |
             org.opencontainers.image.title=picoclaw (zombie-crab patches)
-            org.opencontainers.image.description=sipeed/picoclaw ${{ steps.ver.outputs.tag }} + dispatch-selector-glob + vision-unsupported-glm
+            org.opencontainers.image.description=sipeed/picoclaw ${{ steps.ver.outputs.tag }} + ${{ steps.patches.outputs.list }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.ver.outputs.image_tag }}
 
