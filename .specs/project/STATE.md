@@ -9,6 +9,8 @@ turn after the first. Shipped as a third local patch,
 `deploy/picoclaw-glob/context-routed-agent.patch` (+239/−7 across 8 files), with three
 tests gated in the image build. Operator-verified: the previously amnesiac conversation
 got its memory back after the container picked up the new image.
+Followed by AD-020: the key that selects the context manager is now pinned, so the same
+context loss cannot be inflicted from an admin config editor.
 **Two follow-ups are open, neither blocking:** `ContextManager.Clear` is deliberately out
 of the patch (interface break — `/clear` in a project chat still clears the main agent's
 store), and the defect is unreported upstream. See
@@ -51,6 +53,42 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 
 ## Recent Decisions (Last 60 days)
 
+### AD-020: `agents.defaults.context_manager` is pinned, not admin-editable (2026-08-28)
+
+**Decision:** the proxy writes `agents.defaults.context_manager = "legacy"` into every
+workspace on every materialization (`internal/docker/materialize.go`,
+`PinnedContextManager`) and lists the path in `ManagedConfigPaths`. Both admin config
+editors therefore refuse it, and a template or hand edit in the volume is overwritten too.
+
+**Why.** The key selects which ContextManager assembles a turn's history, and picoclaw
+activates exactly one per process. `legacy` reads the agent's session JSONL; `seahorse`
+reads its own SQLite. **They share no store, so switching migrates nothing** — it silently
+starts every conversation in the workspace over, and switching back strands whatever
+accumulated in between. No error, no warning, and for the member it is indistinguishable
+from the agent having forgotten them. That is AD-019's bug, reachable from a text field.
+
+**What made it urgent rather than a note.** The bulk config editor applies one key across
+*every instance of an agent in a subscription* — N workspaces belonging to other people,
+in one request.
+
+**Why pinned rather than gated.** `ManagedConfigPaths` is authoritative *because the proxy
+rewrites those paths* ("not a diff, not a whitelist"). Giving the key a writer and listing
+it reuses that end to end: the bulk editor refuses with `ErrManagedConfigPath` before
+touching disk, the single-instance editor's reapply takes an edit back, and the admin UI
+already renders managed paths read-only from the list it is served. A per-key deny concept
+would have meant a new API field and a webapp change for the same result.
+
+**`"legacy"` changes nothing.** It is what picoclaw resolves to when the key is absent, so
+the pin removes only the ability to change it.
+
+**Accepted cost, stated so it is not discovered later:** this is stronger than "admins
+cannot edit it" — the pin re-imposes on every materialization, so the template stops being
+an escape hatch. **AD-019's Option B is closed by this.** Adopting seahorse is now a
+reviewed change to one constant plus a plan for the transcripts it orphans, which is the
+weight that decision deserves.
+
+---
+
 ### AD-019: patch picoclaw's context manager to read the ROUTED agent's sessions, rather than adopt `seahorse` (2026-08-28)
 
 **Decision:** ship `deploy/picoclaw-glob/context-routed-agent.patch` — a third local
@@ -70,7 +108,9 @@ project sessions were also never summarized.
 every project its own agent. Main-agent chats were never affected — for the default agent
 the guess is correct.
 
-**Why not `seahorse` (the zero-patch option).** It keeps one SQLite engine keyed by
+**Why not `seahorse` (the zero-patch option).** *Since AD-020 this option is not merely
+unchosen but closed: the key is pinned and no longer settable from a config editor, a
+template, or the volume.* It keeps one SQLite engine keyed by
 session key, so it is agent-agnostic by accident of shape and would have fixed this with a
 config change. Rejected on three counts: its DB lives in the *default* agent's workspace
 (project content leaves the project boundary); `bootstrapSession` replays only the default
