@@ -1,7 +1,7 @@
 # picoclaw + local patches.
 #
-# Two independent patches, each upstreamable on its own. Neither touches a file
-# the other does, so they apply in either order.
+# Three independent patches, each upstreamable on its own. No two touch the same
+# file, so they apply in any order.
 #
 # WHY dispatch-selector-glob.patch EXISTS
 #
@@ -38,6 +38,37 @@
 # (pkg/agent/pipeline_llm.go:282) returns the actionable error rather than
 # retrying without the image, so a conversation that already carries an image
 # reference stays broken. Only askSideQuestion strips media and retries.
+#
+# WHY context-routed-agent.patch EXISTS
+#
+# picoclaw's default context manager reads a conversation's history from the
+# DEFAULT agent's session store instead of the one the turn was routed to
+# (pkg/agent/context_legacy.go, GetDefaultAgent()). Every AgentInstance owns a
+# session store rooted at its own workspace, so agents with different workspaces
+# have disjoint stores — and a named agent gets its own workspace, which is
+# picoclaw's own default.
+#
+# The result in this stack: every conversation inside a PROJECT (agent-projects
+# gives each project its own agent) is answered with NO history, on every turn
+# after the first. The write goes to workspace-<project>/sessions/; the read
+# looks the same key up in workspace/sessions/, where it never existed.
+# SessionStore reports a missing key as an empty history rather than an error, so
+# the turn runs on nothing and no log line records a fault. Members meet it as an
+# agent that greets them mid-conversation and says "esta é a primeira mensagem
+# que recebo nesta sessão", while the webapp still renders the full transcript
+# from the proxy's durable file.
+#
+# The patch threads the routed agent's id through AssembleRequest/CompactRequest
+# and resolves it in the legacy manager, falling back to the default agent when
+# unset — so a single-agent deployment is bit-identical to before. See
+# .specs/features/project-chat-context-loss/investigation.md for the full trace,
+# including why ContextManager.Clear is deliberately NOT part of this patch.
+#
+# One coupling to know about on a tag bump: the test this patch adds
+# (pkg/agent/context_routed_agent_test.go) uses `simpleMockProvider`, a helper
+# defined in UPSTREAM's own pkg/agent/agent_test.go. If upstream renames it, this
+# patch still applies cleanly and then fails to COMPILE — the error will name the
+# helper, not the patch.
 #
 # HOW TO GET RID OF THIS
 #
@@ -86,10 +117,12 @@ RUN git clone --depth 1 --branch ${PICOCLAW_TAG} \
 
 COPY dispatch-selector-glob.patch /tmp/dispatch-selector-glob.patch
 COPY vision-unsupported-glm.patch /tmp/vision-unsupported-glm.patch
+COPY context-routed-agent.patch /tmp/context-routed-agent.patch
 # --verbose so a failed apply names the hunk; no fuzz, no 3-way. A patch that no
 # longer applies cleanly is a signal, not an inconvenience.
 RUN git apply --verbose /tmp/dispatch-selector-glob.patch
 RUN git apply --verbose /tmp/vision-unsupported-glm.patch
+RUN git apply --verbose /tmp/context-routed-agent.patch
 
 RUN go mod download
 
@@ -99,6 +132,15 @@ RUN go mod download
 # test that covers it.
 RUN go test -tags goolm,stdjson ./pkg/routing/...
 RUN go test -tags goolm,stdjson -run TestIsVisionUnsupportedError ./pkg/agent/...
+# The `no tests to run` guard is not paranoia: `go test -run` exits 0 when its
+# regex matches NOTHING ("ok ... [no tests to run]"), so a renamed test or a typo
+# here turns the gate into decoration that passes forever. Fail loudly instead.
+RUN set -e; \
+    out="$(go test -tags goolm,stdjson \
+      -run 'TestLegacyAssemble_ReadsRoutedAgentSessionStore|TestLegacyAssemble_EmptyAgentIDFallsBackToDefault|TestLegacyCompact_CompressesRoutedAgentSessionStore' \
+      ./pkg/agent/...)"; \
+    printf '%s\n' "$out"; \
+    ! printf '%s\n' "$out" | grep -q 'no tests to run'
 
 RUN make build
 

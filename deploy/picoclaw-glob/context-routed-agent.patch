@@ -1,0 +1,396 @@
+diff --git a/pkg/agent/context_legacy.go b/pkg/agent/context_legacy.go
+index 908c3d8..c78bf01 100644
+--- a/pkg/agent/context_legacy.go
++++ b/pkg/agent/context_legacy.go
+@@ -20,11 +20,33 @@ type legacyContextManager struct {
+ 	summarizing sync.Map // dedup for async Compact (post-turn)
+ }
+ 
++// agentFor resolves the agent a request belongs to, falling back to the default
++// one when the caller named none.
++//
++// The fallback is what keeps this compatible: a single-agent deployment has only
++// the default agent to resolve to, and every caller that predates AgentID lands
++// on exactly the behaviour it had before.
++//
++// The lookup itself is not cosmetic. Each AgentInstance owns a session store
++// rooted at its own workspace (NewAgentInstance -> initSessionStore), so agents
++// configured with different workspaces have DISJOINT stores. Reading a routed
++// agent's conversation out of the default agent's store finds nothing, and
++// SessionStore.GetHistory reports a missing key as an empty history rather than
++// an error — so the turn runs on no history at all and nothing logs a fault.
++func (m *legacyContextManager) agentFor(agentID string) *AgentInstance {
++	if agentID != "" {
++		if agent, ok := m.al.registry.GetAgent(agentID); ok {
++			return agent
++		}
++	}
++	return m.al.registry.GetDefaultAgent()
++}
++
+ func (m *legacyContextManager) Assemble(_ context.Context, req *AssembleRequest) (*AssembleResponse, error) {
+ 	// Legacy: read history from session, return as-is.
+ 	// Budget enforcement happens in BuildMessages caller via
+ 	// isOverContextBudget + forceCompression.
+-	agent := m.al.registry.GetDefaultAgent()
++	agent := m.agentFor(req.AgentID)
+ 	if agent == nil {
+ 		return &AssembleResponse{}, nil
+ 	}
+@@ -40,7 +62,7 @@ func (m *legacyContextManager) Compact(_ context.Context, req *CompactRequest) e
+ 	switch req.Reason {
+ 	case ContextCompressReasonProactive, ContextCompressReasonRetry:
+ 		// Sync emergency compression — budget exceeded.
+-		if result, ok := m.forceCompression(req.SessionKey); ok {
++		if result, ok := m.forceCompression(req.AgentID, req.SessionKey); ok {
+ 			m.al.emitEvent(
+ 				runtimeevents.KindAgentContextCompress,
+ 				m.al.newTurnEventScope("", req.SessionKey, nil).meta(0, "forceCompression", "turn.context.compress"),
+@@ -52,7 +74,7 @@ func (m *legacyContextManager) Compact(_ context.Context, req *CompactRequest) e
+ 			)
+ 		}
+ 	case ContextCompressReasonSummarize:
+-		m.maybeSummarize(req.SessionKey)
++		m.maybeSummarize(req.AgentID, req.SessionKey)
+ 	}
+ 	return nil
+ }
+@@ -62,6 +84,11 @@ func (m *legacyContextManager) Ingest(_ context.Context, _ *IngestRequest) error
+ 	return nil
+ }
+ 
++// Clear is deliberately NOT agent-resolved here. ContextManager.Clear takes a
++// bare sessionKey, so giving it the routed agent means changing the interface
++// method's signature — a wider break than adding a field to a request struct,
++// and one every ContextManager implementation has to follow. Left for a change
++// that can carry all of them at once.
+ func (m *legacyContextManager) Clear(_ context.Context, sessionKey string) error {
+ 	agent := m.al.registry.GetDefaultAgent()
+ 	if agent == nil || agent.Sessions == nil {
+@@ -74,8 +101,8 @@ func (m *legacyContextManager) Clear(_ context.Context, sessionKey string) error
+ 
+ // maybeSummarize triggers summarization if the session history exceeds thresholds.
+ // It runs asynchronously in a goroutine.
+-func (m *legacyContextManager) maybeSummarize(sessionKey string) {
+-	agent := m.al.registry.GetDefaultAgent()
++func (m *legacyContextManager) maybeSummarize(agentID, sessionKey string) {
++	agent := m.agentFor(agentID)
+ 	if agent == nil {
+ 		return
+ 	}
+@@ -112,8 +139,8 @@ type compressionResult struct {
+ // forceCompression aggressively reduces context when the limit is hit.
+ // It drops the oldest ~50% of Turns (a Turn is a complete user→LLM→response
+ // cycle, as defined in #1316), so tool-call sequences are never split.
+-func (m *legacyContextManager) forceCompression(sessionKey string) (compressionResult, bool) {
+-	agent := m.al.registry.GetDefaultAgent()
++func (m *legacyContextManager) forceCompression(agentID, sessionKey string) (compressionResult, bool) {
++	agent := m.agentFor(agentID)
+ 	if agent == nil {
+ 		return compressionResult{}, false
+ 	}
+diff --git a/pkg/agent/context_manager.go b/pkg/agent/context_manager.go
+index 5a5dfe9..904ba56 100644
+--- a/pkg/agent/context_manager.go
++++ b/pkg/agent/context_manager.go
+@@ -32,6 +32,12 @@ type ContextManager interface {
+ 
+ // AssembleRequest is the input to Assemble.
+ type AssembleRequest struct {
++	// AgentID is the agent this turn was routed to. It matters because an agent
++	// owns its session store (it is rooted at the agent's workspace), so a
++	// ContextManager that reads history without it can only guess which store
++	// holds the conversation. Empty means "the default agent", which is what a
++	// single-agent deployment always resolves to anyway.
++	AgentID    string
+ 	SessionKey string // session identifier
+ 	Budget     int    // context window in tokens
+ 	MaxTokens  int    // max response tokens
+@@ -45,6 +51,7 @@ type AssembleResponse struct {
+ 
+ // CompactRequest is the input to Compact.
+ type CompactRequest struct {
++	AgentID    string                // routed agent; see AssembleRequest.AgentID
+ 	SessionKey string                // session identifier
+ 	Reason     ContextCompressReason // proactive_budget | llm_retry | summarize
+ 	Budget     int                   // context window budget (used for retry aggressive compaction)
+diff --git a/pkg/agent/context_routed_agent_test.go b/pkg/agent/context_routed_agent_test.go
+new file mode 100644
+index 0000000..74704ef
+--- /dev/null
++++ b/pkg/agent/context_routed_agent_test.go
+@@ -0,0 +1,190 @@
++package agent
++
++import (
++	"context"
++	"os"
++	"path/filepath"
++	"testing"
++
++	"github.com/sipeed/picoclaw/pkg/bus"
++	"github.com/sipeed/picoclaw/pkg/config"
++	"github.com/sipeed/picoclaw/pkg/providers"
++)
++
++// Each AgentInstance owns a session store rooted at its own workspace, so two
++// agents configured with different workspaces have disjoint stores. These tests
++// pin the consequence: the legacy ContextManager must read and compact the store
++// of the agent the turn was ROUTED to, not the default agent's.
++//
++// Without AgentID the manager resolved GetDefaultAgent() unconditionally, so a
++// turn on a non-default agent assembled an empty history — SessionStore reports a
++// missing key as an empty history rather than an error, so the turn ran with no
++// context and nothing logged a fault.
++
++// twoAgentLoop builds an AgentLoop with a default agent ("main") and a second
++// agent ("alt"), each with its own workspace and therefore its own session store.
++func twoAgentLoop(t *testing.T) (*AgentLoop, *AgentInstance, *AgentInstance) {
++	t.Helper()
++
++	root := t.TempDir()
++	mainWorkspace := filepath.Join(root, "workspace")
++	altWorkspace := filepath.Join(root, "workspace-alt")
++	for _, dir := range []string{mainWorkspace, altWorkspace} {
++		if err := os.MkdirAll(filepath.Join(dir, "sessions"), 0o700); err != nil {
++			t.Fatalf("failed to create workspace %s: %v", dir, err)
++		}
++	}
++
++	cfg := &config.Config{
++		Agents: config.AgentsConfig{
++			Defaults: config.AgentDefaults{
++				Workspace:                 mainWorkspace,
++				ModelName:                 "test-model",
++				MaxTokens:                 4096,
++				MaxToolIterations:         10,
++				ContextWindow:             8000,
++				SummarizeMessageThreshold: 20,
++				SummarizeTokenPercent:     75,
++			},
++			List: []config.AgentConfig{
++				{ID: "main", Default: true, Workspace: mainWorkspace},
++				{ID: "alt", Workspace: altWorkspace},
++			},
++		},
++	}
++
++	al := NewAgentLoop(cfg, bus.NewMessageBus(), &simpleMockProvider{response: "summary text"})
++
++	mainAgent := al.registry.GetDefaultAgent()
++	if mainAgent == nil || mainAgent.ID != "main" {
++		t.Fatalf("expected default agent \"main\", got %+v", mainAgent)
++	}
++	altAgent, ok := al.registry.GetAgent("alt")
++	if !ok {
++		t.Fatal("expected agent \"alt\" to be registered")
++	}
++	if mainAgent.Sessions == altAgent.Sessions {
++		t.Fatal("expected the two agents to own separate session stores")
++	}
++
++	return al, mainAgent, altAgent
++}
++
++func TestLegacyAssemble_ReadsRoutedAgentSessionStore(t *testing.T) {
++	al, mainAgent, altAgent := twoAgentLoop(t)
++	cm := &legacyContextManager{al: al}
++
++	const sessionKey = "sk_v1_routed"
++	altAgent.Sessions.SetHistory(sessionKey, []providers.Message{
++		{Role: "user", Content: "the fact only alt knows"},
++		{Role: "assistant", Content: "acknowledged"},
++	})
++	altAgent.Sessions.SetSummary(sessionKey, "alt summary")
++
++	resp, err := cm.Assemble(context.Background(), &AssembleRequest{
++		AgentID:    "alt",
++		SessionKey: sessionKey,
++		Budget:     8000,
++		MaxTokens:  4096,
++	})
++	if err != nil {
++		t.Fatalf("Assemble returned error: %v", err)
++	}
++	if len(resp.History) != 2 {
++		t.Fatalf("expected 2 messages from the routed agent's store, got %d", len(resp.History))
++	}
++	if resp.History[0].Content != "the fact only alt knows" {
++		t.Fatalf("unexpected first message: %q", resp.History[0].Content)
++	}
++	if resp.Summary != "alt summary" {
++		t.Fatalf("expected the routed agent's summary, got %q", resp.Summary)
++	}
++
++	// The default agent's store must be untouched by any of this: reading the
++	// wrong one is exactly the defect, so prove it never held the conversation.
++	if got := mainAgent.Sessions.GetHistory(sessionKey); len(got) != 0 {
++		t.Fatalf("expected the default agent's store to be empty, got %d messages", len(got))
++	}
++}
++
++func TestLegacyAssemble_EmptyAgentIDFallsBackToDefault(t *testing.T) {
++	al, mainAgent, altAgent := twoAgentLoop(t)
++	cm := &legacyContextManager{al: al}
++
++	const sessionKey = "sk_v1_fallback"
++	mainAgent.Sessions.SetHistory(sessionKey, []providers.Message{
++		{Role: "user", Content: "default agent history"},
++	})
++	altAgent.Sessions.SetHistory(sessionKey, []providers.Message{
++		{Role: "user", Content: "alt history"},
++		{Role: "assistant", Content: "alt reply"},
++	})
++
++	// A caller that names no agent keeps the pre-AgentID behaviour, which is what
++	// every single-agent deployment relies on.
++	resp, err := cm.Assemble(context.Background(), &AssembleRequest{SessionKey: sessionKey})
++	if err != nil {
++		t.Fatalf("Assemble returned error: %v", err)
++	}
++	if len(resp.History) != 1 || resp.History[0].Content != "default agent history" {
++		t.Fatalf("expected the default agent's history, got %+v", resp.History)
++	}
++
++	// An id that matches no agent falls back the same way rather than failing the
++	// turn — a stale route must not cost the member their answer.
++	resp, err = cm.Assemble(context.Background(), &AssembleRequest{
++		AgentID:    "does-not-exist",
++		SessionKey: sessionKey,
++	})
++	if err != nil {
++		t.Fatalf("Assemble returned error: %v", err)
++	}
++	if len(resp.History) != 1 || resp.History[0].Content != "default agent history" {
++		t.Fatalf("expected fallback to the default agent's history, got %+v", resp.History)
++	}
++}
++
++func TestLegacyCompact_CompressesRoutedAgentSessionStore(t *testing.T) {
++	al, mainAgent, altAgent := twoAgentLoop(t)
++	cm := &legacyContextManager{al: al}
++
++	const sessionKey = "sk_v1_compact"
++	history := []providers.Message{
++		{Role: "user", Content: "one"},
++		{Role: "assistant", Content: "one reply"},
++		{Role: "user", Content: "two"},
++		{Role: "assistant", Content: "two reply"},
++		{Role: "user", Content: "three"},
++		{Role: "assistant", Content: "three reply"},
++	}
++	altAgent.Sessions.SetHistory(sessionKey, history)
++	mainAgent.Sessions.SetHistory(sessionKey, history)
++
++	if err := cm.Compact(context.Background(), &CompactRequest{
++		AgentID:    "alt",
++		SessionKey: sessionKey,
++		Reason:     ContextCompressReasonProactive,
++		Budget:     8000,
++	}); err != nil {
++		t.Fatalf("Compact returned error: %v", err)
++	}
++
++	compacted := altAgent.Sessions.GetHistory(sessionKey)
++	if len(compacted) >= len(history) {
++		t.Fatalf("expected the routed agent's history to shrink, got %d of %d",
++			len(compacted), len(history))
++	}
++	if altAgent.Sessions.GetSummary(sessionKey) == "" {
++		t.Fatal("expected a compression note on the routed agent's session")
++	}
++
++	// Compaction is destructive; aiming it at the wrong agent drops a conversation
++	// the member can never get back. It must not have touched the default agent.
++	if got := mainAgent.Sessions.GetHistory(sessionKey); len(got) != len(history) {
++		t.Fatalf("expected the default agent's history untouched, got %d of %d",
++			len(got), len(history))
++	}
++	if got := mainAgent.Sessions.GetSummary(sessionKey); got != "" {
++		t.Fatalf("expected no summary on the default agent, got %q", got)
++	}
++}
+diff --git a/pkg/agent/pipeline_execute.go b/pkg/agent/pipeline_execute.go
+index 59e3331..a85b99e 100644
+--- a/pkg/agent/pipeline_execute.go
++++ b/pkg/agent/pipeline_execute.go
+@@ -834,6 +834,7 @@ toolLoop:
+ 		}
+ 		if !ts.opts.NoHistory && ts.opts.EnableSummary {
+ 			al.contextManager.Compact(turnCtx, &CompactRequest{
++				AgentID:    ts.agent.ID,
+ 				SessionKey: ts.sessionKey,
+ 				Reason:     ContextCompressReasonSummarize,
+ 				Budget:     ts.agent.ContextWindow,
+diff --git a/pkg/agent/pipeline_finalize.go b/pkg/agent/pipeline_finalize.go
+index d42f109..181c355 100644
+--- a/pkg/agent/pipeline_finalize.go
++++ b/pkg/agent/pipeline_finalize.go
+@@ -69,6 +69,7 @@ func (p *Pipeline) Finalize(
+ 		al.contextManager.Compact(
+ 			turnCtx,
+ 			&CompactRequest{
++				AgentID:    ts.agent.ID,
+ 				SessionKey: ts.sessionKey,
+ 				Reason:     ContextCompressReasonSummarize,
+ 				Budget:     ts.agent.ContextWindow,
+diff --git a/pkg/agent/pipeline_llm.go b/pkg/agent/pipeline_llm.go
+index 6856477..b9fc7e3 100644
+--- a/pkg/agent/pipeline_llm.go
++++ b/pkg/agent/pipeline_llm.go
+@@ -357,6 +357,7 @@ func (p *Pipeline) CallLLM(
+ 			}
+ 
+ 			if compactErr := p.ContextManager.Compact(ctx, &CompactRequest{
++				AgentID:    ts.agent.ID,
+ 				SessionKey: ts.sessionKey,
+ 				Reason:     ContextCompressReasonRetry,
+ 				Budget:     ts.agent.ContextWindow,
+@@ -368,6 +369,7 @@ func (p *Pipeline) CallLLM(
+ 			}
+ 			ts.refreshRestorePointFromSession(ts.agent)
+ 			if asmResp, asmErr := p.ContextManager.Assemble(ctx, &AssembleRequest{
++				AgentID:    ts.agent.ID,
+ 				SessionKey: ts.sessionKey,
+ 				Budget:     ts.agent.ContextWindow,
+ 				MaxTokens:  ts.agent.MaxTokens,
+diff --git a/pkg/agent/pipeline_setup.go b/pkg/agent/pipeline_setup.go
+index 0911a3b..4763600 100644
+--- a/pkg/agent/pipeline_setup.go
++++ b/pkg/agent/pipeline_setup.go
+@@ -21,6 +21,7 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
+ 	var summary string
+ 	if !ts.opts.NoHistory {
+ 		if resp, err := p.ContextManager.Assemble(ctx, &AssembleRequest{
++			AgentID:    ts.agent.ID,
+ 			SessionKey: ts.sessionKey,
+ 			Budget:     ts.agent.ContextWindow,
+ 			MaxTokens:  ts.agent.MaxTokens,
+@@ -52,6 +53,7 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
+ 			logger.WarnCF("agent", "Proactive compression: context budget exceeded before LLM call",
+ 				map[string]any{"session_key": ts.sessionKey})
+ 			if err := p.ContextManager.Compact(ctx, &CompactRequest{
++				AgentID:    ts.agent.ID,
+ 				SessionKey: ts.sessionKey,
+ 				Reason:     ContextCompressReasonProactive,
+ 				Budget:     ts.agent.ContextWindow,
+@@ -63,6 +65,7 @@ func (p *Pipeline) SetupTurn(ctx context.Context, ts *turnState) (*turnExecution
+ 			}
+ 			ts.refreshRestorePointFromSession(ts.agent)
+ 			if resp, err := p.ContextManager.Assemble(ctx, &AssembleRequest{
++				AgentID:    ts.agent.ID,
+ 				SessionKey: ts.sessionKey,
+ 				Budget:     ts.agent.ContextWindow,
+ 				MaxTokens:  ts.agent.MaxTokens,
+diff --git a/pkg/agent/turn_coord.go b/pkg/agent/turn_coord.go
+index 166ca95..2316fc7 100644
+--- a/pkg/agent/turn_coord.go
++++ b/pkg/agent/turn_coord.go
+@@ -395,6 +395,7 @@ func (al *AgentLoop) askSideQuestion(
+ 	var summary string
+ 	if opts != nil && !opts.NoHistory {
+ 		if resp, err := al.contextManager.Assemble(ctx, &AssembleRequest{
++			AgentID:    agent.ID,
+ 			SessionKey: opts.SessionKey,
+ 			Budget:     agent.ContextWindow,
+ 			MaxTokens:  agent.MaxTokens,

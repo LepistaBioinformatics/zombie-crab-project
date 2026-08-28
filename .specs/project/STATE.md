@@ -1,7 +1,20 @@
 # State
 
-**Last Updated:** 2026-08-18T00:00:00-03:00
-**Current Work:** `background-turn-dock` IMPLEMENTED, T-01..T-09 (AD-016). Proxy:
+**Last Updated:** 2026-08-28T00:00:00-03:00
+**Current Work:** `project-chat-context-loss` FIXED and verified against the live stack
+(AD-019). Root cause was upstream picoclaw, not this stack: `legacyContextManager` read a
+conversation's history from the DEFAULT agent's session store instead of the routed
+agent's, so every conversation inside a project answered with no history at all, on every
+turn after the first. Shipped as a third local patch,
+`deploy/picoclaw-glob/context-routed-agent.patch` (+239/−7 across 8 files), with three
+tests gated in the image build. Operator-verified: the previously amnesiac conversation
+got its memory back after the container picked up the new image.
+**Two follow-ups are open, neither blocking:** `ContextManager.Clear` is deliberately out
+of the patch (interface break — `/clear` in a project chat still clears the main agent's
+store), and the defect is unreported upstream. See
+`.specs/features/project-chat-context-loss/investigation.md`.
+
+**Previously:** `background-turn-dock` IMPLEMENTED, T-01..T-09 (AD-016). Proxy:
 `turnRegistry` gained a first-seen timestamp and `List(scope)`, plus `GET /v1/turns/running`
 — `go build`/`go vet` clean, `go test -race ./internal/httpapi/` green. Webapp:
 `dockStateOf`/`dockedTurns`/`useActiveTurns` in the turn store, `turn-restore.ts`,
@@ -37,6 +50,60 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-019: patch picoclaw's context manager to read the ROUTED agent's sessions, rather than adopt `seahorse` (2026-08-28)
+
+**Decision:** ship `deploy/picoclaw-glob/context-routed-agent.patch` — a third local
+patch — instead of switching `agents.defaults.context_manager` to `"seahorse"`.
+
+**The defect (upstream, present in `v0.3.1` and in `main` at this date).**
+`legacyContextManager.Assemble` resolves `registry.GetDefaultAgent()` and reads history
+out of *that* agent's session store. Every `AgentInstance` owns a store rooted at its own
+workspace, and a named agent gets its own workspace — picoclaw's own default. So a project
+turn writes to `workspace-<project>/sessions/` and reads the same key from
+`workspace/sessions/`, where it never existed. `GetHistory` reports a missing key as an
+empty history rather than an error: the turn runs on nothing and no log line records a
+fault. `Compact`, `maybeSummarize` and `forceCompression` were blind the same way, so
+project sessions were also never summarized.
+
+**Why this stack met it and picoclaw's own users mostly do not:** `agent-projects` gives
+every project its own agent. Main-agent chats were never affected — for the default agent
+the guess is correct.
+
+**Why not `seahorse` (the zero-patch option).** It keeps one SQLite engine keyed by
+session key, so it is agent-agnostic by accident of shape and would have fixed this with a
+config change. Rejected on three counts: its DB lives in the *default* agent's workspace
+(project content leaves the project boundary); `bootstrapSession` replays only the default
+agent's sessions, so history already written into project workspaces would stay invisible
+— the patch, by contrast, made existing broken conversations remember again on the next
+turn; and it swaps a battle-tested summarizer for a newer one deployment-wide. The two are
+**mutually exclusive**, not additive: exactly one ContextManager is active, so adopting
+seahorse would make the patch dead code while leaving seahorse's own default-agent binding
+unfixed.
+
+**Scope call — `Clear` is excluded.** `ContextManager.Clear(ctx, sessionKey string)` takes
+a bare string; fixing it means breaking the interface method and following through in
+every implementation. Left out to keep the patch upstreamable and small. The consequence
+is recorded in the code where the next reader hits it: `/clear` in a project chat still
+clears the main agent's store.
+
+**Evidence, not assertion.** Reverting only the agent resolution makes the new tests fail
+with the defect's exact signature (`expected 2 messages …, got 0`); with the patch the
+full `./pkg/agent/...` suite passes, all three patches apply cleanly to a fresh `v0.3.1`
+in Dockerfile order, and the fix was confirmed against the live stack.
+
+**Two things learned that outlive this fix:**
+
+1. `go test -run` **exits 0 when its regex matches nothing** (`ok … [no tests to run]`), so
+   a `-run`-based build gate silently stops testing the moment a name drifts. The new gate
+   guards against it; the `vision-unsupported-glm.patch` gate still has the flaw.
+2. `internal/history`'s claim that picoclaw "loses earlier turns on a restart" is **stale**
+   — it describes the old in-memory `SessionManager`. `v0.3.1`'s JSONL store re-reads the
+   session file on every `GetHistory`. The comment is corrected in place; the durable
+   fold-forward is kept, because it is what makes the served transcript independent of
+   picoclaw's file lifecycle.
+
+---
 
 ### AD-018: the `dokploy` deploy profile is removed from this repo (2026-08-27)
 
