@@ -155,6 +155,13 @@ always **written** correctly into the project workspace — the defect is read-o
 fixing the read makes existing transcripts visible again on the next turn. B starts those
 chats from zero, because `bootstrapSession` replays only the default agent's sessions.
 
+**That exclusivity is now enforced, not merely documented.** Because the choice between
+the two silently discards a workspace's context — the stores are separate and nothing
+migrates — leaving it settable from an admin config editor meant one text field could
+inflict the very bug this document is about, across every instance of an agent in a
+subscription. A shipped, so the key is pinned to `"legacy"`. See §5B's status note and
+AD-020.
+
 ### A — Third local patch in `deploy/picoclaw-glob/` (recommended) — **IMPLEMENTED**
 
 Shipped as `deploy/picoclaw-glob/context-routed-agent.patch`, wired into the Dockerfile
@@ -205,7 +212,16 @@ zombie-crab content — and is the only option that also restores summarization 
 chats. It is a bigger patch than the two already there (it crosses the interface), so it
 needs a re-read on every `PICOCLAW_TAG` bump.
 
-### B — `agents.defaults.context_manager: "seahorse"` (no patch)
+### B — `agents.defaults.context_manager: "seahorse"` (no patch) — **CLOSED, see AD-020**
+
+**Status (2026-08-28, after A shipped): no longer reachable as a config change.** The proxy
+now pins `agents.defaults.context_manager` to `"legacy"` on every materialization
+(`internal/docker/materialize.go`, `PinnedContextManager`), and the path is in
+`ManagedConfigPaths` — so both admin config editors refuse it and a template or hand edit
+is overwritten. Adopting seahorse is now a code change to that constant, plus a plan for
+the transcripts it orphans. The analysis below is kept because it is the reasoning that
+decided the pin's value, not because the option is open. AD-020 in `STATE.md` carries the
+decision.
 
 The seahorse manager keeps one SQLite engine keyed by session key
 (`context_seahorse.go`), ingests through `turnState.ingestMessage` with the routed
