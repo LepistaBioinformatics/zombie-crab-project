@@ -1,0 +1,59 @@
+# A submodule pointer must name a commit that exists on the child's default branch.
+#
+# Written after a chain of four PRs merged bottom-up by hand and one of them landed with
+# a pointer at a PR branch head, which needed a second PR to correct. The instruction
+# file that was supposed to prevent it said the right thing and was read by nobody at
+# the moment that mattered: the failure is at the MERGE button, and only a check is
+# there too.
+name: submodule pointers
+
+on:
+  pull_request:
+    paths:
+      - "crab/**"
+      - ".gitmodules"
+      - ".github/workflows/submodule-pointers.yml"
+
+jobs:
+  on-default-branch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # No `submodules:` — the pointers are read out of the tree and resolved through
+      # the API, so nothing has to be cloned and a private submodule would not need a
+      # token of its own.
+      - uses: actions/checkout@v4
+
+      - name: Every pointer is on its submodule's default branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          owner="${GITHUB_REPOSITORY%%/*}"
+          status=0
+          while read -r _ path; do
+            sha="$(git rev-parse "HEAD:$path")"
+            # Same org, and the repo is the submodule directory's own name — true for
+            # every submodule in this chain, and a relative .gitmodules URL offers
+            # nothing better to go on.
+            repo="$(basename "$path")"
+            branch="$(gh api "repos/$owner/$repo" --jq .default_branch 2>/dev/null)" || branch=""
+            if [ -z "$branch" ]; then
+              echo "::error::$path — cannot read $owner/$repo through the API"
+              status=1
+              continue
+            fi
+            state="$(gh api "repos/$owner/$repo/compare/$branch...$sha" --jq .status 2>/dev/null)" || state="unreachable"
+            case "$state" in
+              # `behind` means the pointer is an ancestor of the branch tip, which is
+              # the ordinary case for a deliberate lag. `identical` is the tip itself.
+              identical|behind)
+                echo "ok       $path -> ${sha:0:7} (on $branch)" ;;
+              *)
+                echo "::error::$path -> ${sha:0:7} is NOT on $owner/$repo@$branch (compare says: $state)."
+                echo "::error::Merge the submodule's PR first, then advance this pointer to the merge commit."
+                status=1 ;;
+            esac
+          done < <(git config --file .gitmodules --get-regexp '^submodule\..*\.path$')
+          exit $status
