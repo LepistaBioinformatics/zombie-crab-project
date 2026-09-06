@@ -53,6 +53,42 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 
 ## Recent Decisions (Last 60 days)
 
+### AD-021: a tool-delivered turn's ending is fixed in BOTH places — a fourth picoclaw patch and a bound in the proxy (2026-09-05)
+
+**Decision:** patch picoclaw to publish `handledToolResponseSummary` on the channel
+(`deploy/picoclaw-glob/handled-tool-summary.patch`), **and keep** crab-shell-proxy's own
+`deliverySettleWindow`, which finalizes a delivery-only turn after 20s of silence instead
+of the 600s idle budget.
+
+**The defect.** Ask the agent for a file and the chat spun with the caret blinking until
+the ten-minute bound, then reported a FAILURE for a turn that had worked. Cause, in two
+halves: picoclaw ends a turn whose output a tool delivered by writing
+*"Requested output delivered via tool attachment."* into the **session only** and calling
+`setFinalContent("")` (`pkg/agent/pipeline_execute.go`, the `allResponsesHandled` branch),
+and the proxy's completion machine can only finalize a turn after plain assistant content
+has arrived. The Pico Protocol has no "turn over" frame, so there was nothing else to go
+on. Full trace, with the live SSE capture and the `10m0.006s` log lines, in
+`crab/crab-shell-proxy/.specs/features/delivery-turn-never-finalizes/investigation.md`.
+
+**Why both and not either.** The patch fixes the CAUSE — the turn now ends with a plain
+message, the ordinary 500ms grace fires, and the member reads live the same sentence the
+transcript already held. The proxy bound is the DEFENSE — it must not hang for ten minutes
+because a harness ended a turn quietly, whatever the harness does next, and it is the only
+half that survives a `PICOCLAW_TAG` bump that drops the patch. With both, the common case
+is instant and the pathological case is bounded.
+
+**Trade-offs, both real.**
+- A fourth patch to re-check on every tag bump, and the first one that shares a file with
+  another (`pipeline_execute.go`, a dozen lines from context-routed-agent's hunk). The
+  patch is therefore generated against a tree with the other three applied, and the
+  Dockerfile's apply order is now load-bearing rather than incidental.
+- On a `SendResponse:false` channel that is NOT pico — Telegram, Discord — the member now
+  gets one extra sentence after a file they can already see. Upstream may prefer that
+  gated per-channel; it is the honest cost of making the turn audible, and the sentence is
+  upstream's own.
+- 20s is chosen, not measured. What would revise it: a member losing an answer that
+  arrived right after a delivery.
+
 ### AD-020: `agents.defaults.context_manager` is pinned, not admin-editable (2026-08-28)
 
 **Decision:** the proxy writes `agents.defaults.context_manager = "legacy"` into every

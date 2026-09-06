@@ -1,5 +1,21 @@
+diff --git a/pkg/agent/agent_command.go b/pkg/agent/agent_command.go
+index 277d1bd..127071d 100644
+--- a/pkg/agent/agent_command.go
++++ b/pkg/agent/agent_command.go
+@@ -333,7 +333,10 @@ func (al *AgentLoop) buildCommandsRuntime(
+ 			if opts == nil {
+ 				return fmt.Errorf("process options not available")
+ 			}
+-			return al.contextManager.Clear(ctx, opts.SessionKey)
++			return al.contextManager.Clear(ctx, &ClearRequest{
++				AgentID:    agent.ID,
++				SessionKey: opts.SessionKey,
++			})
+ 		}
+ 
+ 		rt.AskSideQuestion = func(ctx context.Context, question string) (string, error) {
 diff --git a/pkg/agent/context_legacy.go b/pkg/agent/context_legacy.go
-index 908c3d8..c78bf01 100644
+index 908c3d8..49eddff 100644
 --- a/pkg/agent/context_legacy.go
 +++ b/pkg/agent/context_legacy.go
 @@ -20,11 +20,33 @@ type legacyContextManager struct {
@@ -55,19 +71,35 @@ index 908c3d8..c78bf01 100644
  	}
  	return nil
  }
-@@ -62,6 +84,11 @@ func (m *legacyContextManager) Ingest(_ context.Context, _ *IngestRequest) error
+@@ -62,20 +84,31 @@ func (m *legacyContextManager) Ingest(_ context.Context, _ *IngestRequest) error
  	return nil
  }
  
-+// Clear is deliberately NOT agent-resolved here. ContextManager.Clear takes a
-+// bare sessionKey, so giving it the routed agent means changing the interface
-+// method's signature — a wider break than adding a field to a request struct,
-+// and one every ContextManager implementation has to follow. Left for a change
-+// that can carry all of them at once.
- func (m *legacyContextManager) Clear(_ context.Context, sessionKey string) error {
- 	agent := m.al.registry.GetDefaultAgent()
+-func (m *legacyContextManager) Clear(_ context.Context, sessionKey string) error {
+-	agent := m.al.registry.GetDefaultAgent()
++// Clear wipes the ROUTED agent's session, not the default agent's.
++//
++// It is destructive and it reported success either way, which is what made the
++// bare-sessionKey signature worth breaking: /clear in a conversation belonging to
++// a non-default agent emptied a session under that key in the DEFAULT agent's
++// store -- destroying an unrelated conversation if one happened to share the key,
++// doing nothing at all if none did -- and told the member their history was gone
++// while it sat untouched.
++func (m *legacyContextManager) Clear(_ context.Context, req *ClearRequest) error {
++	if req == nil {
++		return fmt.Errorf("clear: nil request")
++	}
++	agent := m.agentFor(req.AgentID)
  	if agent == nil || agent.Sessions == nil {
-@@ -74,8 +101,8 @@ func (m *legacyContextManager) Clear(_ context.Context, sessionKey string) error
+ 		return fmt.Errorf("sessions not initialized")
+ 	}
+-	agent.Sessions.SetHistory(sessionKey, []providers.Message{})
+-	agent.Sessions.SetSummary(sessionKey, "")
+-	return agent.Sessions.Save(sessionKey)
++	agent.Sessions.SetHistory(req.SessionKey, []providers.Message{})
++	agent.Sessions.SetSummary(req.SessionKey, "")
++	return agent.Sessions.Save(req.SessionKey)
+ }
  
  // maybeSummarize triggers summarization if the session history exceeds thresholds.
  // It runs asynchronously in a goroutine.
@@ -78,7 +110,7 @@ index 908c3d8..c78bf01 100644
  	if agent == nil {
  		return
  	}
-@@ -112,8 +139,8 @@ type compressionResult struct {
+@@ -112,8 +145,8 @@ type compressionResult struct {
  // forceCompression aggressively reduces context when the limit is hit.
  // It drops the oldest ~50% of Turns (a Turn is a complete user→LLM→response
  // cycle, as defined in #1316), so tool-call sequences are never split.
@@ -90,10 +122,16 @@ index 908c3d8..c78bf01 100644
  		return compressionResult{}, false
  	}
 diff --git a/pkg/agent/context_manager.go b/pkg/agent/context_manager.go
-index 5a5dfe9..904ba56 100644
+index 5a5dfe9..fcfe7f2 100644
 --- a/pkg/agent/context_manager.go
 +++ b/pkg/agent/context_manager.go
-@@ -32,6 +32,12 @@ type ContextManager interface {
+@@ -27,11 +27,17 @@ type ContextManager interface {
+ 
+ 	// Clear removes all stored context for a session (messages, summaries, etc.).
+ 	// Called when the user issues /clear or /reset.
+-	Clear(ctx context.Context, sessionKey string) error
++	Clear(ctx context.Context, req *ClearRequest) error
+ }
  
  // AssembleRequest is the input to Assemble.
  type AssembleRequest struct {
@@ -106,7 +144,7 @@ index 5a5dfe9..904ba56 100644
  	SessionKey string // session identifier
  	Budget     int    // context window in tokens
  	MaxTokens  int    // max response tokens
-@@ -45,6 +51,7 @@ type AssembleResponse struct {
+@@ -45,11 +51,24 @@ type AssembleResponse struct {
  
  // CompactRequest is the input to Compact.
  type CompactRequest struct {
@@ -114,12 +152,51 @@ index 5a5dfe9..904ba56 100644
  	SessionKey string                // session identifier
  	Reason     ContextCompressReason // proactive_budget | llm_retry | summarize
  	Budget     int                   // context window budget (used for retry aggressive compaction)
+ }
+ 
++// ClearRequest is the input to Clear.
++//
++// It is a struct for the same reason the other three are: Clear needs the routed
++// agent, and a session store belongs to an agent. It took a bare sessionKey until
++// the multi-agent case made that a defect -- /clear then wiped the DEFAULT agent's
++// session under that key and reported success, leaving the conversation the member
++// actually asked to clear untouched.
++type ClearRequest struct {
++	AgentID    string // routed agent; see AssembleRequest.AgentID
++	SessionKey string // session identifier
++}
++
+ // IngestRequest is the input to Ingest.
+ type IngestRequest struct {
+ 	SessionKey string            // session identifier
+diff --git a/pkg/agent/context_manager_test.go b/pkg/agent/context_manager_test.go
+index 46e521b..1eebb9e 100644
+--- a/pkg/agent/context_manager_test.go
++++ b/pkg/agent/context_manager_test.go
+@@ -705,7 +705,7 @@ func (m *noopContextManager) Assemble(_ context.Context, req *AssembleRequest) (
+ }
+ func (m *noopContextManager) Compact(_ context.Context, _ *CompactRequest) error { return nil }
+ func (m *noopContextManager) Ingest(_ context.Context, _ *IngestRequest) error   { return nil }
+-func (m *noopContextManager) Clear(_ context.Context, _ string) error            { return nil }
++func (m *noopContextManager) Clear(_ context.Context, _ *ClearRequest) error     { return nil }
+ 
+ // trackingContextManager tracks call counts for each method.
+ type trackingContextManager struct {
+@@ -742,7 +742,7 @@ func (m *trackingContextManager) Ingest(_ context.Context, req *IngestRequest) e
+ 	return nil
+ }
+ 
+-func (m *trackingContextManager) Clear(_ context.Context, _ string) error { return nil }
++func (m *trackingContextManager) Clear(_ context.Context, _ *ClearRequest) error { return nil }
+ 
+ // resetCMRegistry clears the global factory registry and returns a cleanup
+ // function that restores the original state after the test.
 diff --git a/pkg/agent/context_routed_agent_test.go b/pkg/agent/context_routed_agent_test.go
 new file mode 100644
-index 0000000..74704ef
+index 0000000..c5a9370
 --- /dev/null
 +++ b/pkg/agent/context_routed_agent_test.go
-@@ -0,0 +1,190 @@
+@@ -0,0 +1,266 @@
 +package agent
 +
 +import (
@@ -310,6 +387,147 @@ index 0000000..74704ef
 +		t.Fatalf("expected no summary on the default agent, got %q", got)
 +	}
 +}
++
++// Clear is the destructive one, and it reported success whichever store it hit:
++// /clear in a conversation on a non-default agent emptied a session under that
++// key in the DEFAULT agent's store, and told the member their history was gone
++// while it sat untouched.
++func TestLegacyClear_EmptiesRoutedAgentSessionStore(t *testing.T) {
++	al, mainAgent, altAgent := twoAgentLoop(t)
++	cm := &legacyContextManager{al: al}
++
++	const sessionKey = "sk_v1_clear"
++	kept := []providers.Message{
++		{Role: "user", Content: "a conversation on the default agent"},
++		{Role: "assistant", Content: "still here afterwards"},
++	}
++	mainAgent.Sessions.SetHistory(sessionKey, kept)
++	mainAgent.Sessions.SetSummary(sessionKey, "main summary")
++	altAgent.Sessions.SetHistory(sessionKey, []providers.Message{
++		{Role: "user", Content: "the one the member asked to clear"},
++	})
++	altAgent.Sessions.SetSummary(sessionKey, "alt summary")
++
++	if err := cm.Clear(context.Background(), &ClearRequest{
++		AgentID:    "alt",
++		SessionKey: sessionKey,
++	}); err != nil {
++		t.Fatalf("Clear returned error: %v", err)
++	}
++
++	if got := altAgent.Sessions.GetHistory(sessionKey); len(got) != 0 {
++		t.Errorf("the routed agent's session was not cleared: %+v", got)
++	}
++	if got := altAgent.Sessions.GetSummary(sessionKey); got != "" {
++		t.Errorf("the routed agent's summary survived: %q", got)
++	}
++
++	// The half that makes this worth a signature break.
++	if got := mainAgent.Sessions.GetHistory(sessionKey); len(got) != len(kept) {
++		t.Errorf("clear reached the default agent's store: %d of %d messages left",
++			len(got), len(kept))
++	}
++	if got := mainAgent.Sessions.GetSummary(sessionKey); got != "main summary" {
++		t.Errorf("clear reached the default agent's summary: %q", got)
++	}
++}
++
++func TestLegacyClear_EmptyAgentIDFallsBackToDefault(t *testing.T) {
++	al, mainAgent, _ := twoAgentLoop(t)
++	cm := &legacyContextManager{al: al}
++
++	const sessionKey = "sk_v1_clear_fallback"
++	mainAgent.Sessions.SetHistory(sessionKey, []providers.Message{{Role: "user", Content: "x"}})
++
++	if err := cm.Clear(context.Background(), &ClearRequest{SessionKey: sessionKey}); err != nil {
++		t.Fatalf("Clear returned error: %v", err)
++	}
++	if got := mainAgent.Sessions.GetHistory(sessionKey); len(got) != 0 {
++		t.Errorf("a caller naming no agent must keep the pre-AgentID behaviour: %+v", got)
++	}
++}
++
++// A nil request is a programming error, not a reason to wipe the default agent's
++// session -- which is what a nil-tolerant Clear reading an empty AgentID would do.
++func TestLegacyClear_NilRequestIsAnErrorNotAWipe(t *testing.T) {
++	al, mainAgent, _ := twoAgentLoop(t)
++	cm := &legacyContextManager{al: al}
++
++	const sessionKey = "sk_v1_clear_nil"
++	mainAgent.Sessions.SetHistory(sessionKey, []providers.Message{{Role: "user", Content: "untouched"}})
++
++	if err := cm.Clear(context.Background(), nil); err == nil {
++		t.Error("Clear(nil) returned no error")
++	}
++	if got := mainAgent.Sessions.GetHistory(sessionKey); len(got) != 1 {
++		t.Errorf("Clear(nil) destroyed a session: %+v", got)
++	}
++}
+diff --git a/pkg/agent/context_seahorse.go b/pkg/agent/context_seahorse.go
+index 6bd32c2..99ee531 100644
+--- a/pkg/agent/context_seahorse.go
++++ b/pkg/agent/context_seahorse.go
+@@ -19,7 +19,23 @@ import (
+ // seahorseContextManager adapts seahorse.Engine to agent.ContextManager.
+ type seahorseContextManager struct {
+ 	engine   *seahorse.Engine
+-	sessions session.SessionStore // for startup bootstrap
++	sessions session.SessionStore // the DEFAULT agent's store; startup bootstrap
++	// registry resolves a routed agent's own session store. The engine is shared
++	// across agents (one DB, keyed by session key), but the JSONL side is not:
++	// each agent's store is rooted at its own workspace, so Clear has to know
++	// which one it is emptying.
++	registry *AgentRegistry
++}
++
++// sessionsFor returns the routed agent's session store, falling back to the
++// default agent's when the caller named none or named one that is gone.
++func (m *seahorseContextManager) sessionsFor(agentID string) session.SessionStore {
++	if agentID != "" && m.registry != nil {
++		if agent, ok := m.registry.GetAgent(agentID); ok && agent.Sessions != nil {
++			return agent.Sessions
++		}
++	}
++	return m.sessions
+ }
+ 
+ // newSeahorseContextManager creates a seahorse-backed ContextManager.
+@@ -47,6 +63,7 @@ func newSeahorseContextManager(_ json.RawMessage, al *AgentLoop) (ContextManager
+ 	mgr := &seahorseContextManager{
+ 		engine:   engine,
+ 		sessions: agent.Sessions,
++		registry: al.registry,
+ 	}
+ 
+ 	// Register seahorse tools with the agent's tool registry
+@@ -156,14 +173,21 @@ func (m *seahorseContextManager) Ingest(ctx context.Context, req *IngestRequest)
+ }
+ 
+ // Clear removes all stored context for a session (seahorse DB + JSONL).
+-func (m *seahorseContextManager) Clear(ctx context.Context, sessionKey string) error {
+-	if err := m.engine.ClearSession(ctx, sessionKey); err != nil {
++//
++// The engine is one DB keyed by session key, so clearing it needs no agent. The
++// JSONL half does: stores are per agent, and emptying the default agent's while
++// the member asked about a routed agent's is destructive in the wrong place.
++func (m *seahorseContextManager) Clear(ctx context.Context, req *ClearRequest) error {
++	if req == nil {
++		return fmt.Errorf("clear: nil request")
++	}
++	if err := m.engine.ClearSession(ctx, req.SessionKey); err != nil {
+ 		return err
+ 	}
+-	if m.sessions != nil {
+-		m.sessions.SetHistory(sessionKey, []providers.Message{})
+-		m.sessions.SetSummary(sessionKey, "")
+-		return m.sessions.Save(sessionKey)
++	if sessions := m.sessionsFor(req.AgentID); sessions != nil {
++		sessions.SetHistory(req.SessionKey, []providers.Message{})
++		sessions.SetSummary(req.SessionKey, "")
++		return sessions.Save(req.SessionKey)
+ 	}
+ 	return nil
+ }
 diff --git a/pkg/agent/pipeline_execute.go b/pkg/agent/pipeline_execute.go
 index 59e3331..a85b99e 100644
 --- a/pkg/agent/pipeline_execute.go

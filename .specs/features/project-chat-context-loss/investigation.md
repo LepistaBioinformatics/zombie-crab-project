@@ -62,7 +62,7 @@ the legacy manager equally agent-blind:
 | Line | Function | Consequence for a project conversation |
 |---|---|---|
 | `context_legacy.go:27` | `Assemble` | **History is always empty.** The reported bug. |
-| `context_legacy.go:66` | `Clear` | `/clear` wipes the *main* agent's session under that key, never the project's. |
+| `context_legacy.go:66` | `Clear` | `/clear` wipes the *main* agent's session under that key, never the project's — and reports success. **Fixed in the second pass**; see §5A. |
 | `context_legacy.go:78` | `maybeSummarize` | Reads an empty history, so the threshold never trips: project sessions are **never summarized**. |
 | `context_legacy.go:116` | `forceCompression` | Same — emergency compression is a no-op there. |
 
@@ -184,15 +184,27 @@ conversation pays a growing token bill until it hits the ceiling.
 - in `context_legacy.go`, resolve `registry.GetAgent(req.AgentID)` and fall back to
   `GetDefaultAgent()` when it is empty, so single-agent deployments are untouched.
 
-**`Clear` needs a decision of its own.** `ContextManager.Clear(ctx, sessionKey string)`
-(`context_manager.go:30`) takes a bare string — there is no request struct to widen — and
-its only caller is `agent_command.go:336`, which already has `opts` in hand. Fixing the
-`/clear` row of §1's table therefore means changing that signature too (an interface
-break, and the seahorse implementation with it). Either widen it in the same patch, or
-scope the patch to `Assemble`/`Compact` and state that `/clear` in a project chat stays
-broken — but do not leave it implied.
+**`Clear` was scoped out of the first cut and is now in** (2026-08-28, second pass).
+`ContextManager.Clear(ctx, sessionKey string)` took a bare string, so fixing the `/clear`
+row of §1's table meant breaking the interface method's signature and following through in
+every implementation — which is why it waited for a change of its own rather than riding
+along.
 
-Three tests ship with it in `pkg/agent/context_routed_agent_test.go`, and the Dockerfile
+It is the row that most deserved it, because `Clear` is the **destructive** one and it
+reported success whichever store it hit. `/clear` in a conversation on a non-default agent
+emptied a session under that key in the DEFAULT agent's store — destroying an unrelated
+conversation if one happened to share the key, doing nothing at all if none did — and told
+the member their history was gone while it sat untouched.
+
+The follow-up adds `ClearRequest{AgentID, SessionKey}`, matching the three request structs
+the other methods already take, and resolves it in **both** managers: `legacy` through the
+same `agentFor` fallback, and `seahorse` through a new `sessionsFor` — its engine is one DB
+keyed by session key and needs no agent, but its JSONL half is per agent and was clearing
+the default's. A nil request is an error rather than a fallback, because a nil-tolerant
+`Clear` reading an empty `AgentID` would wipe the default agent's session on a programming
+mistake; there is a test for exactly that.
+
+Six tests ship with it in `pkg/agent/context_routed_agent_test.go`, and the Dockerfile
 runs them as a build gate like the other two patches':
 
 | Test | Pins |
@@ -200,12 +212,26 @@ runs them as a build gate like the other two patches':
 | `TestLegacyAssemble_ReadsRoutedAgentSessionStore` | history comes from the routed agent's store, and the default agent's store never held the conversation |
 | `TestLegacyAssemble_EmptyAgentIDFallsBackToDefault` | an empty **and** an unknown `AgentID` both resolve to the default agent — so a caller that names no agent keeps the pre-patch behaviour, and a stale route costs no answer |
 | `TestLegacyCompact_CompressesRoutedAgentSessionStore` | compaction shrinks the routed agent's session and leaves the default agent's untouched (compaction is destructive; aiming it at the wrong agent drops a conversation for good) |
+| `TestLegacyClear_EmptiesRoutedAgentSessionStore` | `/clear` empties the routed agent's session **and leaves the default agent's intact** — both halves, because the bug destroyed one conversation while sparing the one the member named |
+| `TestLegacyClear_EmptyAgentIDFallsBackToDefault` | the same fallback the read path has |
+| `TestLegacyClear_NilRequestIsAnErrorNotAWipe` | a nil request errors instead of resolving to the default agent and wiping it |
 
-Verified before shipping: with the resolution reverted to `GetDefaultAgent()` the first
-test fails with `expected 2 messages …, got 0` — the empty history that *is* the bug —
-and the third with `got 6 of 6`. The full `./pkg/agent/...` suite passes with the patch
-applied, and all three patches apply cleanly to a fresh `v0.3.1` in Dockerfile order (no
-two touch the same file).
+Verified before shipping, each test against the change it guards. Reverting the read
+resolution to `GetDefaultAgent()` fails the first with `expected 2 messages …, got 0` —
+the empty history that *is* the bug — and the compaction one with `got 6 of 6`. Reverting
+`Clear` fails its test with both halves named:
+
+```
+the routed agent's session was not cleared: [{Role:user Content:the one the member asked to clear …}]
+clear reached the default agent's store: 0 of 2 messages left
+```
+
+which is the defect stated as plainly as it can be: the conversation the member asked to
+clear survived, and an unrelated one was destroyed instead.
+
+The full `./pkg/agent/...` suite passes with the patch applied, `go vet` is clean, and all
+three patches apply cleanly to a fresh `v0.3.1` in Dockerfile order (no two touch the same
+file).
 
 This fits the directory's existing discipline — upstreamable as-is, tests included, no
 zombie-crab content — and is the only option that also restores summarization for project

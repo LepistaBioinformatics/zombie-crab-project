@@ -1,7 +1,10 @@
 # picoclaw + local patches.
 #
-# Three independent patches, each upstreamable on its own. No two touch the same
-# file, so they apply in any order.
+# Four independent patches, each upstreamable on its own. They are applied in the
+# order below and that order is now load-bearing: context-routed-agent and
+# handled-tool-summary both touch pkg/agent/pipeline_execute.go (different hunks,
+# a dozen lines apart), so handled-tool-summary is generated against a tree with
+# the other three already applied.
 #
 # WHY dispatch-selector-glob.patch EXISTS
 #
@@ -58,17 +61,53 @@
 # que recebo nesta sessão", while the webapp still renders the full transcript
 # from the proxy's durable file.
 #
-# The patch threads the routed agent's id through AssembleRequest/CompactRequest
-# and resolves it in the legacy manager, falling back to the default agent when
-# unset — so a single-agent deployment is bit-identical to before. See
-# .specs/features/project-chat-context-loss/investigation.md for the full trace,
-# including why ContextManager.Clear is deliberately NOT part of this patch.
+# The patch threads the routed agent's id through the ContextManager interface —
+# AssembleRequest, CompactRequest and (since the follow-up) ClearRequest — and
+# resolves it in both managers, falling back to the default agent when unset, so a
+# single-agent deployment is bit-identical to before. See
+# .specs/features/project-chat-context-loss/investigation.md for the full trace.
+#
+# Clear was excluded from the first cut and is now in. It is the DESTRUCTIVE one:
+# /clear on a non-default agent emptied a session under that key in the DEFAULT
+# agent's store — destroying an unrelated conversation if one shared the key, doing
+# nothing if none did — and reported success either way, so the member was told
+# their history was gone while it sat untouched. Fixing it meant breaking the
+# interface method's signature, which is why it waited for a change of its own.
 #
 # One coupling to know about on a tag bump: the test this patch adds
 # (pkg/agent/context_routed_agent_test.go) uses `simpleMockProvider`, a helper
 # defined in UPSTREAM's own pkg/agent/agent_test.go. If upstream renames it, this
 # patch still applies cleanly and then fails to COMPILE — the error will name the
 # helper, not the patch.
+#
+# WHY handled-tool-summary.patch EXISTS
+#
+# A turn whose output was delivered BY A TOOL — `send_file`, or anything else that
+# sets ResponseHandled — ends without an LLM follow-up. picoclaw writes
+# "Requested output delivered via tool attachment." into the session and calls
+# setFinalContent("") (pkg/agent/pipeline_execute.go, the allResponsesHandled
+# branch), so **nothing at all reaches the channel**: the sentence is in the
+# transcript and the member never sees it.
+#
+# For a human on Telegram that is a missing footnote. For this stack it is a hang.
+# The Pico Protocol has no "turn over" frame — crab-shell-proxy infers completion
+# from "plain assistant content arrived AND typing stopped" — so a turn that never
+# publishes plain content never finalizes. Ask the agent for a file and the chat
+# spins for the full turnIdleTimeout (600s here) and then reports a FAILURE for a
+# turn that worked. Traced in
+# crab/crab-shell-proxy/.specs/features/delivery-turn-never-finalizes/investigation.md.
+#
+# The patch publishes that same sentence on the same path Finalize already uses
+# when the final answer must reach the channel outside SendResponse
+# (`!SendResponse && AllowInterimPicoPublish`), so nothing changes for the channels
+# whose caller publishes finalContent, and the transcript and the conversation stop
+# disagreeing.
+#
+# The proxy ALSO defends itself — a delivery with no plain message finalizes after
+# a short settle window rather than the idle budget — and that stays: the proxy
+# must not hang for ten minutes because a harness ended a turn quietly, whatever
+# the harness does next. This patch is what makes the common case instant instead
+# of merely bounded.
 #
 # HOW TO GET RID OF THIS
 #
@@ -118,11 +157,15 @@ RUN git clone --depth 1 --branch ${PICOCLAW_TAG} \
 COPY dispatch-selector-glob.patch /tmp/dispatch-selector-glob.patch
 COPY vision-unsupported-glm.patch /tmp/vision-unsupported-glm.patch
 COPY context-routed-agent.patch /tmp/context-routed-agent.patch
+COPY handled-tool-summary.patch /tmp/handled-tool-summary.patch
 # --verbose so a failed apply names the hunk; no fuzz, no 3-way. A patch that no
 # longer applies cleanly is a signal, not an inconvenience.
 RUN git apply --verbose /tmp/dispatch-selector-glob.patch
 RUN git apply --verbose /tmp/vision-unsupported-glm.patch
 RUN git apply --verbose /tmp/context-routed-agent.patch
+# LAST, deliberately: its hunks in pipeline_execute.go were generated against the
+# tree the three patches above produce.
+RUN git apply --verbose /tmp/handled-tool-summary.patch
 
 RUN go mod download
 
@@ -137,7 +180,13 @@ RUN go test -tags goolm,stdjson -run TestIsVisionUnsupportedError ./pkg/agent/..
 # here turns the gate into decoration that passes forever. Fail loudly instead.
 RUN set -e; \
     out="$(go test -tags goolm,stdjson \
-      -run 'TestLegacyAssemble_ReadsRoutedAgentSessionStore|TestLegacyAssemble_EmptyAgentIDFallsBackToDefault|TestLegacyCompact_CompressesRoutedAgentSessionStore' \
+      -run 'TestLegacyAssemble_ReadsRoutedAgentSessionStore|TestLegacyAssemble_EmptyAgentIDFallsBackToDefault|TestLegacyCompact_CompressesRoutedAgentSessionStore|TestLegacyClear_EmptiesRoutedAgentSessionStore|TestLegacyClear_EmptyAgentIDFallsBackToDefault|TestLegacyClear_NilRequestIsAnErrorNotAWipe' \
+      ./pkg/agent/...)"; \
+    printf '%s\n' "$out"; \
+    ! printf '%s\n' "$out" | grep -q 'no tests to run'
+RUN set -e; \
+    out="$(go test -tags goolm,stdjson \
+      -run 'TestHandledToolSummaryReachesTheChannel|TestProcessMessage_MediaToolHandledSkipsFollowUpLLMAndFinalText' \
       ./pkg/agent/...)"; \
     printf '%s\n' "$out"; \
     ! printf '%s\n' "$out" | grep -q 'no tests to run'

@@ -1,0 +1,157 @@
+diff --git a/pkg/agent/agent_outbound.go b/pkg/agent/agent_outbound.go
+index b19ea75..6990a9d 100644
+--- a/pkg/agent/agent_outbound.go
++++ b/pkg/agent/agent_outbound.go
+@@ -39,6 +39,32 @@ func (al *AgentLoop) publishResponseOrError(
+ 	al.PublishResponseIfNeeded(ctx, channel, chatID, sessionKey, response)
+ }
+ 
++// publishHandledToolSummary delivers the one sentence a tool-delivered turn ends
++// with (handledToolResponseSummary), on the same path Finalize uses when the final
++// answer must reach the channel outside SendResponse.
++//
++// Gated exactly like that path: the SendResponse channels publish the turn's
++// finalContent through their caller, and this branch deliberately leaves it empty.
++func (al *AgentLoop) publishHandledToolSummary(ctx context.Context, ts *turnState) {
++	if ts == nil || ts.opts.SendResponse || !ts.opts.AllowInterimPicoPublish {
++		return
++	}
++	msg := outboundMessageForTurnWithOptions(ts, handledToolResponseSummary, outboundTurnMessageOptions{})
++	markFinalOutbound(&msg)
++	pubCtx, pubCancel := context.WithTimeout(ctx, 3*time.Second)
++	defer pubCancel()
++	if err := al.bus.PublishOutbound(pubCtx, msg); err != nil &&
++		!errors.Is(err, context.DeadlineExceeded) &&
++		!errors.Is(err, context.Canceled) &&
++		!errors.Is(err, bus.ErrBusClosed) {
++		logger.WarnCF("agent", "Failed to publish handled-tool summary", map[string]any{
++			"channel": ts.channel,
++			"chat_id": ts.chatID,
++			"error":   err.Error(),
++		})
++	}
++}
++
+ func (al *AgentLoop) PublishResponseIfNeeded(ctx context.Context, channel, chatID, sessionKey, response string) {
+ 	if response == "" {
+ 		return
+diff --git a/pkg/agent/handled_tool_summary_test.go b/pkg/agent/handled_tool_summary_test.go
+new file mode 100644
+index 0000000..ed94eb8
+--- /dev/null
++++ b/pkg/agent/handled_tool_summary_test.go
+@@ -0,0 +1,95 @@
++// PicoClaw - Ultra-lightweight personal AI agent
++
++package agent
++
++import (
++	"context"
++	"os"
++	"path/filepath"
++	"slices"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/sipeed/picoclaw/pkg/bus"
++	"github.com/sipeed/picoclaw/pkg/config"
++	"github.com/sipeed/picoclaw/pkg/media"
++)
++
++// recordingMediaChannel is fakeMediaChannel with a lock on the TEXT path, because
++// text is published through the manager's worker goroutine while the test reads it.
++type recordingMediaChannel struct {
++	fakeMediaChannel
++	mu    sync.Mutex
++	texts []string
++}
++
++func (r *recordingMediaChannel) Send(_ context.Context, msg bus.OutboundMessage) ([]string, error) {
++	r.mu.Lock()
++	defer r.mu.Unlock()
++	r.texts = append(r.texts, msg.Content)
++	return nil, nil
++}
++
++func (r *recordingMediaChannel) sentTexts() []string {
++	r.mu.Lock()
++	defer r.mu.Unlock()
++	return append([]string(nil), r.texts...)
++}
++
++// A turn whose output was delivered BY A TOOL ends without an LLM follow-up: the
++// handled-tool branch writes handledToolResponseSummary into the session and calls
++// setFinalContent(""), so nothing at all reaches the channel. The transcript and the
++// conversation then disagree — the sentence is in the history, and the member never
++// saw it — and any client that infers "the turn is over" from the messages it
++// receives never sees the turn end.
++//
++// The summary is already the turn's own account of itself. Publishing it costs
++// nothing and is what makes the delivery legible to a member and terminal to a
++// client.
++func TestHandledToolSummaryReachesTheChannel(t *testing.T) {
++	tmpDir := t.TempDir()
++	cfg := &config.Config{
++		Agents: config.AgentsConfig{
++			Defaults: config.AgentDefaults{
++				Workspace:         tmpDir,
++				ModelName:         "test-model",
++				MaxTokens:         4096,
++				MaxToolIterations: 10,
++			},
++		},
++	}
++
++	msgBus := bus.NewMessageBus()
++	al := NewAgentLoop(cfg, msgBus, &handledMediaProvider{})
++
++	store := media.NewFileMediaStore()
++	al.SetMediaStore(store)
++	channel := &recordingMediaChannel{fakeMediaChannel: fakeMediaChannel{fakeChannel: fakeChannel{id: "rid"}}}
++	al.SetChannelManager(newStartedTestChannelManager(t, msgBus, store, "telegram", channel))
++
++	imagePath := filepath.Join(tmpDir, "screen.png")
++	if err := os.WriteFile(imagePath, []byte("fake screenshot"), 0o644); err != nil {
++		t.Fatalf("WriteFile(imagePath) error = %v", err)
++	}
++	al.RegisterTool(&handledMediaTool{store: store, path: imagePath})
++
++	if _, err := al.processMessage(context.Background(), testInboundMessage(bus.InboundMessage{
++		Channel:  "telegram",
++		ChatID:   "chat1",
++		SenderID: "user1",
++		Content:  "take a screenshot of the screen and send it to me",
++	})); err != nil {
++		t.Fatalf("processMessage() error = %v", err)
++	}
++
++	// Published asynchronously through the manager's worker.
++	deadline := time.Now().Add(2 * time.Second)
++	for time.Now().Before(deadline) {
++		if slices.Contains(channel.sentTexts(), handledToolResponseSummary) {
++			return
++		}
++		time.Sleep(10 * time.Millisecond)
++	}
++	t.Fatalf("the handled-tool summary never reached the channel; it sent %q", channel.sentTexts())
++}
+diff --git a/pkg/agent/pipeline_execute.go b/pkg/agent/pipeline_execute.go
+index a85b99e..87b8fbc 100644
+--- a/pkg/agent/pipeline_execute.go
++++ b/pkg/agent/pipeline_execute.go
+@@ -842,6 +842,14 @@ toolLoop:
+ 		}
+ 		ts.setPhase(TurnPhaseCompleted)
+ 		ts.setFinalContent("")
++		// The summary above went into the session; this puts it on the channel too.
++		//
++		// Without it a tool-delivered turn says NOTHING to the conversation: the
++		// history holds handledToolResponseSummary and the member never sees it, and a
++		// client that infers "the turn is over" from the messages it receives never
++		// sees this one end. finalContent stays empty on purpose — the answer really
++		// was the tool's output — so this is the only place the turn can speak from.
++		al.publishHandledToolSummary(turnCtx, ts)
+ 		if al.channelManager != nil && ts.channel != "" {
+ 			al.channelManager.DismissToolFeedback(ctx, ts.channel, ts.chatID, ts.opts.InboundContext)
+ 		}
