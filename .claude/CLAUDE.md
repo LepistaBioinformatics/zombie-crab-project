@@ -3,6 +3,35 @@
 Monorepo-wide rules. Each submodule has its own `.claude/CLAUDE.md` for rules that
 only apply inside it; this file holds what applies across the stack.
 
+## Open this repo's PR only after its submodules' PRs are merged
+
+`crab/crab-shell-proxy` and `crab/crab-exoskeleton-webapp` are separate
+repositories with their own PRs. **Do not open — or even commit — a pointer bump
+here until the commit it points at is a merge on that submodule's `main`.**
+
+**Why.** A pointer recorded against a PR branch head is stale the moment that PR
+merges: the merge commit is a different sha, and the branch it named can be
+deleted. This repository then lands describing a proxy or a webapp that no branch
+points at any more, and the fix is a second PR that exists only to move a line.
+That happened on 2026-09-06 — #54 was opened with both pointers at branch heads
+and needed `08971f8` before it could merge, and the repo above this one merged a
+pointer at a PR-branch commit and needed a correction PR of its own.
+
+**While waiting:** open the submodule PRs, report the merge order, and commit
+nothing here. An unpushed commit that has to be amended is worse than no commit —
+a rebase or a branch switch can strand it.
+
+**Unless the maintainer asks otherwise.** "Open all of them now so I can review
+the whole chain" is a legitimate request. When it is made, the PR body must say
+which pointers are branch heads and what has to be advanced before it lands.
+
+**When they are merged:** `git -C crab/<name> checkout main && git pull
+--ff-only`, then commit the bump naming the merge commits and their PR numbers.
+
+The repository ABOVE this one (`zombie-crab-project-mkt`, which carries this one
+as a submodule) has the same rule for the same reason, in its own
+`.claude/CLAUDE.md`. The chain is merged bottom-up, one level at a time.
+
 ## Calling mycelium
 
 **Always call mycelium over JSON-RPC. Never add a new call to its REST surface.**
