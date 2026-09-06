@@ -1,5 +1,13 @@
 # canvas-activity — Specification
 
+**REMOVED (2026-09-05).** The Canvas mode is gone from the product: members did not
+know what to do with it, and nobody used it. What shipped and what was taken back out
+is recorded in
+`crab/crab-exoskeleton-webapp/.specs/features/canvas-removal/spec.md`. This document
+is kept as the record of what was built and why — not as a description of the product.
+
+---
+
 > Written alongside the implementation, from two suggestions the user chose off a
 > shortlist. Spans both submodules, which is why it lives here rather than in the webapp's
 > own `.specs/`.
