@@ -1,0 +1,93 @@
+# DERIVED from crab/harness-sphere/config.zombie-crab.toml by changing exactly two
+# lines: exporter -> "otlp" and otlp_endpoint -> the collector on zombie_net.
+#
+# It is a separate file rather than an env override because harness-sphere has no
+# env override for otlp_endpoint -- only HARNESSSPHERE_EXPORTER exists
+# (harnesssphere/src/config.rs). The overlay bind-mounts this over the config the
+# image bakes in, so the submodule needs no change at all.
+#
+# If the upstream config gains a field, re-derive rather than hand-edit:
+#   sed -e 's|^exporter = .*|exporter = "otlp"|' \
+#       -e 's|^otlp_endpoint = .*|otlp_endpoint = "http://otel-collector:4317"|' \
+#       crab/harness-sphere/config.zombie-crab.toml > deploy/observability/harnesssphere.otlp.toml
+
+# HarnessSphere — configuration for the zombie-crab stack.
+#
+# This file is what the container runs (baked to /etc/harnesssphere/config.toml).
+# It configures ONLY fields that exist today: this is the "land it, change no Rust"
+# step, so that the first run against the live stack tests the tree whose behaviour
+# is documented.
+#
+# NO SECRET GOES IN THIS FILE. It is committed. Anything sensitive arrives by
+# environment.
+
+# --- Critical sources: host (hospedeiro) and self. ---------------------------
+# These two are the only mandatory layers; if either cannot be read, the watcher
+# exits non-zero rather than pretending to observe.
+#
+# The host values are the HOST's, not this container's, and that is measured
+# rather than assumed: sysinfo reads /proc/meminfo and /proc/stat, which Docker
+# does not namespace. A run capped at -m 512m reported the host's 33 GB.
+host_interval_secs = 10
+self_interval_secs = 30
+critical_threshold = 3
+
+# --- Export ------------------------------------------------------------------
+# `stdout` is the deliberate default: it proves the whole pipeline with no backend
+# to stand up, and choosing a durable backend is a separate decision that should be
+# made with a real cardinality figure in hand. Override with HARNESSSPHERE_EXPORTER.
+exporter = "otlp"
+otlp_endpoint = "http://otel-collector:4317"
+service_name = "harnesssphere"
+metric_export_interval_secs = 15
+
+# --- Probes: the three fixed compose services --------------------------------
+# Named by their COMPOSE SERVICE NAMES on zombie_net. Note the third one: the
+# repository is called `crab-exoskeleton-webapp`, but the compose service — and
+# therefore the only name that resolves on this network — is `chat-webapp`.
+#
+# No depends_on is needed for these, and adding `condition: service_healthy` would
+# be wrong. EndpointProbeCollector::probe() never touches the network (it returns
+# Ready when the target list is non-empty); reachability is decided per tick inside
+# collect(), which emits endpoint.up = 0 for a target that is down. Ordering the
+# watcher behind the health of what it watches would suppress the exact signal it
+# exists to produce.
+probe_targets = [
+    "mycelium-gateway:8080",
+    "crab-shell-proxy:8080",
+    "chat-webapp:3000",
+]
+
+# --- Session-derived AI activity ---------------------------------------------
+# EMPTY ON PURPOSE, and set by the operator at deploy time as a one-off probe.
+#
+# Two reasons it does not ship populated. First, a development checkout has no
+# tenants/ tree, so any committed path would resolve nowhere. Second, this field is
+# single-valued while the stack has one sessions/ directory PER WORKSPACE — pointing
+# it at one member would emit a metric that silently describes one tenant and looks
+# like it describes the stack. Multiplexing it is the next feature's job.
+#
+# When set for that probe, expect three known distortions and read them as such:
+#   1. sessions/durable/ holds crab-shell-proxy's own append-only transcripts. The
+#      collector's read_dir is non-recursive, so it should skip them; if that ever
+#      changes, every message is counted twice.
+#   2. Every scheduled-task RUN writes its own session file, so `harness.sessions`
+#      drifts from "conversations" towards "conversations plus every cron run since
+#      provisioning". The paired .meta.json key (agent:cron-*) is what tells them apart.
+#   3. Every transcript is re-read IN FULL on every tick.
+session_dir = ""
+session_source = "picoclaw"
+
+# --- Deliberately unset ------------------------------------------------------
+# Each of these is single-valued and resolved once at boot, which is precisely why
+# the dynamic-discovery feature exists. Setting any of them to one arbitrary
+# instance would produce a metric that describes one tenant and reads like it
+# describes the stack.
+container_cgroup = ""
+container_id = ""
+watch_processes = []
+
+# --- Not built into this image -----------------------------------------------
+# The `ingest` and `prometheus` features are OFF (see Dockerfile): nothing in this
+# stack pushes OTLP to us, and nothing exposes a Prometheus exposition endpoint.
+# Both collectors are slated for deletion in the scope-reduction feature.

@@ -1,0 +1,11 @@
+# Provisioned so the stack is useful on first boot with no clicking. A dashboard
+# that requires a manual datasource setup is a dashboard nobody opens twice.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: zombie-crab-prom
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
