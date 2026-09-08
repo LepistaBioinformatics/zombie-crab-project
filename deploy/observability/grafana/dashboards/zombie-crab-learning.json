@@ -41,7 +41,7 @@
         "type": "prometheus",
         "uid": "zombie-crab-prom"
       },
-      "description": "One point per instance. X = tool calls (what it consumes). Y = skills it has built.\n\nQuadrants, clockwise from top right:\n\u2022 Specialist \u2014 uses a lot and has built a lot. The pattern to replicate.\n\u2022 Worker \u2014 uses a lot, has built little. Working without accumulating: a candidate for a prompt review, or for being given skills.\n\u2022 Dormant \u2014 little of either. Provisioned and idle.\n\u2022 Apprentice \u2014 has skills but barely uses tools. Capability sitting unused.\n\n`skills` counts SKILL.md files, not directories: the measured workspace holds 10 directories and 9 skills.\n\nGraph size is not encoded here \u2014 Grafana's auto mapping turns a third numeric field into a second Y series rather than point size. The Knowledge graph panel carries it instead.",
+      "description": "One point per instance. X = tool calls (what it consumes). Y = skills it has built.\n\nQuadrants, clockwise from top right:\n\u2022 Specialist \u2014 uses a lot and has built a lot. The pattern to replicate.\n\u2022 Worker \u2014 uses a lot, has built little. Working without accumulating: a candidate for a prompt review, or for being given skills.\n\u2022 Dormant \u2014 little of either. Provisioned and idle.\n\u2022 Apprentice \u2014 has skills but barely uses tools. Capability sitting unused.\n\n`skills` counts SKILL.md files, not directories: the measured workspace holds 10 directories and 9 skills.\n\nGraph size is not encoded here \u2014 Grafana's auto mapping turns a third numeric field into a second Y series rather than point size. The Knowledge graph panel carries it instead.\n\nAxes are SYMLOG, not log: an instance with zero tool calls or zero retained facts is exactly what this chart needs to show, and log(0) is undefined \u2014 a plain log axis would drop those points silently. Symlog is linear below 1 and logarithmic above it.\n\nHover a point to see which member it is; the Instances table below is the printed key, listing the same members and numbers.",
       "targets": [
         {
           "refId": "A",
@@ -49,7 +49,7 @@
             "type": "prometheus",
             "uid": "zombie-crab-prom"
           },
-          "expr": "harnesssphere_tool_calls",
+          "expr": "label_replace(harnesssphere_tool_calls, \"point\", \"$1\", \"crab_user\", \"(.{8}).*\")",
           "instant": true,
           "range": false,
           "format": "table"
@@ -60,7 +60,7 @@
             "type": "prometheus",
             "uid": "zombie-crab-prom"
           },
-          "expr": "harnesssphere_harness_skills",
+          "expr": "label_replace(harnesssphere_harness_skills, \"point\", \"$1\", \"crab_user\", \"(.{8}).*\")",
           "instant": true,
           "range": false,
           "format": "table"
@@ -198,11 +198,31 @@
               "telemetry_sdk_version 5": true,
               "telemetry_sdk_version 6": true,
               "telemetry_sdk_version 7": true,
-              "crab_user": true
+              "crab_user": true,
+              "point 1": true,
+              "point 2": true,
+              "point 3": true,
+              "point 4": true,
+              "point 5": true,
+              "point 6": true,
+              "point 7": true
             },
             "renameByName": {
               "Value #A": "tool calls",
-              "Value #B": "skills"
+              "Value #B": "skills",
+              "point": "member"
+            }
+          }
+        },
+        {
+          "id": "partitionByValues",
+          "options": {
+            "fields": [
+              "member"
+            ],
+            "keepFields": true,
+            "naming": {
+              "asLabels": true
             }
           }
         }
@@ -212,7 +232,8 @@
         "legend": {
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "single"
@@ -227,11 +248,40 @@
             "show": "points",
             "pointSize": {
               "fixed": 11
+            },
+            "scaleDistribution": {
+              "type": "symlog",
+              "log": 10,
+              "linearThreshold": 1
             }
-          },
-          "min": 0
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tool calls"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "tool calls  (symlog)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "skills"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "skills  (symlog)"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -331,7 +381,7 @@
         "type": "prometheus",
         "uid": "zombie-crab-prom"
       },
-      "description": "X = messages exchanged. Y = memory bytes retained. A point low and to the right talks a lot and keeps little.\n\n`memory` sums NON-EMPTY files only. Three of the four memory files in a freshly provisioned workspace are zero bytes \u2014 counting them would make every new instance read as already having memory, a 4x overcount.",
+      "description": "X = messages exchanged. Y = memory bytes retained. A point low and to the right talks a lot and keeps little.\n\n`memory` sums NON-EMPTY files only. Three of the four memory files in a freshly provisioned workspace are zero bytes \u2014 counting them would make every new instance read as already having memory, a 4x overcount.\n\nAxes are SYMLOG, not log: an instance with zero tool calls or zero retained facts is exactly what this chart needs to show, and log(0) is undefined \u2014 a plain log axis would drop those points silently. Symlog is linear below 1 and logarithmic above it.\n\nHover a point to see which member it is; the Instances table below is the printed key, listing the same members and numbers.",
       "targets": [
         {
           "refId": "A",
@@ -339,7 +389,7 @@
             "type": "prometheus",
             "uid": "zombie-crab-prom"
           },
-          "expr": "sum by (crab_tenant, crab_agent, crab_user) (harnesssphere_harness_messages)",
+          "expr": "label_replace(sum by (crab_tenant, crab_agent, crab_user) (harnesssphere_harness_messages), \"point\", \"$1\", \"crab_user\", \"(.{8}).*\")",
           "instant": true,
           "range": false,
           "format": "table"
@@ -350,7 +400,7 @@
             "type": "prometheus",
             "uid": "zombie-crab-prom"
           },
-          "expr": "harnesssphere_harness_memory_bytes",
+          "expr": "label_replace(harnesssphere_harness_memory_bytes, \"point\", \"$1\", \"crab_user\", \"(.{8}).*\")",
           "instant": true,
           "range": false,
           "format": "table"
@@ -488,12 +538,32 @@
               "telemetry_sdk_version 5": true,
               "telemetry_sdk_version 6": true,
               "telemetry_sdk_version 7": true,
-              "crab_user": true
+              "crab_user": true,
+              "point 1": true,
+              "point 2": true,
+              "point 3": true,
+              "point 4": true,
+              "point 5": true,
+              "point 6": true,
+              "point 7": true
             },
             "renameByName": {
               "Value #A": "messages",
               "Value #B": "memory bytes",
-              "crab_user": "member"
+              "crab_user": "member",
+              "point": "member"
+            }
+          }
+        },
+        {
+          "id": "partitionByValues",
+          "options": {
+            "fields": [
+              "member"
+            ],
+            "keepFields": true,
+            "naming": {
+              "asLabels": true
             }
           }
         }
@@ -501,7 +571,10 @@
       "options": {
         "mapping": "auto",
         "legend": {
-          "showLegend": false
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": []
         },
         "tooltip": {
           "mode": "single"
@@ -516,11 +589,27 @@
             "show": "points",
             "pointSize": {
               "fixed": 10
+            },
+            "scaleDistribution": {
+              "type": "symlog",
+              "log": 10,
+              "linearThreshold": 1
             }
-          },
-          "min": 0
+          }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "messages"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "messages  (symlog)"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -528,8 +617,8 @@
             },
             "properties": [
               {
-                "id": "unit",
-                "value": "bytes"
+                "id": "custom.axisLabel",
+                "value": "memory bytes  (symlog)"
               }
             ]
           }
