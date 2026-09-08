@@ -119,12 +119,18 @@ Telegram / MS Teams channels.
 
 ---
 
-## M5 (planned): Observability — harness-sphere
+## M5 (IN PROGRESS): Observability — harness-sphere
 
 **Goal:** the stack stops being unobservable. Today it emits **nothing** — a strict grep
-for `prometheus|opentelemetry|otel` across this repo and both submodules returns zero
-hits, and the entire observability surface is three health endpoints plus unstructured
+for `prometheus|opentelemetry|otel` across this repo and both submodules returned zero
+hits, and the entire observability surface was three health endpoints plus unstructured
 printf logs with no levels and no request ids.
+
+**Status 2026-09-08:** no longer true. The watcher ships, exports OTLP, and an opt-in
+overlay (`docker-compose.observability.yaml`) carries OTel Collector → Prometheus →
+Grafana with a provisioned dashboard whose every query was verified against live data.
+The scope reduction landed (−1,562 LOC). What remains is dynamic per-tenant instance
+discovery — see `.specs/features/harness-sphere-zombie-crab-scope/tasks.md`, groups D and S.
 
 `harness-sphere` (https://github.com/LepistaBioinformatics/harness-sphere) is adopted as a
 third submodule and **repurposed to work exclusively for this stack** (AD-022). Two
@@ -133,7 +139,7 @@ against.
 
 ### Features
 
-**harness-sphere-integration (SPEC READY)** — the tool lands as a submodule at
+**harness-sphere-integration (DONE, 2026-09-08)** — the tool lands as a submodule at
 `crab/harness-sphere` and runs as one compose service on `zombie_net`, exporting OTLP,
 **with no Rust changed**. Host and self come free; the gateway, proxy and webapp are
 covered by TCP probes. Two things make it more than a drop-in: it runs as a *container*
@@ -146,7 +152,7 @@ most privileged service already has one. Its verification section is the point o
 feature: four questions F2's design depends on, answered by measurement. See
 `.specs/features/harness-sphere-integration/`.
 
-**harness-sphere-zombie-crab-scope (SPEC READY, blocked on the above)** — the reduction
+**harness-sphere-zombie-crab-scope (REDUCTION DONE; dynamic half designed, not started)** — the reduction
 and the dynamic half. `Layer` collapses from seven to the stack's six real ones — host,
 self, mycelium-gateway, proxy, exoskeleton, picoclaw — with `Container` demoted from a
 peer layer to a *dimension* (everything here runs in a container; a picoclaw container's

@@ -62,6 +62,43 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 
 ## Recent Decisions (Last 60 days)
 
+### AD-023: harness-sphere runs as a privileged daemon; FR-C2's "non-root" is withdrawn (2026-09-08)
+
+**A stated requirement was withdrawn.** F1 FR-C2 said the watcher "runs as a **non-root**
+user and mounts **no Docker socket**". Only the second half survives.
+
+**Why.** The tenant tree is `root:root 0700`. A non-root watcher cannot traverse it at all,
+which blocked F1 FR-V3 and the whole of F2's session-collection group (F1 OQ-6). Of four
+options, three were bad: weakening `0700` on the host makes every workspace path
+enumerable by any local uid, and the directory names are account UUIDs; a supplementary
+group means changing what the proxy sets; and having the proxy serve session counts over
+its API would have **destroyed F2 DEC-10's resilience** — session metrics stopping when
+the proxy stops, instead of degrading to disk-only.
+
+**The distinction that was originally missed**, and the reason "run as root" was first
+rejected on sight: DEC-3's privilege argument is about the **Docker socket**, which grants
+*control* — start, stop, exec into any container, a path to host root. Root here grants
+*reading*, across a `:ro` bind, in a process holding no socket and opening no port.
+
+**Three constraints are load-bearing and must not be relaxed one at a time:**
+
+1. the `/data` bind stays **`:ro`**;
+2. **no Docker socket** — DEC-3 unweakened, and still the load-bearing one;
+3. **no listening port** — every collector pulls; there is no inbound surface.
+
+**Residual risk:** a compromise reads every tenant's transcripts. Inherent to deriving
+metrics from transcripts at all, not introduced by this option. FR-S6 (no transcript
+content in any signal) is the control that matters.
+
+**Not yet in effect.** `user: "0:0"` lands with the FR-S session collection that needs it
+(F2 tasks.md, S-07). While `session_dir` is empty, root would be a privilege with no
+consumer. FR-V3 stays blocked but is now unblock*able* — a scheduling decision, not a
+permission wall.
+
+Full argument: `.specs/features/harness-sphere-integration/spec.md`, the OQ-6 resolution.
+**Careful:** there are two OQ-6s in this feature pair. F1's is permissions and is closed;
+F2's is cgroup counters and is open.
+
 ### AD-022: harness-sphere is adopted as a third submodule and repurposed exclusively for this stack (2026-09-07)
 
 **Decision:** `https://github.com/LepistaBioinformatics/harness-sphere` becomes a submodule
