@@ -234,8 +234,16 @@ allowed by the rules file, provided the PR body says which pointers are branch h
 **FR-C1** One new compose service, `harness-sphere`, built from `./crab/harness-sphere`,
 joined to `zombie_net`. It publishes **no host ports**.
 
-**FR-C2** It runs as a **non-root** user and mounts **no Docker socket** (DEC-3). If an
-implementation task adds `/var/run/docker.sock` to this service, the task is wrong.
+**FR-C2** It mounts **no Docker socket** (DEC-3). If an implementation task adds
+`/var/run/docker.sock` to this service, the task is wrong.
+
+> **AMENDED 2026-09-08 (OQ-6).** This requirement also said "it runs as a **non-root**
+> user". That half is withdrawn: harness-sphere runs as a privileged daemon, because the
+> tenant tree is `root:root 0700` and no other option preserved F2 DEC-10's resilience.
+> The no-Docker-socket half is **unweakened** — it was always the load-bearing one, since
+> a socket grants control while root-on-a-read-only-bind grants reading. Two further
+> constraints join it as load-bearing: the `/data` bind stays `:ro`, and the watcher opens
+> **no listening port**. See the OQ-6 resolution for the full argument.
 
 **FR-C3** It mounts **no `/proc` and no `/sys`** bind for host metrics (DEC-2 — the
 container's own `/proc` is already the host's). A bind may only be added if FR-V1
@@ -601,9 +609,11 @@ the answer changes its shape. Four candidates, none chosen:
    local uid, and the directory names are account UUIDs.
 2. **Give the watcher a supplementary group** that can traverse. Narrower than (1), but
    still requires changing what the proxy sets, and adds a group to provision.
-3. **Run the watcher as root.** Rejected on sight: it contradicts FR-C2 and dissolves the
-   privilege argument the whole design is built on. Recorded only so it is visibly
-   rejected rather than quietly available.
+3. **Run the watcher as root.** ← **CHOSEN, 2026-09-08.** See the resolution below.
+   *Original text, kept because being wrong in public is the point of writing options
+   down:* "Rejected on sight: it contradicts FR-C2 and dissolves the privilege argument
+   the whole design is built on. Recorded only so it is visibly rejected rather than
+   quietly available."
 4. **The proxy serves session counts over its API**, as a sibling of `GET /v1/instances`,
    and the disk surface is abandoned. Most consistent with DEC-3's reasoning — the proxy is
    the component that already has the privilege, so do not manufacture a second one — and
@@ -614,6 +624,55 @@ property outright. Session metrics would then stop when the proxy stops, rather 
 degrading to disk-only. A watcher that goes blind exactly when the thing it watches breaks
 is the failure mode DEC-10 was written to avoid — so choosing (4) means accepting that
 trade explicitly, not forgetting it was ever offered.
+
+### OQ-6 — RESOLVED 2026-09-08: the watcher runs as a privileged daemon
+
+**Decided by the owner: harness-sphere runs in production as a daemon, with privileges.**
+That is option 3, which this document had rejected on sight. The rejection was wrong, and
+specifically wrong in a way worth naming rather than quietly reversing.
+
+**Why the rejection was overstated.** The privilege argument this design is built on is
+DEC-3, and DEC-3 is about the **Docker socket**. A socket grants *control*: start, stop,
+exec into any container, mount any host path — a direct path to host root. Root inside
+this container grants *reading*, and only across a bind that is mounted `:ro`, in a
+process that holds no socket and opens no listening port. Those are different grants, and
+collapsing them into one word ("privilege") is what produced a reflexive no.
+
+**Three constraints make it defensible, and they are now load-bearing.** They must not be
+relaxed one at a time by a later change that only looks at one of them:
+
+1. the `/data` bind stays **read-only** — the watcher can never write into the tenant tree;
+2. **no Docker socket**, ever (DEC-3, unchanged and unweakened);
+3. **no listening port** — every collector pulls; there is no inbound surface at all.
+
+**The residual risk, stated plainly.** A compromise of harness-sphere can read every
+tenant's transcripts. That is inherent to *any* design where a telemetry component derives
+metrics from transcripts, including option 1 and option 2; it is not a cost this option
+introduces. FR-S6 remains the control that matters: **no transcript content is ever read
+into a signal** — counts, names and sizes only.
+
+**What it costs compared to the alternatives, honestly:** nothing that was on the table.
+Option 1 required weakening `0700` on the host — making every workspace path enumerable
+by any local uid, where the directory names are account UUIDs. Option 2 required changing
+what the proxy sets and provisioning a group. Option 4 was the expensive one: it would
+have **destroyed F2 DEC-10's resilience property**, so session metrics would stop when
+the proxy stopped, instead of degrading to disk-only.
+
+**DEC-10 survives intact.** That is the concrete win here, and it was the thing most at
+risk: the two-surface reconcile (inventory ∪ disk) stays possible, so the watcher still
+degrades rather than going blind exactly when the component it watches breaks.
+
+**FR-C2 is amended, in half.** "No Docker socket" stands, unweakened. "Non-root" does not
+survive, and F2's FR-C9 is corrected accordingly — it currently asserts that both halves
+carry forward unchanged, which is no longer true.
+
+**Sequencing, which is a deliberate choice and not an oversight:** the compose change
+(`user: "0:0"`) lands with the FR-S session collection that needs it, **not before**.
+Today `session_dir` is empty, so root would be a privilege with no consumer — the same
+thing F2's reduction just deleted 1,344 lines for being.
+
+**FR-V3 stays BLOCKED until that lands**, and is now unblockable rather than blocked: the
+barrier is a scheduling decision, not a permission wall.
 
 **OQ-4 — Nothing reaps abandoned workspaces.** There is no reaper and no GC: containers
 are stopped on idle only in `scale-to-zero` mode, and both agents ship as `continuous`, so
