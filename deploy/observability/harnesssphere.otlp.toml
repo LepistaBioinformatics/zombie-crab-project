@@ -59,6 +59,9 @@ discovery_interval_secs = 30
 # Slower than discovery on purpose: finding a workspace is a directory glob, reading
 # one is IO proportional to its conversation history.
 session_interval_secs = 60
+# Skills, memory files and the knowledge graph. Slower than sessions on purpose: these
+# change rarely, while transcripts change constantly.
+learning_interval_secs = 300
 session_source = "picoclaw"
 
 # --- Still single-valued, still empty ----------------------------------------

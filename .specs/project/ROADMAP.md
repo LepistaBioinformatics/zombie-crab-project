@@ -119,7 +119,7 @@ Telegram / MS Teams channels.
 
 ---
 
-## M6 (SPEC READY): Agent learning — positioning instances, not listing metrics
+## M6 (IN PROGRESS): Agent learning — positioning instances, not listing metrics
 
 **Goal:** a second dashboard that answers "where does each instance sit?" rather than "is
 the stack healthy?". The existing `zombie-crab — stack` is organised by layer, which is
@@ -139,6 +139,12 @@ array is the real learning volume and is not derivable from any file count.
 Framing chosen by the owner: **capability × consumption** — skills against tool calls, with
 graph size as point weight. Skill names may be labels (agent-authored, ~10 per instance);
 entity names never can be (member content, unbounded cardinality).
+
+**Status 2026-09-08:** collectors shipped (harness-sphere#28) and verified against the
+live workspace — the four predicted numbers all landed: skills **9** (not 10), memory
+files **1** (not 4), graph **10 + 10** (not 19), and 56 retained observations. The second
+dashboard is provisioned. What is still open is OQ-10: what threshold makes an instance
+*unsustainable*, which needs a second instance to calibrate.
 
 See `.specs/features/agent-learning-dashboard/`.
 

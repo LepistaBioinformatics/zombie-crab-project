@@ -1,0 +1,595 @@
+{
+  "uid": "zombie-crab-learning",
+  "title": "zombie-crab \u2014 aprendizado",
+  "description": "Posiciona INST\u00c2NCIAS, n\u00e3o m\u00e9tricas. O dashboard 'zombie-crab \u2014 stack' responde 'a stack est\u00e1 saud\u00e1vel?' e \u00e9 organizado por camada; este responde 'onde cada inst\u00e2ncia est\u00e1?' e \u00e9 organizado por membro. Cabe em uma tela.",
+  "tags": [
+    "zombie-crab",
+    "harness-sphere",
+    "aprendizado"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Posicionamento \u2014 capacidade constru\u00edda \u00d7 consumo",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "type": "xychart",
+      "title": "Capacidade \u00d7 consumo",
+      "gridPos": {
+        "h": 13,
+        "w": 14,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "description": "Cada ponto \u00e9 uma inst\u00e2ncia. X = chamadas de ferramenta (consumo). Y = skills com SKILL.md (capacidade constru\u00edda). O TAMANHO do ponto \u00e9 o n\u00famero de entidades no grafo de conhecimento.\n\nQUADRANTES, no sentido hor\u00e1rio a partir do alto-direito:\n\u2022 Especialista \u2014 usa muito e construiu muito. O padr\u00e3o a replicar.\n\u2022 Oper\u00e1ria \u2014 usa muito, construiu pouco. Trabalha, n\u00e3o acumula: candidata a revis\u00e3o de prompt ou a ganhar skills.\n\u2022 Dormente \u2014 pouco de ambos. Provisionada e ociosa.\n\u2022 Aprendiz \u2014 construiu skills mas usa pouco. Capacidade parada.\n\nskills conta arquivos SKILL.md, n\u00e3o diret\u00f3rios: no workspace medido h\u00e1 10 diret\u00f3rios e 9 skills.\n\nATEN\u00c7\u00c3O: com uma \u00fanica inst\u00e2ncia isto mostra UM ponto. Quadrantes desenhados em volta de uma observa\u00e7\u00e3o n\u00e3o dizem nada \u2014 o valor aparece a partir da segunda inst\u00e2ncia.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "harnesssphere_tool_calls",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "legendFormat": "__auto"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "harnesssphere_harness_skills",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "legendFormat": "__auto"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "harnesssphere_graph_entities",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "legendFormat": "__auto"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "keepLabels": [
+              "crab_user",
+              "crab_agent",
+              "crab_tenant"
+            ]
+          }
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "crab_user",
+            "mode": "outer"
+          }
+        }
+      ],
+      "options": {
+        "mapping": "manual",
+        "series": [
+          {
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "harnesssphere_tool_calls"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "harnesssphere_harness_skills"
+              }
+            },
+            "size": {
+              "matcher": {
+                "id": "byName",
+                "options": "harnesssphere_graph_entities"
+              },
+              "min": 6,
+              "max": 40
+            },
+            "color": {
+              "matcher": {
+                "id": "byName",
+                "options": "crab_agent"
+              }
+            },
+            "name": "inst\u00e2ncia"
+          }
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "show": "points",
+            "pointSize": {
+              "fixed": 10
+            },
+            "axisLabel": ""
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "harnesssphere_tool_calls"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "chamadas de ferramenta"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "harnesssphere_harness_skills"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "skills"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "harnesssphere_graph_entities"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "entidades no grafo"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Grafo de conhecimento",
+      "gridPos": {
+        "h": 7,
+        "w": 10,
+        "x": 14,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "description": "O que o agente reteve, n\u00e3o o que ele falou.\n\nobserva\u00e7\u00f5es \u00e9 a soma do TAMANHO dos arrays `observations` de cada entidade \u2014 os fatos efetivamente guardados. \u00c9 o \u00fanico n\u00famero aqui que nenhuma contagem de arquivos deriva.\n\nRegistros s\u00e3o parseados, nunca contados por linha: o arquivo real tem 20 registros e `wc -l` diz 19, porque a \u00faltima linha n\u00e3o tem newline.\n\nO CONTE\u00daDO das observa\u00e7\u00f5es nunca sai do disco \u2014 s\u00f3 o comprimento do array.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "sum(harnesssphere_graph_observations)",
+          "legendFormat": "observa\u00e7\u00f5es retidas",
+          "instant": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "sum(harnesssphere_graph_entities)",
+          "legendFormat": "entidades",
+          "instant": true
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "sum(harnesssphere_graph_relations)",
+          "legendFormat": "rela\u00e7\u00f5es",
+          "instant": true
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "sum(harnesssphere_graph_observations) / clamp_min(sum(harnesssphere_graph_entities),1)",
+          "legendFormat": "observa\u00e7\u00f5es por entidade",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "xychart",
+      "title": "Conversa \u00d7 reten\u00e7\u00e3o",
+      "gridPos": {
+        "h": 6,
+        "w": 10,
+        "x": 14,
+        "y": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "description": "A rela\u00e7\u00e3o pedida diretamente: X = mensagens trocadas, Y = bytes de mem\u00f3ria retidos.\n\nUm ponto no canto inferior-direito fala muito e guarda pouco.\n\nmemory.bytes soma apenas arquivos N\u00c3O-VAZIOS. Tr\u00eas dos quatro arquivos de mem\u00f3ria de um workspace rec\u00e9m-provisionado t\u00eam zero byte (CONTEXT_RECOVERY, FILE_DELIVERY, MEMORY_ROUTING) \u2014 cont\u00e1-los faria toda inst\u00e2ncia nova parecer j\u00e1 ter mem\u00f3ria.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "sum by (crab_user, crab_agent, crab_tenant) (harnesssphere_harness_messages)",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "legendFormat": "__auto"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "harnesssphere_harness_memory_bytes",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "legendFormat": "__auto"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "keepLabels": [
+              "crab_user",
+              "crab_agent",
+              "crab_tenant"
+            ]
+          }
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "crab_user",
+            "mode": "outer"
+          }
+        }
+      ],
+      "options": {
+        "mapping": "manual",
+        "series": [
+          {
+            "x": {
+              "matcher": {
+                "id": "byName",
+                "options": "Value #A"
+              }
+            },
+            "y": {
+              "matcher": {
+                "id": "byName",
+                "options": "harnesssphere_harness_memory_bytes"
+              }
+            },
+            "name": "inst\u00e2ncia"
+          }
+        ],
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "show": "points",
+            "pointSize": {
+              "fixed": 9
+            }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "table",
+      "title": "Inst\u00e2ncias \u2014 todas as medidas, uma linha cada",
+      "gridPos": {
+        "h": 6,
+        "w": 14,
+        "x": 0,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "description": "A mesma informa\u00e7\u00e3o do scatter em forma leg\u00edvel, e o fallback se a jun\u00e7\u00e3o de campos do scatter n\u00e3o renderizar (FR-L10).\n\nOrdene por qualquer coluna para ranquear. 'obs/msg' \u00e9 densidade de aprendizado: quanto do que foi conversado virou fato retido.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "harnesssphere_harness_skills",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "legendFormat": "__auto"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "harnesssphere_tool_calls",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "legendFormat": "__auto"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "harnesssphere_graph_observations",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "legendFormat": "__auto"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "harnesssphere_harness_memory_bytes",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "legendFormat": "__auto"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "sum by (crab_user, crab_agent, crab_tenant) (harnesssphere_harness_sessions)",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "legendFormat": "__auto"
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "sum by (crab_user, crab_agent, crab_tenant) (harnesssphere_graph_observations) / clamp_min(sum by (crab_user, crab_agent, crab_tenant) (harnesssphere_harness_messages),1)",
+          "instant": true,
+          "range": false,
+          "format": "table",
+          "legendFormat": "__auto"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "keepLabels": [
+              "crab_user",
+              "crab_agent",
+              "crab_tenant"
+            ]
+          }
+        },
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "crab_user",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "crab_tenant": true
+            },
+            "renameByName": {
+              "crab_user": "membro",
+              "crab_agent": "agente",
+              "harnesssphere_harness_skills": "skills",
+              "harnesssphere_tool_calls": "ferramentas",
+              "harnesssphere_graph_observations": "observa\u00e7\u00f5es",
+              "harnesssphere_harness_memory_bytes": "mem\u00f3ria",
+              "Value #E": "conversas",
+              "Value #F": "obs/msg"
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "mem\u00f3ria"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "obs/msg"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Skills por inst\u00e2ncia",
+      "gridPos": {
+        "h": 6,
+        "w": 10,
+        "x": 14,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "description": "QUAIS skills cada inst\u00e2ncia construiu, n\u00e3o apenas quantas.\n\nNomes de skill podem ser labels porque s\u00e3o capacidades autorais do agente, limitadas a ~10 por inst\u00e2ncia. Nomes de ENTIDADE do grafo nunca podem: s\u00e3o extra\u00eddos das conversas do membro e a cardinalidade \u00e9 ilimitada.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "zombie-crab-prom"
+          },
+          "expr": "sum by (skill_name) (harnesssphere_harness_skill)",
+          "legendFormat": "{{skill_name}}",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "displayMode": "basic",
+        "orientation": "horizontal",
+        "showUnfilled": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    }
+  ]
+}
