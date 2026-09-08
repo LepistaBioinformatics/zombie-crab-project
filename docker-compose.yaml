@@ -377,6 +377,25 @@ services:
     restart: unless-stopped
     networks:
       - zombie_net
+    # STABLE HOSTNAME, and this is not cosmetic.
+    #
+    # A container's hostname defaults to its own ID, and harness-sphere reads
+    # /proc/sys/kernel/hostname to fill the `host.name` resource attribute. That is
+    # wrong twice over:
+    #
+    #   1. These metrics ARE the host's -- system.cpu/memory come from /proc, which
+    #      Docker does not namespace (that is the whole reason this service needs no
+    #      /proc bind). Labelling them with a CONTAINER id says they describe
+    #      something they do not.
+    #   2. The id changes on every `up --build` / recreate, and `host.name` is a
+    #      label, so EVERY REDEPLOY FORKS A NEW TIME SERIES. Five had already
+    #      accumulated in one evening of iteration -- panels show each metric once
+    #      per generation, and the count grows with deploys forever.
+    #
+    # Set HARNESS_SPHERE_HOST_NAME to the real machine's name in .env. The default is
+    # stable rather than accurate, which is the important half: a wrong-but-constant
+    # label groups correctly, a correct-but-changing one never does.
+    hostname: ${HARNESS_SPHERE_HOST_NAME:-zombie-crab-host}
     # Runs as root, and this is the one place that decision is visible, so it is
     # argued here rather than assumed (AD-023, F1 OQ-6).
     #
