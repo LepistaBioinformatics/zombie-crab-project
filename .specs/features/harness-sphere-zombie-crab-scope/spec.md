@@ -139,11 +139,30 @@ The reconciliation is the feature, not a detail. A workspace on disk with no con
 container with no directory is a stack fault and must surface as one, not be silently
 dropped.
 
-**The disk surface is the fallback, and this is a resilience property, not an
+**The disk surface was intended as the fallback, and this is a resilience property, not an
 optimization:** if the proxy is down or its endpoint fails, session metrics keep flowing
 with full attribution and only the liveness/resource signals degrade. A watcher whose
 telemetry disappears when the thing it watches breaks is worthless at the moment it
 matters.
+
+> **AMENDED 2026-09-07 — that fallback does not currently exist, and this decision cannot
+> be implemented as written.** F1's FR-V3 measured it against the live stack: `data/tenants`
+> is `root:root 0700`, so a non-root watcher cannot traverse it at all. The mount is
+> read-only and present; the process simply cannot enter. Neither uid 10001 (the watcher)
+> nor uid 1000 (what the proxy chowns workspace leaves to) can reach a `sessions/`
+> directory, because traversal is barred at the top before leaf ownership matters.
+>
+> **Consequence for this decision:** the two-surface reconciliation still stands as the
+> right shape, but its *resilience* claim is currently false, and FR-D3, FR-D5 and the
+> whole FR-S group are blocked on F1 OQ-6. If OQ-6 resolves to "the proxy serves session
+> counts over its API", the disk surface disappears entirely and this decision collapses
+> to one surface — in which case the resilience property above is **lost, not deferred**,
+> and that trade must be accepted explicitly rather than forgotten.
+>
+> **One thing the same measurement settled in this decision's favour:** the on-disk path
+> really does carry the full tuple, and there are **two** session directories per
+> workspace, not one — `workspace/sessions` and `workspace-<project>/sessions`. See FR-S5,
+> which was right and is now specific.
 
 ### DEC-11 — Sources become dynamic: owned names, per-instance probe, a mutable supervisor
 
@@ -304,9 +323,15 @@ cadence, which is slower.
 **FR-S4** Transcripts are read incrementally by tracking a per-file offset. **A file that
 shrank is re-read from zero, not treated as a negative delta** (DEC-13.4).
 
-**FR-S5** Per-project workspaces are covered. Sessions live under sibling workspace
-directories as well as the main one, and their ids are prefixed `p.<project>.` — a
-collector that globs only `workspace/sessions` silently omits every project conversation.
+**FR-S5** Per-project workspaces are covered. **Confirmed against the live stack
+2026-09-07, with the naming rule this requirement previously lacked:** the sibling
+directory is **`workspace-<project>`**, not `<project>`, and its session ids carry the
+`p.<project>.` prefix — e.g. `workspace-chat-ux/sessions/durable/p.chat-ux.<key>.jsonl`.
+
+A collector that globs only `workspace/sessions` silently omits every project
+conversation. **In the one workspace measured that is 5 of 12 — 42%.** The failure has no
+error and no warning; it is a smaller number that looks correct, which is why this is a
+requirement rather than a note.
 
 **FR-S6** No transcript *content* is emitted — only counts. Message bodies are member data
 and metrics are not the place for them. (Harness-sphere's upstream backlog carries a

@@ -406,11 +406,128 @@ Two side observations from the same run, worth keeping: the binary boots with
 `self` collector's `process.*` metrics describe the watcher process correctly from inside
 the container.
 
-**FR-V2 — Are the compose services probeable from inside `zombie_net`?**
-`harnesssphere.endpoint.up` is 1 for all three FR-H2 targets. A failure here is a network
-or naming fault, and it is cheaper to find now than inside F2's discovery loop.
+**FR-V2 — Are the compose services probeable from inside `zombie_net`? — DISCHARGED
+2026-09-07 against the live stack. Yes.**
 
-**FR-V3 — Does `SessionCollector` actually parse this stack's transcripts?** This is the
+All three FR-H2 targets report `harnesssphere.endpoint.up = 1`, with probe durations
+between 0.4ms and 6ms.
+
+**The first tick is the more valuable half of this result, and it confirms FR-C5/DEC-18
+in production rather than in argument:**
+
+```
+harnesssphere.endpoint.up = 1 [server.address = mycelium-gateway:8080]
+harnesssphere.endpoint.up = 0 [server.address = crab-shell-proxy:8080]   <- first tick
+harnesssphere.endpoint.up = 1 [server.address = chat-webapp:3000]
+...
+harnesssphere.endpoint.up = 1 [server.address = crab-shell-proxy:8080]   <- next tick
+```
+
+The proxy was not yet listening when the watcher started. The collector emitted an honest
+zero, stayed alive, and recovered on the following tick — **with no `depends_on`, no
+restart, and no intervention.** Had the service been ordered behind
+`condition: service_healthy`, that first `up = 0` — a true statement about the stack —
+would have been suppressed instead of recorded. This is the argument FR-C5 made from
+reading `probe.rs`, now observed.
+
+**FR-V5 — Non-root and no socket — DISCHARGED 2026-09-07 against the running container.**
+
+Asserted against the container, not read off the compose file:
+
+```
+$ docker exec <harness-sphere> id
+uid=10001(harnesssphere) gid=10001 groups=10001
+
+$ docker inspect <harness-sphere> --format '{{range .Mounts}}...'
+<data root> -> /data  rw=false
+```
+
+Exactly one mount, read-only, and **zero** `docker.sock` mounts. FR-C2 holds.
+
+**FR-V3 — Does `SessionCollector` parse this stack's transcripts? — BLOCKED, and not for
+the reason the spec predicted. The watcher cannot read the transcripts at all.**
+
+Measured 2026-09-07 against the live stack, from inside the running container:
+
+```
+$ docker exec <harness-sphere> ls /data
+effective-persona  effective-secrets  effective-skills  managed-skills
+model-registry.db  restart  templates  tenants  user-secrets
+
+$ docker exec <harness-sphere> ls -la /data/tenants
+ls: cannot open directory '/data/tenants': Permission denied
+```
+
+On the host: `data/tenants` is **`root:root 0700`**. Only root can traverse it. The proxy
+writes that tree as root and `chown`s the per-user workspace subtrees to `1000:1000` for
+the picoclaw containers (`picoclawUser: "1000:1000"`), but **traversal is barred at the
+top**, so what the leaves are owned by never comes into play. Neither uid 10001 nor uid
+1000 can reach a `sessions/` directory.
+
+**This is F1 doing its job.** DEC-5 shipped the tool unchanged so that the first live run
+would separate deployment facts from upstream limitations. This is a deployment fact, it
+was invisible to inference, and it would have been discovered halfway through building
+F2's session work instead.
+
+**What it invalidates, stated in full rather than minimized:**
+
+- FR-H4 and FR-C4 are satisfied as written — the data root *is* mounted read-only — and
+  are nonetheless **insufficient**. Mounting a tree the process cannot traverse is not
+  access.
+- **F2 DEC-10's resilience claim is false as deployed.** It says the on-disk surface is the
+  fallback that keeps session metrics flowing with full attribution when the proxy is
+  down. It cannot: the disk surface is unreadable by a non-root watcher, whether the proxy
+  is up or not.
+- F2 FR-D3, FR-D5 and the whole FR-S group rest on that surface and must be re-planned.
+
+**The fix is a genuine fork and is deliberately not chosen here — see OQ-6.**
+
+### What the tree actually contains (measured 2026-09-07, root-assisted)
+
+The permission wall blocks the *watcher*, not an operator, so the tree was inspected
+directly to settle the predictions. **Counts, names and sizes only — no transcript content
+was read**, which is the same line FR-S6 draws for the metrics themselves.
+
+**An unpredicted finding, and the most consequential one: there are TWO session
+directories for a single workspace, not one.**
+
+```
+.../users/<u>/workspace/sessions           7 live *.jsonl,  7 *.meta.json
+.../users/<u>/workspace-chat-ux/sessions   5 live *.jsonl,  5 *.meta.json
+```
+
+The second is a **project** workspace. F2's FR-S5 predicted that project conversations
+live in sibling directories and would be missed by a collector globbing only
+`workspace/sessions` — this confirms it and supplies the naming rule that requirement was
+missing: the sibling is **`workspace-<project>`**, not `<project>`. The durable filenames
+carry the matching session prefix (`p.chat-ux.<key>.jsonl`), agreeing with the proxy's
+`ProjectSessionID` scheme.
+
+**In this deployment that is 5 of 12 conversations — 42% — that a naive glob would drop
+silently.** Not an error, not a warning: a smaller number that looks correct.
+
+**Distortion 1 (`durable/`) — confirmed, with a magnitude.** Present in both directories,
+mirroring the live files exactly 1:1 (7↔7 and 5↔5). `SessionCollector`'s non-recursive
+`read_dir` therefore excludes it correctly *today*. The risk the original text flagged is
+now quantified: a walk that ever became recursive would **exactly double** every count,
+which is a failure mode that looks plausible rather than obviously broken.
+
+**Distortion 2 (cron inflation) — predicted, NOT observed.** Zero `*.meta.json` files
+carry the `agent:cron-` key in either directory. The stack has no scheduled tasks running
+yet, so the inflation is **latent, not manifest**. Recorded as predicted-and-unconfirmed
+rather than quietly dropped: the mechanism in the proxy's `history.go` is unchanged, so it
+will appear the day cron is used, and F2 OQ-8 still needs answering.
+
+**FR-V4 — cardinality — DISCHARGED. One workspace.** One tenant, one subscription, one
+agent (`alpha`), one user. The label budget argued for in DEC-4 is not merely defensible
+here, it is trivially so — and F2 OQ-7's discovery-interval question is unconstrained by
+volume at this scale. **This number will not stay 1**, so it bounds nothing permanently;
+what it does establish is that F2 need not optimize for cardinality before it works.
+
+**Still unmeasured:** the leaf directory modes (which decide whether OQ-6's option 1 is
+viable at all) and the live-bytes total (distortion 3, the per-tick re-read cost).
+
+**FR-V3 (original text, retained — the shape argument still stands)** This is the
 richest zero-instrumentation signal available and the one most likely to need real work.
 
 The shape is already known to be compatible, from the proxy's own parser rather than from
@@ -471,6 +588,32 @@ Per-agent scoping (harness-sphere calls once per agent key) versus a distinct op
 credential. **This must be settled in `design.md` before FR-P is implemented** — it is the
 only F1 requirement whose shape is genuinely undecided, and it changes both the route and
 the caller.
+
+**OQ-6 — How does the watcher reach the session transcripts, given `tenants/` is
+`root:root 0700`?** Raised by FR-V3's measurement. This is the largest open question in
+either feature now, because F2's entire session-collection group depends on the answer and
+the answer changes its shape. Four candidates, none chosen:
+
+1. **Loosen `tenants/` to `0755`** (traversal only; leaves stay `1000:1000`) and run the
+   watcher as uid 1000. Cheapest, and the one to be most suspicious of: `0700` is
+   consistent throughout the proxy's tree-building, so it reads as deliberate isolation
+   rather than an accident. Weakening it makes every workspace path enumerable by any
+   local uid, and the directory names are account UUIDs.
+2. **Give the watcher a supplementary group** that can traverse. Narrower than (1), but
+   still requires changing what the proxy sets, and adds a group to provision.
+3. **Run the watcher as root.** Rejected on sight: it contradicts FR-C2 and dissolves the
+   privilege argument the whole design is built on. Recorded only so it is visibly
+   rejected rather than quietly available.
+4. **The proxy serves session counts over its API**, as a sibling of `GET /v1/instances`,
+   and the disk surface is abandoned. Most consistent with DEC-3's reasoning — the proxy is
+   the component that already has the privilege, so do not manufacture a second one — and
+   it needs no permission change anywhere.
+
+**Option 4's real cost, which must not be glossed:** it kills F2 DEC-10's resilience
+property outright. Session metrics would then stop when the proxy stops, rather than
+degrading to disk-only. A watcher that goes blind exactly when the thing it watches breaks
+is the failure mode DEC-10 was written to avoid — so choosing (4) means accepting that
+trade explicitly, not forgetting it was ever offered.
 
 **OQ-4 — Nothing reaps abandoned workspaces.** There is no reaper and no GC: containers
 are stopped on idle only in `scale-to-zero` mode, and both agents ship as `continuous`, so
