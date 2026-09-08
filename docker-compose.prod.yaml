@@ -93,15 +93,6 @@ services:
     build: !reset null
     image: ghcr.io/lepistabioinformatics/crab-exoskeleton-webapp:${CHAT_WEBAPP_TAG:-latest}
 
-  # NOT DEPLOYABLE YET. harness-sphere publishes binary releases only -- it has no
-  # release-image.yml, and ghcr.io/lepistabioinformatics/harness-sphere does not
-  # exist (the package 404s). This override is written now so the prod file is
-  # complete and the gap is stated where someone would hit it, rather than
-  # discovered as an image pull failure during a deploy.
-  #
-  # To close it: add an image release workflow to the harness-sphere repo,
-  # mirroring crab-shell-proxy's release-image.yml. Until then, prod either omits
-  # this service or builds it from source.
   harness-sphere:
     build: !reset null
     image: ghcr.io/lepistabioinformatics/harness-sphere:${HARNESS_SPHERE_TAG:-latest}
