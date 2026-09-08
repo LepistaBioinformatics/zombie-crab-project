@@ -3,6 +3,31 @@
 Monorepo-wide rules. Each submodule has its own `.claude/CLAUDE.md` for rules that
 only apply inside it; this file holds what applies across the stack.
 
+## The three submodules
+
+| Path | What it is |
+|---|---|
+| `crab/crab-shell-proxy` | the orchestrator — spawns one picoclaw per (tenant, subscription, agent, user) |
+| `crab/crab-exoskeleton-webapp` | the member-facing UI. **Its compose service is `chat-webapp`**, not the repo name |
+| `crab/harness-sphere` | the watcher. Observability only; exclusive to this stack |
+
+When a pointer may be committed, and the check that enforces it, are in
+`.claude/rules/submodule-pointers.md`.
+
+## harness-sphere: two rules that are easy to violate by accident
+
+**It never gets a Docker socket.** `crab-shell-proxy` already mounts one and runs as
+root. A second socket-mounting service would double the blast radius of the stack's
+worst-case compromise, and everything it would need the socket *for* — mapping a
+container to its tenant — is served by `GET /v1/instances` instead.
+
+**`CRAB_TELEMETRY_TOKEN` is not an agent token, and an agent token must never be used
+in its place.** The mycelium profile header is decoded and never verified
+(`identity.SDKResolver.Resolve`), so an agent's bearer token is what stops a caller who
+reached the proxy directly on `zombie_net` from asserting any `accId` it likes — it gates
+chatting **as any member of any tenant**. Unset, the inventory route is not registered at
+all (404, not 401); that is the safe default, not an oversight.
+
 ## Calling mycelium
 
 **Always call mycelium over JSON-RPC. Never add a new call to its REST surface.**
