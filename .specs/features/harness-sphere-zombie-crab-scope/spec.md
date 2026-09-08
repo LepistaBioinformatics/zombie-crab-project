@@ -1,8 +1,17 @@
 # harness-sphere-zombie-crab-scope — Spec
 
-**Status:** SPEC. Not implemented. **Blocked on `harness-sphere-integration` (F1)** — not
-by ceremony, but because four of its decisions (DEC-9, DEC-11, DEC-12, F1 OQ-2) are written
-against measurements F1 takes and this spec does not have.
+**Status:** **PARTIALLY IMPLEMENTED (2026-09-08).**
+
+- **Scope reduction (FR-R1–R8) — DONE**, harness-sphere#23. Net −1,562 LOC: `crates/ingest`
+  and `collectors/src/prometheus.rs` deleted, `Layer` cut to the six of DEC-8.
+- **Dynamic discovery (FR-D) and session collection (FR-S) — NOT STARTED.** No longer
+  blocked: F1's measurements exist, and **F1 OQ-6 resolved 2026-09-08** (the watcher runs
+  as a privileged daemon), which was the one open question that changed this feature's
+  shape.
+- **F2 OQ-6 (per-container counters), OQ-7 (discovery interval), OQ-8 (cron) remain open.**
+  Note there are two OQ-6s in this feature pair and they are unrelated: F1's is about
+  filesystem permissions and is now closed; this document's is about cgroup counters and
+  is not.
 **Spans:** `harness-sphere` (the substantial change — reduction and dynamic discovery) +
 `zombie-crab-project` (compose, submodule pointer). `crab-shell-proxy` is **not** touched:
 F1 already shipped the endpoint this feature consumes (F1 FR-P8).
@@ -145,19 +154,27 @@ with full attribution and only the liveness/resource signals degrade. A watcher 
 telemetry disappears when the thing it watches breaks is worthless at the moment it
 matters.
 
-> **AMENDED 2026-09-07 — that fallback does not currently exist, and this decision cannot
-> be implemented as written.** F1's FR-V3 measured it against the live stack: `data/tenants`
-> is `root:root 0700`, so a non-root watcher cannot traverse it at all. The mount is
-> read-only and present; the process simply cannot enter. Neither uid 10001 (the watcher)
-> nor uid 1000 (what the proxy chowns workspace leaves to) can reach a `sessions/`
-> directory, because traversal is barred at the top before leaf ownership matters.
+> **AMENDED 2026-09-07, then RESOLVED 2026-09-08. The fallback now exists.** Read both
+> halves — the first is why this looked dead, the second is why it is not.
 >
-> **Consequence for this decision:** the two-surface reconciliation still stands as the
-> right shape, but its *resilience* claim is currently false, and FR-D3, FR-D5 and the
-> whole FR-S group are blocked on F1 OQ-6. If OQ-6 resolves to "the proxy serves session
-> counts over its API", the disk surface disappears entirely and this decision collapses
-> to one surface — in which case the resilience property above is **lost, not deferred**,
-> and that trade must be accepted explicitly rather than forgotten.
+> **2026-09-07 — the wall.** F1's FR-V3 measured it against the live stack: `data/tenants`
+> is `root:root 0700`, so a **non-root** watcher cannot traverse it at all. The mount is
+> read-only and present; the process simply could not enter. Neither uid 10001 (the
+> watcher) nor uid 1000 (what the proxy chowns workspace leaves to) could reach a
+> `sessions/` directory, because traversal is barred at the top before leaf ownership
+> matters.
+>
+> **2026-09-08 — the wall was the *non-root* half, and that half is gone.** The watcher
+> runs as a privileged daemon (F1 OQ-6), so it traverses `0700` regardless of the mode
+> bit. Nothing on the host was changed to achieve this: no `chmod`, no supplementary
+> group, no new endpoint on the proxy.
+>
+> **Consequence for this decision:** the two-surface reconciliation stands as the right
+> shape **and its resilience claim is true again**. FR-D3, FR-D5 and the whole FR-S group
+> were blocked on this and are now unblocked. The outcome that would have collapsed the
+> design to a single surface — "the proxy serves session counts over its API" — was
+> considered and **not** chosen, precisely because it would have made the resilience
+> property above **lost, not deferred**.
 >
 > **One thing the same measurement settled in this decision's favour:** the on-disk path
 > really does carry the full tuple, and there are **two** session directories per
@@ -341,8 +358,23 @@ content path at all, which is the stronger position.)
 ### Deployment (FR-C)
 
 **FR-C9** Compose gains whatever mount FR-D's resource collection settles on
-(F1 OQ-2) — and nothing more. F1 FR-C2's "no Docker socket, non-root" survives this feature
-unchanged.
+(F1 OQ-2) — and nothing more.
+
+**CORRECTED 2026-09-08.** This requirement said F1 FR-C2's "no Docker socket, non-root"
+survives unchanged. **Only half of that is still true.**
+
+- **"No Docker socket" survives, unweakened.** It was always the load-bearing half: a
+  socket grants *control* over every container and a path to host root.
+- **"Non-root" does not survive.** F1 OQ-6 resolved to running the watcher as a privileged
+  daemon, because the tenant tree is `root:root 0700` and every alternative either weakened
+  `0700` on the host or destroyed DEC-10's resilience.
+
+Three constraints replace it and are load-bearing — a later change must not relax them one
+at a time: the `/data` bind stays **`:ro`**, there is **no Docker socket**, and the watcher
+opens **no listening port**.
+
+The compose change (`user: "0:0"`) lands **with FR-S**, not before: while `session_dir` is
+empty, root is a privilege with no consumer.
 
 **FR-C10** New configuration keys follow the existing `.env` convention with documented
 defaults.

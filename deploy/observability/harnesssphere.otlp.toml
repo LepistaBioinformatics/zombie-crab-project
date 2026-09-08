@@ -87,7 +87,8 @@ container_cgroup = ""
 container_id = ""
 watch_processes = []
 
-# --- Not built into this image -----------------------------------------------
-# The `ingest` and `prometheus` features are OFF (see Dockerfile): nothing in this
-# stack pushes OTLP to us, and nothing exposes a Prometheus exposition endpoint.
-# Both collectors are slated for deletion in the scope-reduction feature.
+# --- Gone, not merely unconfigured -------------------------------------------
+# The OTLP ingest receiver and the Prometheus scraper were DELETED (harness-sphere
+# #23), not disabled. Nothing in this stack pushes OTLP at us and nothing exposes
+# an exposition endpoint, so both were a receive path with no sender. There is no
+# feature flag to turn them back on.
