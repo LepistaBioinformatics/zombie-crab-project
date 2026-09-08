@@ -287,11 +287,28 @@ Three things were wrong, each discovered by measurement:
    instead, with the frame reduced to exactly the numeric fields the panel should infer
    from.
 
-**Outcome:** the table is verified working against live data and carries every measure,
-one row per instance. The scatter's configuration is valid — it moved from `Err` to the
-plugin's own loading state — but **`xychart` does not finish loading under headless
-Chromium**, so its render is confirmed only in a real browser. The table therefore ships
-as a peer panel rather than as a fallback to be swapped in later.
+**Then the real blocker, which was not in the dashboard at all.** The panel sat at
+"Loading plugin panel…" forever, in a real browser as well as headless. Grafana's own boot
+log had been saying why since the beginning:
+
+```
+level=error msg="Could not register plugin" pluginId=xychart
+      error="plugin xychart is already registered"
+```
+
+**`xychart` was the only panel that failed to register**, so it never loaded. Disabling the
+`autoMigrateXYChartPanel` toggle did not help. Booting 11.4.0 and 11.6.0 side by side and
+diffing the logs settled it: 11.4.0 logs the error twice, **11.6.0 zero times**. The
+observability overlay now pins **11.6.0**, with the reason written where the version is set.
+
+On 11.6.0 the panel loaded and threw `TypeError: Cannot read properties of undefined
+(reading 'map')` — it dereferences `options.series` unconditionally, so `mapping: "auto"`
+still requires `series: [{}]` to be present. With that, the scatter renders.
+
+**Outcome: every panel renders, verified by screenshot.** One trade: auto mapping turns a
+third numeric field into a second Y series rather than point size, so graph size is not
+encoded on the scatter — the Knowledge graph panel carries it instead. The table ships as a
+peer panel regardless, so every measure is on screen whatever the scatter does.
 
 ## What the live stack showed (FR-L11, discharged)
 

@@ -41,7 +41,7 @@
         "type": "prometheus",
         "uid": "zombie-crab-prom"
       },
-      "description": "One point per instance. X = tool calls (what it consumes). Y = skills it has built.\n\nQuadrants, clockwise from top right:\n\u2022 Specialist \u2014 uses a lot and has built a lot. The pattern to replicate.\n\u2022 Worker \u2014 uses a lot, has built little. Working without accumulating: a candidate for a prompt review, or for being given skills.\n\u2022 Dormant \u2014 little of either. Provisioned and idle.\n\u2022 Apprentice \u2014 has skills but barely uses tools. Capability sitting unused.\n\n`skills` counts SKILL.md files, not directories: the measured workspace holds 10 directories and 9 skills.",
+      "description": "One point per instance. X = tool calls (what it consumes). Y = skills it has built.\n\nQuadrants, clockwise from top right:\n\u2022 Specialist \u2014 uses a lot and has built a lot. The pattern to replicate.\n\u2022 Worker \u2014 uses a lot, has built little. Working without accumulating: a candidate for a prompt review, or for being given skills.\n\u2022 Dormant \u2014 little of either. Provisioned and idle.\n\u2022 Apprentice \u2014 has skills but barely uses tools. Capability sitting unused.\n\n`skills` counts SKILL.md files, not directories: the measured workspace holds 10 directories and 9 skills.\n\nGraph size is not encoded here \u2014 Grafana's auto mapping turns a third numeric field into a second Y series rather than point size. The Knowledge graph panel carries it instead.",
       "targets": [
         {
           "refId": "A",
@@ -216,7 +216,10 @@
         },
         "tooltip": {
           "mode": "single"
-        }
+        },
+        "series": [
+          {}
+        ]
       },
       "fieldConfig": {
         "defaults": {
@@ -502,7 +505,10 @@
         },
         "tooltip": {
           "mode": "single"
-        }
+        },
+        "series": [
+          {}
+        ]
       },
       "fieldConfig": {
         "defaults": {
