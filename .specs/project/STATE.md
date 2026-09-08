@@ -1,7 +1,16 @@
 # State
 
-**Last Updated:** 2026-08-28T00:00:00-03:00
-**Current Work:** `project-chat-context-loss` FIXED and verified against the live stack
+**Last Updated:** 2026-09-07T00:00:00-03:00
+**Current Work:** **M5 observability planned, nothing implemented.** Two specs written for
+adopting `harness-sphere` as a third submodule and repurposing it to work exclusively for
+this stack: `harness-sphere-integration` (land it, no Rust changed) and
+`harness-sphere-zombie-crab-scope` (cut the scope, teach it dynamic instances). Four
+gray areas were put to the maintainer and all four answered — see AD-022. The starting
+fact that shapes both: **this stack emits no telemetry at all**, verified by a strict grep
+for `prometheus|opentelemetry|otel` across this repo and both submodules returning zero
+hits. **No code has been written for either feature.**
+
+**Previously:** `project-chat-context-loss` FIXED and verified against the live stack
 (AD-019). Root cause was upstream picoclaw, not this stack: `legacyContextManager` read a
 conversation's history from the DEFAULT agent's session store instead of the routed
 agent's, so every conversation inside a project answered with no history at all, on every
@@ -52,6 +61,71 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-022: harness-sphere is adopted as a third submodule and repurposed exclusively for this stack (2026-09-07)
+
+**Decision:** `https://github.com/LepistaBioinformatics/harness-sphere` becomes a submodule
+at `crab/harness-sphere` and is then cut down to zombie-crab's shape. Planned as two
+sequential features (`.specs/features/harness-sphere-integration/`,
+`.specs/features/harness-sphere-zombie-crab-scope/`). Four gray areas were put to the
+maintainer; all four were answered, and each is load-bearing.
+
+**1. The upstream repo is repurposed in place, not forked.** Checked rather than assumed:
+0 stars, 0 forks, 0 open issues, and `harnesssphere` is **not on crates.io** (the publish
+workflow is manual and was only ever dry-run). There is no external consumer to break.
+*Cost accepted:* the generic seven-layer "Claw/Harness ecosystem" vision ends. Getting a
+generic watcher back later means forking out of a tree that has had a third of its
+collectors deleted.
+
+**2. `crab-shell-proxy` gains one read-only endpoint (`GET /v1/instances`) instead of
+harness-sphere getting a Docker socket.** The container name is
+`crabshell-<role>-<sha256(tenant::subs::user)[:16]>` and the hash is one-way —
+`manager.go:139-149` says so itself: *"tenant/subscription/user are recovered from the
+container labels and the .crab-owner.json marker, not the name."* So per-tenant
+attribution of a running container needs the Docker API or someone who already holds it.
+The proxy already mounts the socket and runs as root; a second socket-mounting service
+would double the blast radius of the stack's worst-case compromise to obtain a mapping the
+proxy has in memory. *What it does not buy:* the inventory names containers, it does not
+carry cgroup counters — where per-container CPU/memory comes from is left open on purpose
+(F1 OQ-2 / F2 OQ-5), with a read-only `/sys/fs/cgroup` bind as the current preference.
+
+**3. Attribution is the full tuple; `session_id` is never a metric attribute.** Every
+instance metric carries `crab.tenant`/`crab.subscription`/`crab.agent`/`crab.user` — one
+series per container, which is the granularity the stack already creates, and the only one
+that answers "which user is burning the host". `session_id` is excluded **by rule**:
+conversations grow without bound and nothing prunes them, a defect this repo already
+records against the in-memory registry (`background-turn-dock/spec.md:446`, OQ-3). The
+user label is the mycelium account UUID, never the email — the same line the proxy already
+draws.
+
+**4. Two features, not one.** F1 lands the tool with **no Rust changed** so that its first
+run against the stack tests the tree whose behaviour is documented; anything that breaks is
+then a deployment fact or a real upstream limitation, with no third candidate. F2 is
+designed against F1's measurements rather than against inference.
+
+**One decision taken without asking, and why.** It runs as a **compose service on
+`zombie_net`**, contradicting harness-sphere's own "single portable binary" principle. Not
+a preference: picoclaw instances publish no host ports (`18790` exists only on the internal
+network) and the proxy's `18080` is loopback-only and dropped entirely in prod, so a host
+binary would be structurally blind to the agent layer. The usual objection — that a
+container cannot see the host — does not apply: `HostCollector` reads through `sysinfo`,
+which reads `/proc/meminfo` and `/proc/stat`, and **those are not namespaced in Docker**.
+No `/proc` or `/sys` bind is needed for host metrics. That claim is asserted from the
+collector's source and is F1's first verification item, because a wrong answer changes the
+deployment shape.
+
+**Two findings worth keeping even if the features never ship.**
+- **`SessionCollector` will work here**, established from the proxy's own parser rather
+  than by guessing: `internal/history/history.go:73-86` reads picoclaw's JSONL as
+  `{role, content, created_at, tool_calls[], reasoning_content}`, and the collector reads
+  exactly `role` and `tool_calls`. Three distortions come with it — the proxy's own
+  `sessions/durable/` transcripts, **one session file per cron *run*** (which turns
+  "sessions" into "sessions plus every scheduled run since provisioning"), and a full
+  re-read of every transcript on every tick.
+- **Token cost is not obtainable in this stack, at all.** Picoclaw does not write tokens to
+  disk, and the only path harness-sphere had to `gen_ai.client.token.usage` was scraping
+  OpenClaw's Prometheus endpoint, which nothing here exposes. Anyone expecting a token bill
+  from "AI observability" should read this line first.
 
 ### AD-021: a tool-delivered turn's ending is fixed in BOTH places — a fourth picoclaw patch and a bound in the proxy (2026-09-05)
 
