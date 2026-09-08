@@ -2,6 +2,20 @@
 
 Read `spec.md` and `design.md` first. Nothing here restates their reasoning.
 
+## Status (2026-09-07)
+
+**Groups A and B are implemented and open as draft PRs.** They are independent and were
+built in parallel, as the build order below intends.
+
+| Group | Repo | PR | State |
+|---|---|---|---|
+| A | `harness-sphere` | [#21](https://github.com/LepistaBioinformatics/harness-sphere/pull/21) `feat/zombie-crab-exclusive` | draft — T-01…T-05 done |
+| B | `crab-shell-proxy` | [#38](https://github.com/LepistaBioinformatics/crab-shell-proxy/pull/38) `feat/instance-inventory` | draft — T-06…T-08 done |
+| — | `zombie-crab-project` | [#58](https://github.com/LepistaBioinformatics/zombie-crab-project/pull/58) `docs/harness-sphere-specs` | draft — these documents |
+
+**Not started:** Group C (blocked on A and B merging), Group D (needs a live stack),
+Group E. One deviation is recorded, at T-08.
+
 **Gate for every `harness-sphere` task:** `cargo build`, `cargo test`, `cargo clippy`
 and `cargo fmt --check` clean, plus `cargo audit` (the repo already runs it in CI).
 **Gate for every `crab-shell-proxy` task:** `go build ./...`, `go vet ./...`,
@@ -36,7 +50,7 @@ three separate PRs in three repositories by construction.
 
 ## Group A — `harness-sphere` becomes this stack's tool (upstream repo)
 
-### T-01 — state the exclusivity in the project documents
+### T-01 — state the exclusivity in the project documents. DONE (2026-09-07).
 - **What:** rewrite `.specs/project/PROJECT.md`'s Vision, "Target stack" and Non-goals to
   name zombie-crab; add a banner to `README.md`. Record the adoption in the repo's own
   `STATE.md`, cross-referencing this stack's AD-022.
@@ -47,7 +61,7 @@ three separate PRs in three repositories by construction.
   FR-R7, after the layers actually change. Prose only.
 - **Satisfies:** FR-M4.
 
-### T-02 — delete the crates.io publishing workflow
+### T-02 — delete the crates.io publishing workflow. DONE (2026-09-07).
 - **What:** remove `.github/workflows/publish-crates.yml`. Leave `release-pr.yml`,
   `release.yml` and `audit.yml` untouched. Drop the "so the crates are publishable to
   crates.io" justification comment on the workspace `version` fields; **keep the fields**
@@ -56,7 +70,7 @@ three separate PRs in three repositories by construction.
   tool, and the registry is the one publication that cannot be cleanly withdrawn.
 - **Satisfies:** FR-M5.
 
-### T-03 — add the Dockerfile
+### T-03 — add the Dockerfile. DONE (2026-09-07).
 - **What:** two-stage build per design DEC-17 — builder on the pinned toolchain,
   `--features otlp` (no `ingest`, no `prometheus`), runtime stage minimal with a
   **non-root** user, binary only.
@@ -64,11 +78,17 @@ three separate PRs in three repositories by construction.
   `Cargo.toml` keeps `panic = "unwind"` deliberately, because FR-RES-03's `catch_unwind`
   containment depends on it. Shrinking the binary by breaking the resilience contract is
   the one tempting mistake here.
-- **Done when:** the image builds and `docker run <image> --help` (or an equivalent
-  no-config invocation) exits cleanly as a non-root uid.
+- **Done:** 131MB image; `id` inside it is `uid=10001(harnesssphere) gid=10001`; it boots
+  `sources=3 receivers=0 exporter=stdout` and reports the host's memory
+  (`system.memory.usage{used} = 10369028096`).
+- **Incidental confirmation of FR-C5, worth keeping:** the run also emitted
+  `harnesssphere.endpoint.up = 0` for `mycelium-gateway:8080` — unreachable, because the
+  test container was not on `zombie_net`. An unreachable target therefore yields an honest
+  zero rather than a dead collector, which is FR-C5's argument demonstrated instead of
+  reasoned.
 - **Satisfies:** FR-C6, FR-C2 (image half).
 
-### T-04 — add `config.zombie-crab.toml`
+### T-04 — add `config.zombie-crab.toml`. DONE (2026-09-07).
 - **What:** `host` and `self` intervals; `probe_targets` = `mycelium-gateway:8080`,
   `crab-shell-proxy:8080`, `chat-webapp:3000`. `container_cgroup`, `container_id`,
   `prometheus_scrape_url` and `watch_processes` left empty.
@@ -85,7 +105,7 @@ three separate PRs in three repositories by construction.
 - **Depends on:** nothing.
 - **Satisfies:** FR-H1–FR-H4, FR-C5 (no ordering needed).
 
-### T-05 — confirm no Rust changed
+### T-05 — confirm no Rust changed. DONE (2026-09-07) — `git diff --stat` over `crates/**` and `harnesssphere/src/**` is empty.
 - **What:** `git diff --stat` on the group's branch shows no file under `crates/` or
   `harnesssphere/src/`.
 - **Why it is a task and not an assumption:** DEC-5 is the property that makes Group D's
@@ -97,7 +117,7 @@ three separate PRs in three repositories by construction.
 
 ## Group B — `GET /v1/instances` (`crab-shell-proxy`, independent of Group A)
 
-### T-06 — the operator credential
+### T-06 — the operator credential. DONE (2026-09-07).
 - **What:** a new config value with a `CRAB_*` env override, absent by default;
   constant-time comparison. **When unset, the route is not registered** (design DEC-15) —
   not registered-and-401.
@@ -109,7 +129,7 @@ three separate PRs in three repositories by construction.
   credential 401s and the right one succeeds; an **agent** token does not authorize it.
 - **Satisfies:** FR-P4.
 
-### T-07 — the handler
+### T-07 — the handler. DONE (2026-09-07).
 - **What:** `GET /v1/instances` returning the union of `docker.List(crab-shell.managed=true)`
   and the on-disk workspace glob, each entry carrying the tuple, container name, mode and a
   state from a **closed set** (running / stopped / provisioned-without-container /
@@ -122,12 +142,28 @@ three separate PRs in three repositories by construction.
 - **Depends on:** T-06.
 - **Satisfies:** FR-P1, FR-P2, FR-P3, FR-P5, FR-P6.
 
-### T-08 — tests and the OpenAPI entry
-- **What:** table tests over the four states using the existing `Docker` fake (the
-  interface is declared at the consumer precisely so tests can supply one); a test asserting
-  no lifecycle method is invoked; the route added to `/doc/openapi.json` consistently with
-  the rest.
-- **Done when:** `go test -race ./...` green and the existing suite unchanged.
+### T-08 — tests, and the OpenAPI entry that was NOT added. DONE (2026-09-07).
+- **What:** tests over the four states using the existing `Docker` fake (the interface is
+  declared at the consumer precisely so tests can supply one), plus assertions that no
+  lifecycle method is invoked.
+- **Done:** 10 tests — 6 in `internal/httpapi` (including "an agent token must not open
+  this route" and the no-side-effects check) and 4 in `internal/docker` (the union across
+  both surfaces; the tuple coming from labels rather than the name). `go build`, `go vet`
+  and `gofmt` clean on every file touched.
+- **SPEC_DEVIATION — the route was deliberately NOT added to `/doc/openapi.json`.**
+  That document is served **unauthenticated** and exists for mycelium tool discovery — its
+  own description says the operations in it are exposed "as a discoverable tool". This
+  route does not go through mycelium (harness-sphere calls the proxy directly on
+  `zombie_net` with its own credential) and is not a member tool, so listing it there
+  would publish the existence of a topology endpoint for free, to anyone who can fetch the
+  document. Adding it would have contradicted DEC-15's whole reason for existing. Flagged
+  on the PR as reversible if the maintainer disagrees.
+- **Pre-existing failures, confirmed unrelated:** five tests in `internal/docker`
+  (`TestScaleToZeroIdleStop`, `TestContinuousDoesNotArmIdle`,
+  `TestReconcileEnsuresContinuousWorkspaces`, `TestEnsureRunningRecreatesOnPersonaDrift`,
+  `TestEnsureRunningRecreatesOnImageDrift`) fail with `lchown: operation not permitted` —
+  they need root. **Reproduced identically on a pristine clone of `main`** before being
+  called pre-existing.
 - **Satisfies:** FR-P7 (by demonstration).
 
 ---
