@@ -42,17 +42,6 @@ metric_export_interval_secs = 15
 # Each target names the layer it belongs to. Before this, one collector stamped one
 # layer on every target, so the proxy and the webapp both filed themselves under
 # "gateway" and three of the six layers were unanswerable by construction.
-[[probe_targets]]
-address = "mycelium-gateway:8080"
-layer = "gateway"
-
-[[probe_targets]]
-address = "crab-shell-proxy:8080"
-layer = "proxy"
-
-[[probe_targets]]
-address = "chat-webapp:3000"
-layer = "webapp"
 
 # --- Session-derived AI activity (picoclaw workspaces) -----------------------
 # The root of crab-shell-proxy's data directory -- the one containing tenants/.
@@ -82,3 +71,19 @@ watch_processes = []
 # Nothing in this stack pushes OTLP at us and nothing exposes an exposition
 # endpoint, so both were a receive path with no sender. There is no feature flag
 # to turn them back on.
+
+# --- Probe targets MUST STAY LAST -------------------------------------------
+# TOML scopes every bare key to the table header above it, so any scalar written
+# below this point is absorbed into the last [[probe_targets]] entry instead of
+# the root table. Add new scalar settings ABOVE this line.
+[[probe_targets]]
+address = "mycelium-gateway:8080"
+layer = "gateway"
+
+[[probe_targets]]
+address = "crab-shell-proxy:8080"
+layer = "proxy"
+
+[[probe_targets]]
+address = "chat-webapp:3000"
+layer = "webapp"
