@@ -154,21 +154,27 @@ with full attribution and only the liveness/resource signals degrade. A watcher 
 telemetry disappears when the thing it watches breaks is worthless at the moment it
 matters.
 
-> **AMENDED 2026-09-07 — that fallback does not currently exist, and this decision cannot
-> be implemented as written.** F1's FR-V3 measured it against the live stack: `data/tenants`
-> is `root:root 0700`, so a non-root watcher cannot traverse it at all. The mount is
-> read-only and present; the process simply cannot enter. Neither uid 10001 (the watcher)
-> nor uid 1000 (what the proxy chowns workspace leaves to) can reach a `sessions/`
-> directory, because traversal is barred at the top before leaf ownership matters.
+> **AMENDED 2026-09-07, then RESOLVED 2026-09-08. The fallback now exists.** Read both
+> halves — the first is why this looked dead, the second is why it is not.
 >
-> **Consequence for this decision:** the two-surface reconciliation still stands as the
-> right shape, but its *resilience* claim is currently false, and FR-D3, FR-D5 and the
-> whole FR-S group were blocked on F1 OQ-6. **UNBLOCKED 2026-09-08: OQ-6 resolved to
-> running the watcher as a privileged daemon, so the disk surface is reachable and this
-> decision stands in full.** The outcome that would have collapsed it to one surface —
-> "the proxy serves session counts over its API" — was considered and not chosen,
-> precisely because it would have made the resilience property above **lost, not
-> deferred**.
+> **2026-09-07 — the wall.** F1's FR-V3 measured it against the live stack: `data/tenants`
+> is `root:root 0700`, so a **non-root** watcher cannot traverse it at all. The mount is
+> read-only and present; the process simply could not enter. Neither uid 10001 (the
+> watcher) nor uid 1000 (what the proxy chowns workspace leaves to) could reach a
+> `sessions/` directory, because traversal is barred at the top before leaf ownership
+> matters.
+>
+> **2026-09-08 — the wall was the *non-root* half, and that half is gone.** The watcher
+> runs as a privileged daemon (F1 OQ-6), so it traverses `0700` regardless of the mode
+> bit. Nothing on the host was changed to achieve this: no `chmod`, no supplementary
+> group, no new endpoint on the proxy.
+>
+> **Consequence for this decision:** the two-surface reconciliation stands as the right
+> shape **and its resilience claim is true again**. FR-D3, FR-D5 and the whole FR-S group
+> were blocked on this and are now unblocked. The outcome that would have collapsed the
+> design to a single surface — "the proxy serves session counts over its API" — was
+> considered and **not** chosen, precisely because it would have made the resilience
+> property above **lost, not deferred**.
 >
 > **One thing the same measurement settled in this decision's favour:** the on-disk path
 > really does carry the full tuple, and there are **two** session directories per
