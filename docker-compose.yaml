@@ -377,11 +377,27 @@ services:
     restart: unless-stopped
     networks:
       - zombie_net
-    # No `user:` override -- the image already runs as uid 10001 (see its
-    # Dockerfile). And NO docker.sock: crab-shell-proxy already mounts one and
-    # runs as root, so a second socket-mounting service would double the blast
-    # radius of the stack's worst compromise. Instance identity comes from the
-    # proxy's read-only GET /v1/instances instead.
+    # Runs as root, and this is the one place that decision is visible, so it is
+    # argued here rather than assumed (AD-023, F1 OQ-6).
+    #
+    # WHY: crab-shell-proxy creates the tenant tree as `root:root 0700`. A non-root
+    # watcher cannot TRAVERSE it -- not a leaf-permission problem, the barrier is at
+    # the top -- so session metrics were impossible without this. The alternatives
+    # were worse: chmod 0755 makes every workspace path enumerable by any local uid
+    # and the directory names are account UUIDs; and moving session counts into the
+    # proxy's API would have destroyed the disk fallback, so telemetry would stop
+    # exactly when the proxy stops.
+    #
+    # WHAT KEEPS IT NARROW -- three constraints, load-bearing TOGETHER. A later
+    # change must not relax them one at a time:
+    #   1. the /data bind below stays :ro -- it can read the tree, never write it;
+    #   2. NO docker.sock, ever. That is the grant that actually matters: a socket
+    #      is start/stop/exec on any container and a path to host root. This is
+    #      read-only file access. crab-shell-proxy already holds the socket; a
+    #      second holder would double the blast radius of the worst compromise.
+    #   3. NO published ports -- every collector pulls, so there is no inbound
+    #      surface at all.
+    user: "0:0"
     #
     # No /proc or /sys bind either, and that was MEASURED rather than assumed: a
     # container capped at -m 512m reported the host's 33 GB, because sysinfo

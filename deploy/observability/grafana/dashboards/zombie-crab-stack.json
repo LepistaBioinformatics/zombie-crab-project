@@ -392,17 +392,217 @@
       }
     },
     {
-      "type": "text",
-      "title": "What is NOT here, and why",
+      "type": "row",
+      "title": "Harness (picoclaw) \u2014 per tenant, per member",
       "gridPos": {
-        "h": 7,
+        "h": 1,
         "w": 24,
         "x": 0,
         "y": 21
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Workspaces watched",
+      "description": "harnesssphere.discovery.workspaces \u2014 how many (tenant, subscription, agent, user) workspaces discovery currently has a collector for. Created after boot? It appears within one discovery interval, no restart.",
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 0,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "targets": [
+        {
+          "expr": "harnesssphere_discovery_workspaces",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Discovery scans",
+      "description": "A scan counter that STOPS ADVANCING is how you tell 'no workspaces' from 'discovery died' \u2014 two states that look identical on the gauge to the left. A flat line here is an incident; a flat zero next door is not.",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 4,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "targets": [
+        {
+          "expr": "harnesssphere_discovery_scans",
+          "legendFormat": "scans",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Conversations per member",
+      "description": "harnesssphere.harness.sessions. Counts BOTH session directories (project conversations live in a sibling workspace-<project>/sessions \u2014 missing them dropped 42% on the workspace measured), excludes the durable/ mirror (which would exactly double every count), and excludes cron runs.",
+      "gridPos": {
+        "h": 6,
+        "w": 14,
+        "x": 10,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "targets": [
+        {
+          "expr": "harnesssphere_harness_sessions",
+          "legendFormat": "{{crab_tenant}} / {{crab_agent}} / {{crab_user}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "displayMode": "gradient",
+        "orientation": "horizontal"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Messages by role",
+      "description": "Absolute counts re-derived from disk each scrape, which is why these are Gauges: pushing an absolute value through the Counter path would double-count every tick. They survive restarts and legitimately FALL when transcripts are rotated away.",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 28
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "targets": [
+        {
+          "expr": "sum by (role) (harnesssphere_harness_messages)",
+          "legendFormat": "{{role}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tool calls, and cron runs excluded",
+      "description": "tool.calls is the surviving signal from the deleted Tools layer \u2014 it comes from picoclaw's session JSONL, which is a real source. cron.sessions is reported rather than silently dropped: 'we excluded 40% of your files and told you nothing' is its own failure mode.",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 28
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "targets": [
+        {
+          "expr": "sum(harnesssphere_tool_calls)",
+          "legendFormat": "tool calls",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(harnesssphere_harness_cron_sessions)",
+          "legendFormat": "cron runs (excluded from conversations)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "text",
+      "title": "What is NOT here, and why",
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 35
       },
       "options": {
         "mode": "markdown",
-        "content": "**Three layers are still missing from this dashboard, and none is an oversight.**\n\n- **picoclaw (per-tenant agent containers)** \u2014 the layer this project exists to run. `SessionCollector` is compiled and tested but switched **off** (`session_dir = \"\"`): it takes *one* boot-resolved directory while the proxy creates a workspace per `(tenant, subscription, agent, user)` at runtime. Workspace discovery is in progress.\n- **Per-container CPU/memory** \u2014 needs a cgroup source; still open, because the watcher deliberately holds no Docker socket.\n- **Token cost** \u2014 **not obtainable in this stack at all.** picoclaw writes no token counts to disk and the only path that ever existed was scraping an endpoint this stack does not run. It is not coming later.\n\n**Now fixed:** Gateway, Proxy and Webapp are three distinct layers here. They used to share one label \u2014 and in fact carried no layer at all."
+        "content": "**What is still missing, and why none of it is an oversight.**\n\n- **The proxy's live instance inventory.** Discovery reads the **on-disk** tenant tree \u2014 the resilient surface, and enough to attribute every conversation to a member. What it cannot yet say is whether that member's container is *running*. This is exactly the designed degraded mode: session metrics keep flowing when the proxy is down, which is when they matter most.\n- **Per-instance liveness** for agent containers \u2014 needs the inventory above, because harness-sphere never computes the container-name hash itself. Duplicating a preimage the proxy owns would diverge silently the day the prefix changes.\n- **Per-container CPU/memory** \u2014 needs a cgroup source; still open, because the watcher deliberately holds no Docker socket.\n- **Token cost** \u2014 **not obtainable in this stack at all.** picoclaw writes no token counts to disk and the only path that ever existed was scraping an endpoint this stack does not run. It is not coming later."
       }
     }
   ]
