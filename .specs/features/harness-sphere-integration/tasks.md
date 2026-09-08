@@ -17,7 +17,28 @@ Read `spec.md` and `design.md` first. Nothing here restates their reasoning.
 DEC-15 stands ("configurável e previsível"), and DEC-8 proceeds as proposed. DEC-15 is
 already on `main` via #38; DEC-8 is F2 and unbuilt.
 
-**Not started:** Group D (needs a live stack), Group E (follows C).
+**Group D ran 2026-09-07 against the live stack. Three of four discharged; the fourth is
+BLOCKED and it is the important one.**
+
+| Item | Result |
+|---|---|
+| FR-V1 (host from a container) | discharged at the desk, pre-implementation |
+| FR-V2 / T-13 (probes) | **pass** — and the first tick confirmed FR-C5 in production |
+| FR-V4 / T-15 (cardinality) | **1 workspace** |
+| FR-V5 / T-16 (privilege) | **pass** — uid 10001, one read-only mount, no socket |
+| FR-V3 / T-14 (session transcripts) | **BLOCKED** — `data/tenants` is `root:root 0700` |
+
+**F1 did exactly what DEC-5 built it to do.** Shipping the tool unchanged surfaced a
+deployment fact that no amount of reading could have produced: the watcher cannot traverse
+the tenant tree, so F2's entire session-collection group and DEC-10's resilience claim are
+blocked on **spec OQ-6**. Discovering this now, rather than midway through building F2's
+session work, is the whole return on the two-feature split.
+
+The same run also produced a finding nobody predicted — **two session directories per
+workspace**, `workspace/sessions` and `workspace-<project>/sessions`, which is 42% of
+conversations in the one workspace measured. F2's FR-S5 now carries the naming rule.
+
+**Not started:** Group E (follows C).
 
 **Two things carried forward that are not task failures but will bite if forgotten:**
 
@@ -219,13 +240,13 @@ three separate PRs in three repositories by construction.
 This group cannot run from a development checkout: the local `data/` tree holds only
 `templates/` and no `tenants/`, so there is no workspace to measure.
 
-### T-13 — FR-V2, probes from inside the network
+### T-13 — FR-V2, probes from inside the network. DONE (2026-09-07) — all three `up = 1`; the first tick caught the proxy still starting and emitted an honest `up = 0`, confirming FR-C5 in production.
 - **What:** `harnesssphere.endpoint.up` = 1 for all three targets.
 - **Also run the restart case:** `docker compose restart harness-sphere` alone, with the
   targets already up. Both orderings should give the same answer given design DEC-18's
   reasoning; a disagreement falsifies it.
 
-### T-14 — FR-V3, does `SessionCollector` parse this stack's transcripts
+### T-14 — FR-V3. **BLOCKED (2026-09-07)** — the watcher cannot read the transcripts: `data/tenants` is `root:root 0700`. See spec FR-V3 and OQ-6.
 - **Depends on:** T-04 (which ships `session_dir` empty) and a live stack with at least one
   provisioned workspace. This task is where FR-H4 is actually discharged.
 - **What:** set `session_dir` to a real workspace and report on **each of the three
@@ -234,11 +255,11 @@ This group cannot run from a development checkout: the local `data/` tree holds 
 - **Why it is the most valuable task in the group:** it is the input to F2's DEC-13, which
   is the largest single piece of work in the whole effort.
 
-### T-15 — FR-V4, the real cardinality
+### T-15 — FR-V4, the real cardinality. DONE (2026-09-07) — **1 workspace** (one tenant/subscription/agent/user).
 - **What:** with T-07 live, record the actual count of workspaces and containers.
 - **Feeds:** F2 OQ-7 (discovery interval) and spec OQ-1 (backend choice).
 
-### T-16 — FR-V5, privilege, asserted at runtime
+### T-16 — FR-V5, privilege, asserted at runtime. DONE (2026-09-07) — `uid=10001`, one read-only mount, zero `docker.sock`.
 - **What:** against the **running** container, confirm the effective user is not root and
   `/var/run/docker.sock` is absent from its mounts. Read off the container, not off the
   compose file — the compose file is the claim, not the evidence.
