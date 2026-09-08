@@ -1,6 +1,6 @@
 # agent-learning-dashboard — Spec
 
-**Status:** SPEC. Not implemented.
+**Status:** IMPLEMENTED 2026-09-08. Collectors in harness-sphere#28; dashboard here.
 **Spans:** `harness-sphere` (three new collectors — the substantial part) +
 `zombie-crab-project` (a second Grafana dashboard).
 **Date:** 2026-09-08.
@@ -255,16 +255,58 @@ is a distortion that a plausible implementation gets wrong.
 
 ## Open questions
 
-**OQ-10 — What is a *sustainable* instance?** The request asks for "sustainable use", and
-this spec delivers the raw material — capability, retention, consumption — without naming a
-threshold. A threshold needs a second instance to calibrate against, and inventing one now
-would encode a guess as a line on a chart.
+**OQ-10 — DROPPED by the owner (2026-09-08).** The "sustainable use" threshold is not
+pursued. The dashboard delivers capability, retention and consumption as raw material; no
+line is drawn on the chart, and none is planned.
 
 **OQ-11 — Should `logs/` size be a signal?** 118 KB of `gateway.log` and
 `gateway_panic.log` sit in every workspace. Growth there is a health signal rather than a
 learning one, and it may belong on the stack dashboard instead. Not decided.
 
 **OQ-12 — Cron jobs as a capability axis.** `workspace/cron/jobs.json` names the agent's
-scheduled tasks. A scheduled task is arguably capability, which would make it a third axis
-— but F2 OQ-8 already flags cron as latent-not-manifest in this deployment, so there is
-nothing to calibrate against yet.
+scheduled tasks. A scheduled task is arguably capability — but F2 OQ-8 already flags cron
+as latent-not-manifest here, so there is nothing to calibrate against yet.
+
+## What FR-L10 actually found (2026-09-08)
+
+The gate was worth having: **the first two configurations rendered `Err`**, and the
+failure was found by screenshotting the running Grafana in headless Chromium and reading
+the image, not by reasoning about it.
+
+Three things were wrong, each discovered by measurement:
+
+1. **`labelsToFields` cannot pivot a `format: table` frame.** That format already expands
+   labels into columns, so the transform has nothing to do. Removing it produced the pivot
+   — and then one frame *per series*, which the table exposed as a frame picker.
+2. **The join works; the naming was the problem.** `joinByField` on `crab_user` aligns
+   members as rows correctly. It names each query's value column **`Value #<refId>`** and
+   suffixes every duplicated label column ` 1`, ` 2`, … **per query** — so an exclude list
+   covering only ` 1` left `crab_agent 2` and `__name__ 1` on screen, which is the
+   duplicate-column defect the owner reported.
+3. **The manual `byName` matchers never bound in Grafana 11.4.** `mapping: "auto"` is used
+   instead, with the frame reduced to exactly the numeric fields the panel should infer
+   from.
+
+**Outcome:** the table is verified working against live data and carries every measure,
+one row per instance. The scatter's configuration is valid — it moved from `Err` to the
+plugin's own loading state — but **`xychart` does not finish loading under headless
+Chromium**, so its render is confirmed only in a real browser. The table therefore ships
+as a peer panel rather than as a fallback to be swapped in later.
+
+## What the live stack showed (FR-L11, discharged)
+
+All four predicted numbers landed, and **a second instance appeared during the work**, so
+the table is no longer a single row:
+
+| member | skills | tool calls | retained facts | memory | conversations |
+|---|---|---|---|---|---|
+| `28690354…` | 9 | 125 | 56 | 317 B | 12 |
+| `ba226b3b…` | 9 | 0 | 0 | 317 B | 1 |
+
+`skills` reports **9**, not the 10 directories present. `memory` reports **317 B** from
+**one** non-empty file, not four. `retained facts` is **56** — the number that did not
+exist before this feature.
+
+The second row is already doing the job the feature was built for: same capability, no
+consumption, nothing retained. That is the *Apprentice* quadrant, readable from the table
+without the scatter.
