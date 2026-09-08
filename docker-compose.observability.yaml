@@ -1,0 +1,94 @@
+# Opt-in observability backend: somewhere for harness-sphere's metrics to land
+# and a UI to read them in.
+#
+#   docker compose -f docker-compose.yaml -f docker-compose.observability.yaml up -d
+#   → Grafana on http://localhost:${GRAFANA_PORT:-3001}  (anonymous, no login)
+#
+# OPT-IN ON PURPOSE. The base file stays one added service exporting to stdout,
+# which proves the pipeline with nothing to stand up. This overlay is for
+# actually looking at the numbers over time.
+#
+# WHY NOT SIGNOZ, which harness-sphere already vendors under
+# crab/harness-sphere/deploy/signoz/ and which was verified end to end upstream:
+# it is six services including ClickHouse and Zookeeper, and its value is traces
+# and logs. harness-sphere boots `sources=3 receivers=0` -- it emits METRICS
+# ONLY, no traces, no logs -- so that engine would idle while costing gigabytes.
+# Three services sized to the signal that actually exists beats six sized to the
+# signal that does not. The vendored SigNoz stays available for the day traces do.
+
+services:
+  # Point the watcher at the collector instead of stdout.
+  harness-sphere:
+    environment:
+      HARNESSSPHERE_EXPORTER: otlp
+    volumes:
+      # Bind-mounted OVER the config the image bakes in. harness-sphere has no
+      # env override for otlp_endpoint (only HARNESSSPHERE_EXPORTER exists), so
+      # a whole file is the way to redirect it -- and doing it here means the
+      # submodule needs no change.
+      #
+      # Compose appends volume lists across -f layers, so the base file's
+      # read-only /data bind is still here; this is an addition, not a
+      # replacement.
+      - ./deploy/observability/harnesssphere.otlp.toml:/etc/harnesssphere/config.toml:ro
+
+  # Translates OTLP/gRPC into Prometheus exposition. Needed because
+  # harness-sphere's exporter is built .with_tonic() (gRPC) while Prometheus's
+  # own OTLP receiver is HTTP-only -- the two cannot be wired directly.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:${OTEL_COLLECTOR_TAG:-0.116.1}
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./deploy/observability/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    networks:
+      - zombie_net
+    # No published ports: it is reached only from inside zombie_net.
+
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_TAG:-v3.1.0}
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # Keep it modest: this is for watching the stack while it is being built,
+      # not a retention tier.
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+    volumes:
+      - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - zombie_net
+    # Published so a raw PromQL query is possible when a dashboard disagrees
+    # with what you expect. 9090 is Prometheus's own convention.
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+
+  grafana:
+    image: grafana/grafana:${GRAFANA_TAG:-11.4.0}
+    restart: unless-stopped
+    environment:
+      # Anonymous admin access. This is a local development backend on a
+      # loopback-published port, and a login prompt in front of your own CPU
+      # graphs is friction with no threat model behind it. If this is ever
+      # exposed beyond localhost, these three lines are the first thing to
+      # remove.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: dark
+    volumes:
+      - ./deploy/observability/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./deploy/observability/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - zombie_net
+    # 3001 because chat-webapp already owns 3000.
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  prometheus-data:
+  grafana-data:

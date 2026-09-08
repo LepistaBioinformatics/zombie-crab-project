@@ -1,0 +1,39 @@
+# OTel Collector — the translator between what harness-sphere speaks and what
+# Prometheus can read.
+#
+# It exists for one concrete reason: harness-sphere's OTLP exporter is built with
+# `.with_tonic()` (crates/export/src/otlp.rs), so it speaks OTLP over **gRPC**.
+# Prometheus's own OTLP receiver is HTTP-only, so the two cannot be wired
+# directly. This collector receives gRPC and re-exposes everything in Prometheus
+# exposition format for scraping.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+    timeout: 5s
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # Without this, the OTel Resource attributes (service.name, host.name) are
+    # dropped and every series looks anonymous. They are how a signal is traced
+    # back to what produced it.
+    resource_to_telemetry_conversion:
+      enabled: true
+
+service:
+  # Metrics only. harness-sphere emits no traces and no logs -- it boots
+  # `sources=3 receivers=0` -- so declaring those pipelines would advertise
+  # capability the stack does not have.
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]
+  telemetry:
+    logs:
+      level: warn
