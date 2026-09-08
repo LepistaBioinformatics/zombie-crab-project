@@ -1,16 +1,3 @@
-# DERIVED from crab/harness-sphere/config.zombie-crab.toml by changing exactly two
-# lines: exporter -> "otlp" and otlp_endpoint -> the collector on zombie_net.
-#
-# It is a separate file rather than an env override because harness-sphere has no
-# env override for otlp_endpoint -- only HARNESSSPHERE_EXPORTER exists
-# (harnesssphere/src/config.rs). The overlay bind-mounts this over the config the
-# image bakes in, so the submodule needs no change at all.
-#
-# If the upstream config gains a field, re-derive rather than hand-edit:
-#   sed -e 's|^exporter = .*|exporter = "otlp"|' \
-#       -e 's|^otlp_endpoint = .*|otlp_endpoint = "http://otel-collector:4317"|' \
-#       crab/harness-sphere/config.zombie-crab.toml > deploy/observability/harnesssphere.otlp.toml
-
 # HarnessSphere — configuration for the zombie-crab stack.
 #
 # This file is what the container runs (baked to /etc/harnesssphere/config.toml).
@@ -52,8 +39,9 @@ metric_export_interval_secs = 15
 # collect(), which emits endpoint.up = 0 for a target that is down. Ordering the
 # watcher behind the health of what it watches would suppress the exact signal it
 # exists to produce.
-# Each target names the layer it belongs to. One collector used to stamp one layer on
-# every target, so the proxy and the webapp both filed themselves under "gateway".
+# Each target names the layer it belongs to. Before this, one collector stamped one
+# layer on every target, so the proxy and the webapp both filed themselves under
+# "gateway" and three of the six layers were unanswerable by construction.
 [[probe_targets]]
 address = "mycelium-gateway:8080"
 layer = "gateway"
@@ -66,37 +54,31 @@ layer = "proxy"
 address = "chat-webapp:3000"
 layer = "webapp"
 
-# --- Session-derived AI activity ---------------------------------------------
-# EMPTY ON PURPOSE, and set by the operator at deploy time as a one-off probe.
+# --- Session-derived AI activity (picoclaw workspaces) -----------------------
+# The root of crab-shell-proxy's data directory -- the one containing tenants/.
+# The compose file mounts it read-only at /data.
 #
-# Two reasons it does not ship populated. First, a development checkout has no
-# tenants/ tree, so any committed path would resolve nowhere. Second, this field is
-# single-valued while the stack has one sessions/ directory PER WORKSPACE — pointing
-# it at one member would emit a metric that silently describes one tenant and looks
-# like it describes the stack. Multiplexing it is the next feature's job.
+# harness-sphere rescans this tree on `discovery_interval_secs` and runs ONE session
+# collector per (tenant, subscription, agent, user), each attributed with the full
+# tuple. This replaces the old single-valued `session_dir`, which could only ever
+# name one workspace and so emitted a metric that described one member while reading
+# like it described the stack.
 #
-# When set for that probe, expect three known distortions and read them as such:
-#   1. sessions/durable/ holds crab-shell-proxy's own append-only transcripts. The
-#      collector's read_dir is non-recursive, so it should skip them; if that ever
-#      changes, every message is counted twice.
-#   2. Every scheduled-task RUN writes its own session file, so `harness.sessions`
-#      drifts from "conversations" towards "conversations plus every cron run since
-#      provisioning". The paired .meta.json key (agent:cron-*) is what tells them apart.
-#   3. Every transcript is re-read IN FULL on every tick.
-session_dir = ""
+# Traversal requires privileges: the tree is root:root 0700 (AD-023).
+data_root = "/data"
+discovery_interval_secs = 30
+# Slower than discovery on purpose: finding a workspace is a directory glob, reading
+# one is IO proportional to its conversation history.
+session_interval_secs = 60
 session_source = "picoclaw"
 
-# --- Deliberately unset ------------------------------------------------------
-# Each of these is single-valued and resolved once at boot, which is precisely why
-# the dynamic-discovery feature exists. Setting any of them to one arbitrary
-# instance would produce a metric that describes one tenant and reads like it
-# describes the stack.
+# --- Still single-valued, still empty ----------------------------------------
 container_cgroup = ""
 container_id = ""
 watch_processes = []
 
 # --- Gone, not merely unconfigured -------------------------------------------
-# The OTLP ingest receiver and the Prometheus scraper were DELETED (harness-sphere
-# #23), not disabled. Nothing in this stack pushes OTLP at us and nothing exposes
-# an exposition endpoint, so both were a receive path with no sender. There is no
-# feature flag to turn them back on.
+# The OTLP ingest receiver and the Prometheus scraper were DELETED, not disabled.
+# Nothing in this stack pushes OTLP at us and nothing exposes an exposition
+# endpoint, so both were a receive path with no sender. There is no feature flag
+# to turn them back on.
