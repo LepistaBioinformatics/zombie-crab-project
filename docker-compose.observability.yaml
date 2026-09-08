@@ -77,7 +77,14 @@ services:
       - "${PROMETHEUS_PORT:-9090}:9090"
 
   grafana:
-    image: grafana/grafana:${GRAFANA_TAG:-11.4.0}
+    # 11.6.0, not 11.4.0, and the reason is specific: 11.4.0 FAILS TO REGISTER ITS OWN
+    # XY Chart panel. Its boot log carries
+    #   Could not register plugin pluginId=xychart error="plugin xychart is already registered"
+    # -- xychart is the only panel that errors -- and any xychart panel then sits at
+    # "Loading plugin panel..." forever, with no error shown to the reader. Verified by
+    # booting both versions and diffing the logs: 11.4.0 logs the error twice, 11.6.0 zero
+    # times. Disabling the autoMigrateXYChartPanel toggle does NOT fix it.
+    image: grafana/grafana:${GRAFANA_TAG:-11.6.0}
     restart: unless-stopped
     environment:
       # Anonymous admin access. This is a local development backend on a
