@@ -4,17 +4,31 @@ Read `spec.md` and `design.md` first. Nothing here restates their reasoning.
 
 ## Status (2026-09-07)
 
-**Groups A and B are implemented and open as draft PRs.** They are independent and were
-built in parallel, as the build order below intends.
+**Groups A, B and C are implemented.** A and B are **merged**; C is open as a draft.
 
 | Group | Repo | PR | State |
 |---|---|---|---|
-| A | `harness-sphere` | [#21](https://github.com/LepistaBioinformatics/harness-sphere/pull/21) `feat/zombie-crab-exclusive` | draft — T-01…T-05 done |
-| B | `crab-shell-proxy` | [#38](https://github.com/LepistaBioinformatics/crab-shell-proxy/pull/38) `feat/instance-inventory` | draft — T-06…T-08 done |
-| — | `zombie-crab-project` | [#58](https://github.com/LepistaBioinformatics/zombie-crab-project/pull/58) `docs/harness-sphere-specs` | draft — these documents |
+| A | `harness-sphere` | [#21](https://github.com/LepistaBioinformatics/harness-sphere/pull/21) | **merged** — T-01…T-05 |
+| B | `crab-shell-proxy` | [#38](https://github.com/LepistaBioinformatics/crab-shell-proxy/pull/38) | **merged** — T-06…T-08 |
+| C | `zombie-crab-project` | [#60](https://github.com/LepistaBioinformatics/zombie-crab-project/pull/60) | draft — T-09…T-12 |
+| — | `zombie-crab-project` | [#58](https://github.com/LepistaBioinformatics/zombie-crab-project/pull/58) | draft — these documents |
 
-**Not started:** Group C (blocked on A and B merging), Group D (needs a live stack),
-Group E. One deviation is recorded, at T-08.
+**Both decisions the specs flagged for the maintainer were confirmed (2026-09-07):**
+DEC-15 stands ("configurável e previsível"), and DEC-8 proceeds as proposed. DEC-15 is
+already on `main` via #38; DEC-8 is F2 and unbuilt.
+
+**Not started:** Group D (needs a live stack), Group E (follows C).
+
+**Two things carried forward that are not task failures but will bite if forgotten:**
+
+1. **One deviation, at T-08** — `/v1/instances` was kept out of `openapi.json`.
+2. **`ghcr.io/lepistabioinformatics/harness-sphere` does not exist.** Group C's prod
+   override names it, but `harness-sphere` publishes **binary releases only** — it has no
+   `release-image.yml` and the package 404s. Prod must omit the service or build from
+   source until an image workflow is added there. Recorded in the compose file and both
+   `.env.example`s, not just here, because the failure would otherwise surface as an image
+   pull error mid-deploy. **This is the next small piece of work**, and it belongs to the
+   `harness-sphere` repo, mirroring `crab-shell-proxy`'s `release-image.yml`.
 
 **Gate for every `harness-sphere` task:** `cargo build`, `cargo test`, `cargo clippy`
 and `cargo fmt --check` clean, plus `cargo audit` (the repo already runs it in CI).
@@ -172,13 +186,13 @@ three separate PRs in three repositories by construction.
 
 **Blocked on A and B both merged to their default branches** (FR-M7). CI enforces it.
 
-### T-09 — add the submodule
+### T-09 — add the submodule. DONE (2026-09-07) — pointer `768fcc6`, absolute HTTPS URL.
 - **What:** `crab/harness-sphere`, `.gitmodules` entry in the **absolute HTTPS** form.
 - **Watch for:** the relative form (`../name.git`) is the *marketing* repo's convention.
   Both existing entries here are absolute HTTPS; copy those.
 - **Satisfies:** FR-M1, FR-M2, FR-M3.
 
-### T-10 — the compose service
+### T-10 — the compose service. DONE (2026-09-07).
 - **What:** per design DEC-18 — `zombie_net`, `restart: unless-stopped`, non-root user,
   data root bound `:ro`, exporter by env. **No `ports`, no `depends_on`, no
   `/var/run/docker.sock`, no `/proc`, no `/sys`.**
@@ -186,14 +200,14 @@ three separate PRs in three repositories by construction.
   `ghcr.io/lepistabioinformatics/harness-sphere:${HARNESS_SPHERE_TAG}` image.
 - **Satisfies:** FR-C1–FR-C3, FR-C5, FR-C7.
 
-### T-11 — env plumbing
+### T-11 — env plumbing. DONE (2026-09-07).
 - **What:** inline `${VAR:-default}` in compose plus entries in the **tracked**
   `deploy/standalone/.env.example` and `deploy/prod/.env.example`.
 - **Watch for:** `.env` is gitignored and untracked here — a requirement written against it
   cannot be committed. The examples are the tracked surface.
 - **Satisfies:** FR-C8.
 
-### T-12 — bump the proxy pointer and record the chain
+### T-12 — bump the proxy pointer and record the chain. DONE (2026-09-07) — pointer `473b726`.
 - **What:** advance `crab/crab-shell-proxy` to Group B's merge commit; add the third
   submodule and its merge order to `.claude/CLAUDE.md`.
 - **Satisfies:** FR-M6, FR-M7 step 3.
