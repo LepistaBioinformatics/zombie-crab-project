@@ -4,6 +4,18 @@
 #   docker compose -f docker-compose.yaml -f docker-compose.observability.yaml up -d
 #   → Grafana on http://localhost:${GRAFANA_PORT:-3001}  (anonymous, no login)
 #
+# THE `-f` CHAIN IS NOT OPTIONAL ON ANY COMMAND, and forgetting it fails silently.
+# `docker compose up -d`, `restart`, or `up -d harness-sphere` without both files
+# reverts every service this overlay overrides back to the base file: harness-sphere
+# returns to the `stdout` exporter and loses its config mount, so it prints metrics
+# into its own logs instead of sending them. Every container stays healthy and
+# Grafana simply goes empty -- there is no error anywhere.
+#
+# To stop having to remember, put this in the .env at the repo root (see
+# deploy/observability/.env.example) and a bare `docker compose up -d` is correct:
+#
+#   COMPOSE_FILE=docker-compose.yaml:docker-compose.observability.yaml
+#
 # OPT-IN ON PURPOSE. The base file stays one added service exporting to stdout,
 # which proves the pipeline with nothing to stand up. This overlay is for
 # actually looking at the numbers over time.
