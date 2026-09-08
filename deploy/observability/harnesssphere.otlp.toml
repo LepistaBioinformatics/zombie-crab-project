@@ -52,11 +52,19 @@ metric_export_interval_secs = 15
 # collect(), which emits endpoint.up = 0 for a target that is down. Ordering the
 # watcher behind the health of what it watches would suppress the exact signal it
 # exists to produce.
-probe_targets = [
-    "mycelium-gateway:8080",
-    "crab-shell-proxy:8080",
-    "chat-webapp:3000",
-]
+# Each target names the layer it belongs to. One collector used to stamp one layer on
+# every target, so the proxy and the webapp both filed themselves under "gateway".
+[[probe_targets]]
+address = "mycelium-gateway:8080"
+layer = "gateway"
+
+[[probe_targets]]
+address = "crab-shell-proxy:8080"
+layer = "proxy"
+
+[[probe_targets]]
+address = "chat-webapp:3000"
+layer = "webapp"
 
 # --- Session-derived AI activity ---------------------------------------------
 # EMPTY ON PURPOSE, and set by the operator at deploy time as a one-off probe.

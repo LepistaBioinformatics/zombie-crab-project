@@ -1,34 +1,59 @@
 {
   "uid": "zombie-crab-stack",
-  "title": "zombie-crab — stack",
+  "title": "zombie-crab \u2014 stack",
   "description": "Every panel here is built on a metric name verified against a live Prometheus, not inferred from OTel semconv. The OTLP->Prometheus translation renames things (dots to underscores, unit suffixes appended), so the semconv name is not the query name.",
-  "tags": ["zombie-crab", "harness-sphere"],
+  "tags": [
+    "zombie-crab",
+    "harness-sphere"
+  ],
   "timezone": "browser",
   "editable": true,
   "schemaVersion": 39,
   "refresh": "10s",
-  "time": { "from": "now-30m", "to": "now" },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
   "panels": [
     {
       "type": "row",
-      "title": "Service liveness — the four layers a probe can reach",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+      "title": "Service liveness \u2014 the four layers a probe can reach",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
     },
     {
       "type": "stat",
       "title": "Endpoints up",
-      "description": "harnesssphere.endpoint.up, one series per probe target. A target that is down reads 0 here rather than going absent — the collector emits an honest zero and stays alive, which is why the watcher needs no depends_on ordering.",
-      "gridPos": { "h": 5, "w": 10, "x": 0, "y": 1 },
-      "datasource": { "type": "prometheus", "uid": "zombie-crab-prom" },
+      "description": "harnesssphere.endpoint.up, one series per probe target, now labelled with the LAYER it belongs to. Until harness-sphere#25 the layer never reached a backend at all -- Layer::as_str() had zero callers -- so all six layers were invisible, not just Proxy and Webapp. A target that is down reads 0 here rather than going absent, which is why the watcher needs no depends_on ordering.",
+      "gridPos": {
+        "h": 5,
+        "w": 10,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
       "targets": [
         {
           "expr": "harnesssphere_endpoint_up",
-          "legendFormat": "{{server_address}}",
+          "legendFormat": "{{harnesssphere_layer}} \u2014 {{server_address}}",
           "refId": "A"
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "colorMode": "background",
         "graphMode": "none",
         "textMode": "auto"
@@ -36,10 +61,40 @@
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 } } },
-            { "type": "value", "options": { "1": { "text": "UP", "color": "green", "index": 1 } } }
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red",
+                  "index": 0
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "UP",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
           ],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
         },
         "overrides": []
       }
@@ -47,39 +102,75 @@
     {
       "type": "timeseries",
       "title": "Probe latency",
-      "description": "TCP connect time per target. A rising line here is the earliest sign a service is struggling, before it fails a health check.",
-      "gridPos": { "h": 5, "w": 14, "x": 10, "y": 1 },
-      "datasource": { "type": "prometheus", "uid": "zombie-crab-prom" },
+      "description": "TCP connect time per target, by layer. A rising line is the earliest sign a service is struggling, before it fails a health check.",
+      "gridPos": {
+        "h": 5,
+        "w": 14,
+        "x": 10,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
       "targets": [
         {
           "expr": "harnesssphere_endpoint_probe_duration_seconds",
-          "legendFormat": "{{server_address}}",
+          "legendFormat": "{{harnesssphere_layer}} \u2014 {{server_address}}",
           "refId": "A"
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "s", "custom": { "fillOpacity": 8, "showPoints": "never" } },
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
         "overrides": []
       }
     },
     {
       "type": "row",
-      "title": "Host (hospedeiro) — the real machine, not this container",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 }
+      "title": "Host (hospedeiro) \u2014 the real machine, not this container",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      }
     },
     {
       "type": "timeseries",
       "title": "Host CPU utilisation",
-      "description": "sysinfo reads /proc/stat, which Docker does not namespace, so this is the HOST — measured, not assumed: a container capped at 512m still reported the host's 33 GB.",
-      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 7 },
-      "datasource": { "type": "prometheus", "uid": "zombie-crab-prom" },
-      "targets": [{ "expr": "system_cpu_utilization", "legendFormat": "cpu", "refId": "A" }],
+      "description": "sysinfo reads /proc/stat, which Docker does not namespace, so this is the HOST \u2014 measured, not assumed: a container capped at 512m still reported the host's 33 GB.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "targets": [
+        {
+          "expr": "system_cpu_utilization",
+          "legendFormat": "cpu",
+          "refId": "A"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
           "min": 0,
           "max": 1,
-          "custom": { "fillOpacity": 15, "showPoints": "never" }
+          "custom": {
+            "fillOpacity": 15,
+            "showPoints": "never"
+          }
         },
         "overrides": []
       }
@@ -87,9 +178,17 @@
     {
       "type": "timeseries",
       "title": "Host memory by state",
-      "description": "used / free / available. 'available' is the one that matters for headroom — 'free' excludes reclaimable cache and reads alarmingly low on a healthy machine.",
-      "gridPos": { "h": 7, "w": 10, "x": 8, "y": 7 },
-      "datasource": { "type": "prometheus", "uid": "zombie-crab-prom" },
+      "description": "used / free / available. 'available' is the one that matters for headroom \u2014 'free' excludes reclaimable cache and reads alarmingly low on a healthy machine.",
+      "gridPos": {
+        "h": 7,
+        "w": 10,
+        "x": 8,
+        "y": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
       "targets": [
         {
           "expr": "system_memory_usage_bytes",
@@ -98,17 +197,42 @@
         }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "bytes", "custom": { "fillOpacity": 10, "showPoints": "never" } },
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
         "overrides": []
       }
     },
     {
       "type": "gauge",
       "title": "Host memory used",
-      "gridPos": { "h": 7, "w": 3, "x": 18, "y": 7 },
-      "datasource": { "type": "prometheus", "uid": "zombie-crab-prom" },
-      "targets": [{ "expr": "system_memory_utilization", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": {
+        "h": 7,
+        "w": 3,
+        "x": 18,
+        "y": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "targets": [
+        {
+          "expr": "system_memory_utilization",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
@@ -117,9 +241,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.8 },
-              { "color": "red", "value": 0.92 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.8
+              },
+              {
+                "color": "red",
+                "value": 0.92
+              }
             ]
           }
         },
@@ -130,10 +263,29 @@
       "type": "gauge",
       "title": "Swap used",
       "description": "Swap climbing on a host that runs agent containers is the earliest warning that the box is oversubscribed.",
-      "gridPos": { "h": 7, "w": 3, "x": 21, "y": 7 },
-      "datasource": { "type": "prometheus", "uid": "zombie-crab-prom" },
-      "targets": [{ "expr": "system_paging_utilization", "refId": "A" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": {
+        "h": 7,
+        "w": 3,
+        "x": 21,
+        "y": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "targets": [
+        {
+          "expr": "system_paging_utilization",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
@@ -142,9 +294,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.2 },
-              { "color": "red", "value": 0.5 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.2
+              },
+              {
+                "color": "red",
+                "value": 0.5
+              }
             ]
           }
         },
@@ -153,42 +314,95 @@
     },
     {
       "type": "row",
-      "title": "Watcher (self) — is the thing measuring you healthy?",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }
+      "title": "Watcher (self) \u2014 is the thing measuring you healthy?",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      }
     },
     {
       "type": "timeseries",
       "title": "Watcher memory",
       "description": "Resident and virtual. A watcher whose own footprint grows without bound is a watcher about to become the incident.",
-      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 15 },
-      "datasource": { "type": "prometheus", "uid": "zombie-crab-prom" },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
       "targets": [
-        { "expr": "process_memory_usage_bytes", "legendFormat": "resident", "refId": "A" },
-        { "expr": "process_memory_virtual_bytes", "legendFormat": "virtual", "refId": "B" }
+        {
+          "expr": "process_memory_usage_bytes",
+          "legendFormat": "resident",
+          "refId": "A"
+        },
+        {
+          "expr": "process_memory_virtual_bytes",
+          "legendFormat": "virtual",
+          "refId": "B"
+        }
       ],
       "fieldConfig": {
-        "defaults": { "unit": "bytes", "custom": { "fillOpacity": 8, "showPoints": "never" } },
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
         "overrides": []
       }
     },
     {
       "type": "timeseries",
       "title": "Watcher CPU",
-      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 15 },
-      "datasource": { "type": "prometheus", "uid": "zombie-crab-prom" },
-      "targets": [{ "expr": "process_cpu_utilization", "legendFormat": "{{process_executable_name}}", "refId": "A" }],
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "zombie-crab-prom"
+      },
+      "targets": [
+        {
+          "expr": "process_cpu_utilization",
+          "legendFormat": "{{process_executable_name}}",
+          "refId": "A"
+        }
+      ],
       "fieldConfig": {
-        "defaults": { "unit": "percentunit", "min": 0, "custom": { "fillOpacity": 8, "showPoints": "never" } },
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "custom": {
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
         "overrides": []
       }
     },
     {
       "type": "text",
       "title": "What is NOT here, and why",
-      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 21 },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
       "options": {
         "mode": "markdown",
-        "content": "**Four layers are missing from this dashboard, and none of them is an oversight.**\n\n- **picoclaw (per-tenant agent containers)** — the layer this project exists to run. Requires dynamic instance discovery, which is the next feature. Today the watcher's sources are all single-valued and resolved once at boot.\n- **Per-container CPU/memory** for the gateway, proxy and webapp — needs a cgroup source; still an open question, because the watcher deliberately holds no Docker socket.\n- **Session / AI activity** (messages by role, tool calls) — **blocked**: `data/tenants` is `root:root 0700`, so the non-root watcher cannot traverse it. This also breaks the on-disk fallback the next feature's design relied on.\n- **Token cost** — **not obtainable in this stack at all.** picoclaw does not write token counts to disk, and the only path that ever existed was scraping an endpoint this stack does not run. It is not coming later.\n\nWhat *is* here is everything a metrics-only pipeline can honestly show today."
+        "content": "**Three layers are still missing from this dashboard, and none is an oversight.**\n\n- **picoclaw (per-tenant agent containers)** \u2014 the layer this project exists to run. `SessionCollector` is compiled and tested but switched **off** (`session_dir = \"\"`): it takes *one* boot-resolved directory while the proxy creates a workspace per `(tenant, subscription, agent, user)` at runtime. Workspace discovery is in progress.\n- **Per-container CPU/memory** \u2014 needs a cgroup source; still open, because the watcher deliberately holds no Docker socket.\n- **Token cost** \u2014 **not obtainable in this stack at all.** picoclaw writes no token counts to disk and the only path that ever existed was scraping an endpoint this stack does not run. It is not coming later.\n\n**Now fixed:** Gateway, Proxy and Webapp are three distinct layers here. They used to share one label \u2014 and in fact carried no layer at all."
       }
     }
   ]
