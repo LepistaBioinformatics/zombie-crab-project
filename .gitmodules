@@ -4,3 +4,6 @@
 [submodule "crab/crab-exoskeleton-webapp"]
 	path = crab/crab-exoskeleton-webapp
 	url = https://github.com/LepistaBioinformatics/crab-exoskeleton-webapp.git
+[submodule "crab/harness-sphere"]
+	path = crab/harness-sphere
+	url = https://github.com/LepistaBioinformatics/harness-sphere.git

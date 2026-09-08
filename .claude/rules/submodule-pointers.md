@@ -4,8 +4,14 @@ description: When a submodule pointer may be committed, and the check that enfor
 
 # Submodule pointers
 
-`crab/crab-shell-proxy` and `crab/crab-exoskeleton-webapp` are separate repositories
-with their own PRs.
+`crab/crab-shell-proxy`, `crab/crab-exoskeleton-webapp` and `crab/harness-sphere` are
+separate repositories with their own PRs.
+
+**A change can have TWO independent children gating one parent PR**, which this file
+originally did not anticipate. `harness-sphere-integration` was the first: it needed a PR
+in `harness-sphere` *and* one in `crab-shell-proxy`, neither blocking the other, both
+merged before this repository's PR could pass. Siblings have no ordering between them —
+only children and parents do. Merge them in whatever order review finishes, then bump.
 
 **A pointer may only name a commit reachable from that submodule's default branch.**
 Reachable, not equal: pointing at an older commit on `main` is ordinary and allowed.
