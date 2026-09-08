@@ -119,6 +119,29 @@ Telegram / MS Teams channels.
 
 ---
 
+## M6 (SPEC READY): Agent learning — positioning instances, not listing metrics
+
+**Goal:** a second dashboard that answers "where does each instance sit?" rather than "is
+the stack healthy?". The existing `zombie-crab — stack` is organised by layer, which is
+right for health and wrong for this; it stays as the general view.
+
+**The blocker was never the dashboard.** None of the data existed: harness-sphere emits
+messages, sessions and tool calls, so a "learning" dashboard built on today's metrics could
+only show how much an agent *talked*. Three new collectors come first — skills, memory and
+the knowledge graph — all reachable through the read-only `/data` mount that already exists.
+
+Measured on the live workspace before speccing, and each number is a trap a plausible
+implementation falls into: skills are **9 `SKILL.md` files across 10 directories**; memory
+is **1 non-empty file out of 4** (three are zero-byte provisioning scaffolds, a 4×
+overcount); the graph is **20 records where `wc -l` says 19**. The entity `observations`
+array is the real learning volume and is not derivable from any file count.
+
+Framing chosen by the owner: **capability × consumption** — skills against tool calls, with
+graph size as point weight. Skill names may be labels (agent-authored, ~10 per instance);
+entity names never can be (member content, unbounded cardinality).
+
+See `.specs/features/agent-learning-dashboard/`.
+
 ## M5 (IN PROGRESS): Observability — harness-sphere
 
 **Goal:** the stack stops being unobservable. Today it emits **nothing** — a strict grep
