@@ -119,6 +119,51 @@ Telegram / MS Teams channels.
 
 ---
 
+## M5 (planned): Observability — harness-sphere
+
+**Goal:** the stack stops being unobservable. Today it emits **nothing** — a strict grep
+for `prometheus|opentelemetry|otel` across this repo and both submodules returns zero
+hits, and the entire observability surface is three health endpoints plus unstructured
+printf logs with no levels and no request ids.
+
+`harness-sphere` (https://github.com/LepistaBioinformatics/harness-sphere) is adopted as a
+third submodule and **repurposed to work exclusively for this stack** (AD-022). Two
+features, deliberately sequential — the first measures what the second is designed
+against.
+
+### Features
+
+**harness-sphere-integration (SPEC READY)** — the tool lands as a submodule at
+`crab/harness-sphere` and runs as one compose service on `zombie_net`, exporting OTLP,
+**with no Rust changed**. Host and self come free; the gateway, proxy and webapp are
+covered by TCP probes. Two things make it more than a drop-in: it runs as a *container*
+rather than the host binary its own design principles call for (picoclaw publishes no host
+ports, so a host binary is structurally blind to the agent layer), and `crab-shell-proxy`
+gains one read-only endpoint, `GET /v1/instances`, because the container name hashes the
+`(tenant, subscription, user)` tuple one-way and the proxy is the only holder of the
+preimage — cheaper than giving the watcher a **second** Docker socket in a stack whose
+most privileged service already has one. Its verification section is the point of the
+feature: four questions F2's design depends on, answered by measurement. See
+`.specs/features/harness-sphere-integration/`.
+
+**harness-sphere-zombie-crab-scope (SPEC READY, blocked on the above)** — the reduction
+and the dynamic half. `Layer` collapses from seven to the stack's six real ones — host,
+self, mycelium-gateway, proxy, exoskeleton, picoclaw — with `Container` demoted from a
+peer layer to a *dimension* (everything here runs in a container; a picoclaw container's
+memory is a Harness signal). `prometheus.rs` (770 LOC) and the `ingest` crate (574 LOC)
+are deleted: nothing here exposes Prometheus text and nothing pushes OTLP. **Token cost
+leaves with them and does not come back** — picoclaw does not write tokens to disk, and
+instrumenting it is a non-goal. The dynamic half is the real work: harness-sphere's
+sources are single-valued and boot-resolved (`&'static str` names, `probe()` once at
+startup, a supervisor whose source set never changes), which is the exact opposite of a
+proxy that creates and recreates a container per user on demand. Discovery reconciles two
+surfaces that are allowed to disagree — the proxy's inventory (live containers) and the
+on-disk tenant tree (provisioned workspaces, whose *path* carries the tuple, so session
+metrics survive the proxy being down). See
+`.specs/features/harness-sphere-zombie-crab-scope/`.
+
+---
+
 ## Future Considerations
 
 - Production hardening (TLS termination, secret rotation, Docker-socket privilege — see AD-009 R2)
