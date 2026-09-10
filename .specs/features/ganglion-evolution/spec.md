@@ -1,7 +1,7 @@
 # ganglion-evolution — Specification (authoritative)
 
-**Status:** SPECIFIED, NOT STARTED. Zero lines of code. See "Why this one is
-not built" below before picking it up.
+**Status:** Both parts IMPLEMENTED. `apply` cannot be switched on until OQ-3 is
+answered — see "Implementation status" at the end.
 **Date:** 2026-09-10.
 **Spans:** `crab-ganglion-harness`, `crab-shell-proxy`, `crab-exoskeleton-webapp`.
 **Depends on:** `ganglion-model-registry` FR-1 (the config file).
@@ -63,10 +63,22 @@ add capability, never overwrite identity.
 
 **R4 — reload per turn**, the same cadence `AGENT.md` is already re-read at.
 
-**R5 — OPEN, and put to the owner rather than assumed:** whether the proxy's
-admin-managed shared skills should mount into ganglion containers at all.
-Evolution-authored skills live inside the workspace bind and persist without any
-proxy change; admin-authored ones would need a new bind. See OQ-1.
+**R5 — ANSWERED YES (owner, 2026-09-10): admin-managed shared skills mount into
+ganglion containers.** So the loader has two sources, not one, and they are not
+equivalent:
+
+- `<workspace>/skills/` — writable, where evolution's own drafts land.
+- the admin's shared skills root — **read-only**, mounted by the proxy the way
+  the persona cascade already is.
+
+**R5.1 — a name collision resolves in favour of the ADMIN's copy**, and the
+shadowed one is logged. The other way round would let an agent overwrite an
+administrator's instruction by writing a file with the same name, which is a
+privilege escalation dressed as a merge rule.
+
+**R5.2** — evolution may only ever write into the workspace copy. The shared root
+is mounted read-only, so this is enforced by the kernel rather than by a check,
+which is the point of mounting it that way.
 
 ## Part 2 — evolution
 
@@ -138,48 +150,99 @@ an operator story this feature does not have.
 `pattern-records.jsonl` clustering by LLM in v1 uses a deterministic clusterer;
 picoclaw's `LLMDraftGenerator` prompt-based clustering is the second cut.
 
+## Decisions
+
+### D-1 — Admin-managed shared skills mount into ganglion containers (owner, 2026-09-10)
+
+Answers the former OQ-1. `ganglionBinds` was deliberately narrow — workspace,
+credential key, persona — and this widens it by one read-only mount. Read-only is
+load-bearing rather than tidy: it is what makes R5.2 a kernel guarantee instead
+of a check somebody can forget.
+
+### D-2 — `apply` requires approval (owner, 2026-09-10)
+
+Answers the former OQ-2. Evolution becomes the **second consumer of the
+`Approver` port**, which is one of the two capabilities that justified building
+this harness at all (spec §Problem, A1).
+
+**And it carries a dependency the question did not mention.** The harness side of
+approval is done: the port, the loop suspension, the heartbeat, the fail-closed
+timeout, and a `proxy.Client` adapter whose wire is fully defined —
+`POST {session_key, session_id, tool_call_id, tool, arguments}` answering
+`{allowed, reason, by}`. **The proxy endpoint it calls does not exist.** With no
+`GANGLION_APPROVAL_ENDPOINT` configured, the loop installs an allow-all approver,
+so "apply requires approval" would be a sentence that changes nothing.
+
+So D-2 is implemented as **R10.1: selecting `apply` with no approval endpoint
+configured is a BOOT FAILURE naming the reason.** Not a downgrade to `draft`,
+which would leave an operator believing apply was on. The consequence is stated
+plainly: until the proxy grows the endpoint, `apply` cannot be switched on at
+all, and `observe` and `draft` are what run.
+
 ## Open questions
 
-- **OQ-1 — R5.** Do admin-managed shared skills apply to ganglion agents? This is
-  a product decision, not a technical one: `ganglion.go` deliberately mounts a
-  narrow bind set, and adding a skills root widens it. **To the owner.**
-- **OQ-2** — Should `apply` require an approval hop through the `Approver` port
-  that already exists for tool gating? It would make evolution the second consumer
-  of the mechanism the harness was built for, at the cost of a proxy endpoint that
-  is itself still unbuilt (harness spec OQ-3).
+- **OQ-3 (inherited from the harness spec) — WHO approves, and how are they
+  asked?** The wire is settled; the policy is not. A human in the webapp, an
+  admin-set scope policy of the kind `ScopePolicy` already carries for personal
+  models, or an auto-approve with an audit trail are three different products.
+  This is the one thing still blocking a usable `apply`, and it is the owner's.
 
 ---
 
-## Why this one is not built (2026-09-10)
+## Why this waited a round (2026-09-10)
 
-The other three features of this round shipped; this one did not, and the reason
-is worth writing down rather than leaving as an empty directory.
+Kept rather than deleted, because the reasoning is what the two decisions above
+were answers to.
 
 **It is two features, and the first one is invisible from the outside.** The
 skills loader is the prerequisite established above — `grep -rn skill
---include='*.go'` in the harness still returns nothing — and without it `apply`
-mode writes `SKILL.md` files nothing reads. Shipping only the evolution half
-would have been the exact failure the harness spec's deferred table exists to
-prevent: a setting that stores something and changes nothing.
+--include='*.go'` in the harness returned nothing — and without it `apply` mode
+writes `SKILL.md` files nothing reads. Shipping only the evolution half would
+have been the exact failure the harness spec's deferred table exists to prevent:
+a setting that stores something and changes nothing.
 
 **Its size is measured, not guessed.** picoclaw's `pkg/evolution` is 34 files and
 roughly 12 500 lines including tests. A faithful port of the ladder, the
 clustering, the draft review and the rollback is the largest single piece of the
-four, and it is the only one with no user-visible surface until the last step.
+round, and it is the only one with no user-visible surface until the last step.
 
-**Two of its decisions are still open**, and both are the owner's rather than an
-implementer's:
+**Build order, unchanged by the answers:** Part 1 alone first — skills that a
+member or an admin wrote, loaded into the prompt, with the budget and the
+precedence in R2 and R3. Only then Part 2, starting at `observe`, which writes
+records and changes nothing. `draft` and its review panel (R12) come before
+`apply` ever ships — and after D-2, `apply` additionally cannot ship before
+OQ-3 is answered.
 
-- **OQ-1** — whether admin-managed shared skills mount into ganglion containers
-  at all. `ganglionBinds` is deliberately narrow; adding a skills root widens it,
-  and evolution-authored skills need no such widening. This changes what Part 1
-  is for.
-- **OQ-2** — whether `apply` should go through the `Approver` port, which would
-  make evolution the second consumer of the mechanism the harness was built for,
-  at the cost of a proxy endpoint that is itself still unbuilt.
 
-**Build order when it is picked up:** Part 1 alone first, shipped and used —
-skills that a member or an admin wrote, loaded into the prompt, with the budget
-and the precedence in R2 and R3. Only then Part 2, starting at `observe`, which
-writes records and changes nothing. `draft` and its review panel (R12) come
-before `apply` ever ships.
+---
+
+## Implementation status (2026-09-10)
+
+| Requirement | State |
+|---|---|
+| R1, R2, R2.1, R3, R4 | **done** — `internal/adapter/skills`, `domain.SystemPrompt` |
+| R5, R5.1, R5.2 | **done** — the proxy mounts the admin root read-only; the admin's copy wins a collision |
+| R6, R7, R8 | **done** — picoclaw's config block, records fsync'd, clustering by tool signature |
+| R9 | **done** — name and frontmatter validation, the credential scan, backup, atomic write, post-write re-validation, rollback |
+| R10, R10.1 | **done** — `apply` without an approver is a boot failure naming the variable |
+| R11 | **done** — `GANGLION_LIFECYCLE_MODE`, refused at load |
+| R12 | **NOT built** — the drafts are on disk and `Engine.Drafts()` reads them, but no panel shows them. `draft` mode is therefore a review workflow whose review happens over `cat` |
+| AC-1..AC-6 | **asserted by test**, with mutation checks on both approval gates |
+
+**One decision made during implementation that the spec did not anticipate.**
+`internal/domain/arch_test.go` caught `evolution` importing the `skills` adapter
+on the first build — AR-4 forbids one adapter importing another. The `SKILL.md`
+FORMAT is shared vocabulary rather than either adapter's property, so it moved to
+`internal/skillfile`. Both adapters import it; neither imports the other.
+
+**What blocks a usable `apply`.** OQ-3, and it is the owner's: *who* approves.
+The wire is settled and the harness end is built, but the proxy endpoint does not
+exist, so `GANGLION_APPROVAL_ENDPOINT` is unset in every deployment and `apply`
+refuses to boot. That refusal is correct — it is what stops the mode from being
+decoration — and it means the shipped, usable rungs today are `observe` and
+`draft`.
+
+**Not verified against a real deployment.** No agent has run with evolution
+enabled. The clustering, the review and the rollback are exercised against
+fixtures and a scripted provider; nothing here has yet watched a real agent
+produce a real pattern.
