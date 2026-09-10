@@ -11,6 +11,16 @@ receivers:
     protocols:
       grpc:
         endpoint: 0.0.0.0:4317
+      # HTTP, for crab-ganglion-harness.
+      #
+      # It speaks OTLP/HTTP with JSON encoding, which the OTLP spec defines and
+      # this receiver accepts, because that is implementable with the Go
+      # standard library alone. The harness has ZERO third-party dependencies
+      # and the gRPC SDK would be its first -- a large tree, in an image pulled
+      # per user, to emit a token count. The receiver already listens here; the
+      # protocol was simply not declared.
+      http:
+        endpoint: 0.0.0.0:4318
 
 processors:
   batch:

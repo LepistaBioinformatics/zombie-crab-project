@@ -171,6 +171,20 @@ services:
       # Set it back to docker.io/sipeed/picoclaw:latest to run stock picoclaw
       # (projects stop working; nothing else changes).
       CRAB_PICOCLAW_IMAGE: ${CRAB_PICOCLAW_IMAGE:-zombie-crab/picoclaw:0.3.1-glob}
+      # Imagem do segundo harness (crab-ganglion-harness), com o MESMO padrão de
+      # fallback que CRAB_PICOCLAW_IMAGE acima: default para a build local.
+      #
+      # O `:-` substitui quando a variável está ausente OU VAZIA, e isso importa
+      # aqui: o Compose dá precedência ao ambiente do shell sobre o .env, e uma
+      # variável exportada vazia conta como definida. Sem o default, um
+      # `export CRAB_GANGLION_IMAGE=` esquecido num terminal vence um .env
+      # correto e o agente se desabilita sem causa visível de dentro do container.
+      #
+      # Isto vale só para o compose de DESENVOLVIMENTO. O deploy do dokploy
+      # continua sem default, e o proxy também: lá a referência tem que ser uma
+      # decisão explícita e imutável, porque uma tag móvel já deixou aquele host
+      # três semanas com o binário errado.
+      CRAB_GANGLION_IMAGE: ${CRAB_GANGLION_IMAGE:-zombie-crab/crab-ganglion:dev}
       # Shared secret authenticating POST /v1/accounts (the mycelium
       # subscriptionAccount.created webhook). Register the webhook in mycelium
       # with an Authorization: Bearer <this> header -- see README/STATE.
@@ -208,6 +222,16 @@ services:
       # model.apiKeyEnv). Real values live only in .env (gitignored) or your
       # secrets manager -- never in config.yaml or the image.
       PICOCLAW_ALPHA_API_KEY: ${PICOCLAW_ALPHA_API_KEY}
+      MYC_GANGLION_TOKEN: ${MYC_GANGLION_TOKEN:-}
+      # FR-10. O proxy repassa para o container do harness; vazio desliga a
+      # exportacao sem logar erro por turno.
+      GANGLION_OTLP_ENDPOINT: ${GANGLION_OTLP_ENDPOINT:-http://otel-collector:4318}
+      # Cai na chave do alpha por padrão. O agente gamma existe para comparar os
+      # dois harnesses com o MESMO provider e o MESMO modelo, então usar a mesma
+      # chave é o que isola o harness como a única variável -- e evita que um
+      # `export GANGLION_API_KEY=` esquecido desabilite o agente sem causa
+      # visível (o `:-` também substitui quando a variável está vazia).
+      GANGLION_API_KEY: ${GANGLION_API_KEY:-${PICOCLAW_ALPHA_API_KEY}}
       PICOCLAW_BETA_API_KEY: ${PICOCLAW_BETA_API_KEY}
     # TEMPORARY (direct-to-proxy testing of tenant-scoped-workspaces): the proxy
     # normally publishes no host port (mycelium-gateway is the only entry). This
@@ -262,6 +286,8 @@ services:
       # only in .env (gitignored), never in the committed TOML.
       MYC_PICOCLAW_ALPHA_TOKEN: ${MYC_PICOCLAW_ALPHA_TOKEN}
       MYC_PICOCLAW_BETA_TOKEN: ${MYC_PICOCLAW_BETA_TOKEN}
+      # TESTE LOCAL: o mesmo bearer que o agente gamma do proxy valida.
+      MYC_GANGLION_TOKEN: ${MYC_GANGLION_TOKEN:-}
       MYC_STANDALONE_BOOTSTRAP_SECRET: ${MYC_STANDALONE_BOOTSTRAP_SECRET}
     volumes:
       - mycelium-data:/data

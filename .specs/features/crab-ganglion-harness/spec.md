@@ -1,6 +1,7 @@
 # crab-ganglion-harness — Spec
 
-**Status:** Specified. Not implemented.
+**Status:** Specified; the proxy side and the harness core are implemented.
+See "Implementation status" below.
 **Date:** 2026-09-09.
 **Spans:** a new module `crab/crab-ganglion-harness` + integration in `crab-shell-proxy`.
 **Feasibility record:** `zombie-crab-project-mkt/.specs/features/own-go-harness/investigation.md`
@@ -275,6 +276,28 @@ before, not after.
   unrun, and it should be run regardless of this spec.
 
 ---
+
+## Implementation status (2026-09-10)
+
+`crab-ganglion-harness` at `2fd0348`; `crab-shell-proxy` on `feat/ganglion-harness`.
+
+| Requirement | State |
+|---|---|
+| FR-1, FR-2, FR-4, FR-5, FR-6, FR-9, FR-12 | **done** in the harness, with tests |
+| FR-7 approval | **harness side done** (port, loop suspension, heartbeat, fail-closed timeout). The proxy endpoint it calls is **not built** — OQ-3 is still open, and v1 ships an empty gate list so the path runs allow-all |
+| FR-8 token accounting | **accumulated and delivered to the port**; the OTLP adapter is a no-op, so nothing leaves the process yet |
+| FR-10 OTLP | **not done** |
+| FR-3 byte-compatibility | plausible, **unverified** — the golden test of OQ-2 does not exist |
+| FR-11 persona | `GANGLION_SYSTEM_FILE` points at the cascade's `AGENT.md`; read per turn |
+| FR-13..FR-17 | **done** — harness kind, second `Turner`, container profile, provisioning, both session headers |
+| FR-18 `DisabledAgents` | **done** — ganglion only; picoclaw deliberately exempt |
+| FR-19 immutable tag | **enforced by absence of a default**: a ganglion agent with no `ganglionImage` fails the load |
+| DF-1..DF-6 | projects and personal models answer **501**; cron and the memory graph are declared in the gate but their handlers are **not yet wired to it** |
+| AC-1, AC-3 | plausible — the binary is 9.6 MB static, no supervisor. **Not measured against a real cold start** |
+| AC-2, AC-4 | not measured; EX-1..EX-4 not started |
+
+**The harness has never spoken to a real provider.** Every provider test is against
+`httptest` with a recorded stream.
 
 ## Traceability
 

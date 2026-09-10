@@ -14,6 +14,10 @@ only apply inside it; this file holds what applies across the stack.
 When a pointer may be committed, and the check that enforces it, are in
 `.claude/rules/submodule-pointers.md`.
 
+**Everything here and below is written in English** — code comments, commits, PRs,
+issues, specs, docs. Only the parent `zombie-crab-project-mkt` writes Portuguese.
+See `.claude/rules/language.md`.
+
 ## harness-sphere: two rules that are easy to violate by accident
 
 **It never gets a Docker socket.** `crab-shell-proxy` already mounts one and runs as
