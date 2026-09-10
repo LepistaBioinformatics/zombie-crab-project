@@ -224,6 +224,36 @@ gets a requirement ID so the gap is tracked.
 | DF-5 | Scheduled tasks / cron sessions | proxy-side; no harness surface in v1 |
 | DF-6 | Built-in `web_search` / `web_fetch` | first target is tool-light; adding a tool is one `Tool` adapter (AR-3) |
 
+### NOT a gap: persona
+
+Reported in use — *"quando entro na area de admin do gamma não vejo a aba de config, só no
+picoclaw"*. Two of the three withheld admin sections were withheld correctly; the third
+was a regression this feature introduced and nobody noticed.
+
+| Section | Withheld from a ganglion agent? | Why |
+|---|---|---|
+| `config` | **correctly** | `config.json` is picoclaw's file. `provisionGanglion` writes no config at all — the harness reads its whole configuration from the environment — so a key edited here would mean nothing to it. |
+| `model` | **correctly** | the registry materializes into `.security.yml` and `config.json`, and the proxy REFUSES an assignment for any other harness (`rejectNonPicoclawAgent`), naming the reason. A form here would post a write the proxy 400s. |
+| `persona` | **wrongly** | fixed |
+
+The webapp's `PICOCLAW_ONLY` list justified hiding persona with *"the identity files are
+picoclaw's workspace layout, delivered on the picoclaw create path"*. That was true when
+it was written and stopped being true when `createGanglion` grew `personaBindStrings`:
+a ganglion container mounts `AGENT.md`, `SOUL.md` and `HEARTBEAT.md` read-only over its
+workspace, and `GANGLION_SYSTEM_FILE` points the harness at `AGENT.md`, re-read every
+turn. The proxy's persona routes were never harness-gated either — `picoclawOnly` lists
+projects, personal models and the memory graph, never persona.
+
+So the **one screen that edits a ganglion agent's identity was unreachable**, for agents
+whose identity this feature had wired the cascade up to deliver. The gate was a webapp
+list that nothing kept in agreement with the create path it described.
+
+Removing persona from `PICOCLAW_ONLY` surfaced a second dependency: the legacy all-agents
+entry had been losing persona for free through that list, and its reason is different —
+the proxy refuses an agent-less persona write, which is about the ADDRESS, not the
+harness. It is now excluded where that argument actually applies. Caught by
+`agent-scope.test.ts`, not by review.
+
 **A deferred feature must answer `501` with the harness named.** Storing a setting that has no
 effect is the failure mode this table exists to prevent.
 
