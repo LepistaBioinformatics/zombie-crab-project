@@ -7,3 +7,6 @@
 [submodule "crab/harness-sphere"]
 	path = crab/harness-sphere
 	url = https://github.com/LepistaBioinformatics/harness-sphere.git
+[submodule "crab/crab-ganglion-harness"]
+	path = crab/crab-ganglion-harness
+	url = https://github.com/LepistaBioinformatics/crab-ganglion-harness.git
