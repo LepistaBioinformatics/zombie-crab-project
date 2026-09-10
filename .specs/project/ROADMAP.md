@@ -263,3 +263,36 @@ metrics survive the proxy being down). See
   thing it constrains now:** that feature's Group C frame log is keyed per conversation,
   which is only safe while the webapp queue holds — see its OQ-4. See
   `.specs/features/steering-messages/investigation.md`.
+
+- **ganglion-reasoning-depth** (IMPLEMENTED 2026-09-10) — depth the agent chooses,
+  per turn. picoclaw's `model_list[].thinking_level` adopted verbatim as the static
+  floor (its six values; a seventh would break the model editor that already renders
+  the field), plus `set_reasoning_depth`, which is sticky for the rest of the turn
+  and dies with it. Declaring a level IS the capability declaration — there is no
+  provider table, because this harness speaks one wire to every endpoint — and a
+  request whose depth field an endpoint rejects is retried once without it rather
+  than ending the turn. `crab-ganglion-harness#5`, `crab-shell-proxy#43`,
+  `crab-exoskeleton-webapp#58`. See `.specs/features/ganglion-reasoning-depth/`.
+- **ganglion-subagents** (SPEC READY) — one tool, `subagents{mode, tasks[]}`,
+  taking a batch and fanning out inside a single tool call so the turn loop stays
+  sequential and the call↔result pairing `compact` enforces stays intact.
+  Synchronous by design: picoclaw's async path returns its result as a *different
+  turn* and its status tool polls a map nothing writes. `research{question, mode}`
+  is built on the same dispatcher rather than being a second mechanism — deep
+  research is a fan-out plus a synthesis the PARENT performs, not a wire
+  parameter. Bounds are stated as arithmetic (108 model calls at the defaults) and
+  enforced at depth 0, which is where picoclaw's are not. See
+  `.specs/features/ganglion-subagents/`.
+- **ganglion-projects** (SPEC READY, three slices) — closes DF-3, DF-5, DF-1 and
+  DF-2, which are four `501`s in `harness_gate.go` today. **A** gives a ganglion
+  turn its own files, transcripts, window and `MEMORY.md` under
+  `workspace/projects/<id>/` — a subdirectory of the bind it already has, so no
+  new mount and **no container recreate**, at the stated cost that isolation
+  between projects is a harness convention and not a kernel boundary. **B** puts
+  the scheduler in the PROXY, because the ganglion runs `scale-to-zero` and a
+  clock inside it would sleep through its own work — which also makes
+  per-project schedules possible for the first time, something picoclaw's
+  one-store-per-container cron structurally cannot do (defect B1). **C** gives the
+  harness a hand-written MCP client so it reaches the graph the proxy already
+  hosts. Two open questions block B and C respectively. See
+  `.specs/features/ganglion-projects/` and STATE.md AD-026.
