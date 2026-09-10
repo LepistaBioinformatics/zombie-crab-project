@@ -1,8 +1,16 @@
 # State
 
 **Last Updated:** 2026-09-10T00:00:00-03:00
-**Current Work:** **Three of four harness-parity features implemented; the fourth
-is specified and deliberately not started.** `ganglion-model-registry` (the model
+**Current Work:** **All four harness-parity features implemented.** The fourth,
+`ganglion-evolution`, was unblocked the same day by the owner answering its two
+open questions — yes, admin-managed shared skills mount into ganglion
+containers; yes, `apply` requires approval. The second answer had a consequence
+the question did not mention and AD-025 records it: the harness end of approval
+was built, the PROXY ENDPOINT IS NOT, so `apply` refuses to boot and the usable
+rungs today are `observe` and `draft`.
+
+**Previously in this session:** three of four implemented, the fourth specified
+and deliberately not started. `ganglion-model-registry` (the model
 inventory now governs ganglion agents, end to end across all three repositories),
 `web-search-providers` (`web_search` + `web_fetch` in the harness, four
 providers) and `multimodal-with-fallback` (images in through `load_image` or the
@@ -78,6 +86,43 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-025: evolution ships as a ladder whose top rung cannot yet be climbed (2026-09-10)
+
+The owner answered both open questions of `ganglion-evolution` and both answers
+changed something real.
+
+**D-1 — admin-managed shared skills mount into ganglion containers.**
+`ganglionBinds` was deliberately narrow and this widens it by one read-only
+mount. Two consequences worth keeping: a name present in both the admin's root
+and the workspace resolves to the ADMIN's copy — the other way round would let an
+agent overwrite an instruction it was given, by writing a file with the same name
+— and the mount lands INSIDE the workspace, unlike every other proxy-owned bind,
+because the skills index names paths the agent must be able to open and Landlock
+grants it only the workspace. Read-only at the mount is a kernel guarantee
+Landlock cannot widen, which is what makes "evolution writes only into the
+workspace copy" enforced rather than intended.
+
+**D-2 — `apply` requires approval, and it could easily have been decoration.**
+The loop's default approver allows everything. With no
+`GANGLION_APPROVAL_ENDPOINT` configured, "apply requires approval" would have
+been a sentence that changed nothing. So `apply` with no approver is a BOOT
+FAILURE naming the variable and the mode to use instead — not a downgrade to
+`draft`, which would leave an operator believing apply was on.
+
+**And that leaves the feature honestly incomplete.** The harness end of approval
+is built; the proxy endpoint is not, and what it should ask is OQ-3, still the
+owner's: a human in the webapp, an admin-set scope policy, or an auto-approve
+with an audit trail are three different products. Until it exists, `apply`
+cannot be enabled anywhere, and `observe` and `draft` are what run. That is the
+right shape for a feature whose top rung writes files the agent will then obey.
+
+**One thing the architecture test caught that review would not have.**
+`evolution` imported the `skills` adapter on the first build, and AR-4 forbids
+one adapter importing another. The `SKILL.md` FORMAT is shared vocabulary rather
+than either adapter's property, so it moved to `internal/skillfile`. The rule
+exists for exactly this, and it fired on the first compile rather than in a
+review three days later.
 
 ### AD-024: the model inventory governs ganglion; evolution is deferred with its reason (2026-09-10)
 
