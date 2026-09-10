@@ -1,7 +1,24 @@
 # State
 
-**Last Updated:** 2026-09-07T00:00:00-03:00
-**Current Work:** **M5 observability planned, nothing implemented.** Two specs written for
+**Last Updated:** 2026-09-10T00:00:00-03:00
+**Current Work:** **Three of four harness-parity features implemented; the fourth
+is specified and deliberately not started.** `ganglion-model-registry` (the model
+inventory now governs ganglion agents, end to end across all three repositories),
+`web-search-providers` (`web_search` + `web_fetch` in the harness, four
+providers) and `multimodal-with-fallback` (images in through `load_image` or the
+ingress, images out through `generate_image`, each with a chain and a defined
+terminal behaviour). `ganglion-evolution` is specified with its prerequisite and
+its two open questions stated, and has zero lines of code — see AD-024.
+
+**The finding that shaped all of it:** picoclaw's `enc://` and this harness's are
+the SAME construction — `salt(16)‖nonce(12)‖ciphertext`, AES-256-GCM,
+`ikm = HMAC-SHA256(SHA256(key file), passphrase)`, `HKDF-SHA256` to 32 bytes.
+They differ in one string, the HKDF domain (`picoclaw-credential-v1` against
+`ganglion-credential-v1`). The harness now accepts picoclaw's domain on decrypt
+and still seals in its own, which is what makes one credential format across the
+stack real rather than aspirational.
+
+**Previously:** **M5 observability planned, nothing implemented.** Two specs written for
 adopting `harness-sphere` as a third submodule and repurposing it to work exclusively for
 this stack: `harness-sphere-integration` (land it, no Rust changed) and
 `harness-sphere-zombie-crab-scope` (cut the scope, teach it dynamic instances). Four
@@ -61,6 +78,64 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-024: the model inventory governs ganglion; evolution is deferred with its reason (2026-09-10)
+
+**Four features were asked for. Three shipped and one did not, on purpose.**
+
+**What made the first three possible was not new machinery, it was removing a
+gate whose premise had expired.** `rejectNonPicoclawAgent` said a non-picoclaw
+harness "reads its model from the proxy configuration", and it was right: a
+ganglion container took its model from one static `config.yaml` field as three
+environment variables. The fix was to give the harness a sink — a picoclaw-shaped
+`config.json` written by the proxy from the SAME `registry.Resolve`, bound
+read-only above the workspace — and then the gate had nothing left to protect.
+`registry.Resolve` itself is untouched: one resolver, two sinks.
+
+**Three defects surfaced as consequences rather than as goals.**
+
+1. `authorizeScopeDefault` checked the harness only at the AGENT level. A tenant-
+   or subscription-level default on an ungoverned agent was accepted and then
+   never consulted — the precise failure the agent-level check exists to prevent,
+   one scope up. Now checked at every mutating level.
+2. Dropping `model` from the webapp's `PICOCLAW_ONLY` leaked it to the legacy
+   all-agents store — **the same regression this repository already caught once
+   for `persona`**. A model assignment resolves for a workspace; the legacy entry
+   is an address for shared content and has no workspace. Caught by
+   `agent-scope.test.ts`, not by review, for the second time.
+3. `tools.web` mixes scalars with one object per provider in the same JSON
+   object. A single-pass decode into a map of provider structs fails on the
+   scalars and silently yields no providers — the whole block reads as "search is
+   off" while looking correct in the file. Caught by a test written before the
+   code was trusted.
+
+**The premise of the image request was one-third wrong, and saying so improved
+the feature.** `agents.defaults.image_model` DOES permit fallback —
+`image_model_fallbacks` is the next line of picoclaw's struct. The three real
+gaps are that text-to-image does not exist at all, that the image model is
+defaults-only, and that an exhausted chain ends the turn with an error — and
+because the media reference stays in the session history, **every later turn in
+that conversation fails identically**. That last one is the production failure
+`deploy/picoclaw-glob/vision-unsupported-glm.patch` exists for. The harness now
+degrades instead: strips the image from a COPY of the window, tells the model
+what happened, retries once, and says so to the member.
+
+**Why evolution is not built.** It is two features — a skills loader, then
+evolution on top — and `grep -rn skill --include='*.go'` in the harness returns
+nothing, so `apply` mode would write `SKILL.md` files nothing reads. That is the
+"stores a setting that changes nothing" failure the harness spec's deferred table
+exists to prevent. picoclaw's own `pkg/evolution` is 34 files and ~12 500 lines.
+Two of its decisions are the owner's, not an implementer's: whether admin-managed
+shared skills should mount into ganglion containers at all, and whether `apply`
+should go through the `Approver` port. Spec written, build order recorded, zero
+code.
+
+**What is NOT verified.** The harness has still never spoken to a real provider —
+every provider test is `httptest` with a recorded stream. No image has been sent
+to a real vision model. No Brave key exists in this deployment. AC-2 of
+`ganglion-model-registry` (an admin changes a model and a RUNNING container
+answers on it) is tested on both sides of the mechanism and has not been watched
+happen.
 
 ### AD-023: harness-sphere runs as a privileged daemon; FR-C2's "non-root" is withdrawn (2026-09-08)
 
