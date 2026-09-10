@@ -172,8 +172,32 @@ turn that asked, because the `pendingResults` channel is nil at depth 0. And
 first-level fan-out is uncapped. Ganglion's answer is one synchronous tool taking
 a batch, with the bounds enforced where the fan-out actually happens.
 
+**Two open questions answered the same day (2026-09-10), and the first made the
+work smaller.**
+
+*Scheduled tasks:* "a tarefa não responde a ninguém. Elas ficam salvas e posso
+visualizar na sidebar igual no picoclaw." So a fired job delivers to nobody and
+its RUN is stored and read from the Tasks panel — which already exists end to
+end: `history.CronRuns` discovers runs, `ReadCronRun` serves one transcript,
+`/v1/cron/runs` exposes both, and the webapp renders them, all harness-blind.
+The three conversation-delivery shapes the spec weighed are withdrawn. What
+remains is that the proxy runs the turn under picoclaw's own
+`agent:cron-<jobID>-<runID>` conversation id and writes the run's `.meta.json`
+itself — the one part of that reader's contract a harness does not satisfy,
+because a harness writes transcripts and never metas.
+
+*The memory graph:* "igual no picoclaw, global ou por projeto." picoclaw's graph
+is ours, and it is scoped per MEMBER — the MCP bearer's payload is
+`tenant/subs/role/user` with no project dimension. So matching picoclaw means per
+member, and slice C touches no security-critical path. The assumption recorded in
+the spec, so it can be corrected rather than discovered: "global or per project"
+is read as naming the two shapes rather than requesting both now, and per-project
+is built to be additive — one more field in the token payload, nothing else.
+
 **Status.** `ganglion-reasoning-depth` implemented (harness#5, proxy#43,
-webapp#58). `ganglion-subagents` and `ganglion-projects` specified.
+webapp#58). `ganglion-subagents` implemented (harness#6). `ganglion-projects`
+slice A implemented in the harness (harness#7), proxy half in progress; slices B
+and C unblocked by the answers above.
 
 ### AD-025: evolution ships as a ladder whose top rung cannot yet be climbed (2026-09-10)
 

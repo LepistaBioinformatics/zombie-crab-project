@@ -267,14 +267,31 @@ added: `project`.
 is running** — waking a `scale-to-zero` agent — and delivers the job's message as
 an ordinary turn on the job's project.
 
-**FR-B4** — A fired job's turn is written into a **real conversation**, not a
-throwaway session. Which conversation is FR-B5. picoclaw's `agent:cron-<id>-<uuid>`
-sessions are why a member can never see what their schedule did; this is the
-second half of the different mechanism.
+**FR-B4** — A fired job **delivers to nobody**. Its run is stored and read from
+the Tasks panel, exactly as a picoclaw run is today. *(Owner's decision,
+2026-09-10: "a tarefa não responde a ninguém. Elas ficam salvas e posso
+visualizar na sidebar igual no picoclaw.")*
 
-**FR-B5** — A job carries the conversation it belongs to. Its output lands there,
-so the member opens the chat and finds it. A job with no conversation creates one
-named after the job, once, and reuses it.
+This is smaller than what this spec first proposed and it is better, because the
+whole read surface already exists and is harness-blind:
+`history.CronRuns(sessionsDir)` discovers runs, `history.ReadCronRun` serves one
+transcript, `/v1/cron/runs` exposes both, and the webapp's Tasks panel renders
+them. Nothing on that path needs to change.
+
+**FR-B5** — A run is written where that reader already looks. The proxy runs the
+turn with the conversation id `agent:cron-<jobID>-<runID>` — picoclaw's own
+shape, so `splitCronKey` reads it unchanged — and the harness writes
+`<sessionsDir>/<basename>.jsonl` as it does for any conversation.
+
+**FR-B5a** — The **proxy** writes the run's `<basename>.meta.json`, because it
+is the only participant that knows the job, the run and the originating scope,
+and because the ganglion has no concept of a scheduled turn at all. This is the
+one piece of the reader's contract the harness does not already satisfy: it
+writes transcripts, never metas.
+
+**FR-B5b** — A run belongs to its project's sessions directory, so a project's
+schedules are listed under that project and the main workspace's under none. This
+is the part picoclaw structurally cannot do (T-1).
 
 **FR-B6** — `lastStatus` and `lastError` are written on every run. The webapp's
 Tasks panel already renders them and `agent-projects-scope-fixes` records that
@@ -290,9 +307,10 @@ cron, because moving it would mean two schedulers racing over one `jobs.json`.
 The spec records that unifying them later is the obvious follow-up and that B1
 would be fixed for picoclaw too by the same code.
 
-**FR-B9** — A schedule that fires while a turn is already running on that
-conversation is **queued, not dropped and not interleaved**. Two turns on one
-conversation would corrupt the window.
+**FR-B9** — A schedule that fires while a turn is already running is **queued,
+not dropped and not interleaved**. A run has its own conversation id (FR-B5), so
+it cannot corrupt a member's window — but two turns at once in one container
+share a workspace, and the ganglion's own single-flight is per conversation.
 
 ---
 
@@ -331,6 +349,11 @@ be possible.
 **FR-C6** — An MCP call that fails returns a `domain.Result` describing the
 failure. It never fails the turn, and it never fails boot after boot succeeded —
 if the graph is unreachable mid-turn the agent is told and carries on.
+
+**FR-C6a** — The graph is scoped per member and spans that member's projects
+(OQ-1). No tool parameter names a project, and the bearer's payload is unchanged,
+so a ganglion container reaches exactly the graph a picoclaw container in the
+same workspace would.
 
 **FR-C7** — The proxy's per-workspace MCP writer runs for ganglion workspaces too,
 writing the block into the ganglion `config.json` via `ganglionConfigDoc`. The
@@ -397,11 +420,14 @@ exists for.
 **AC-B2** — Two projects each with a schedule produce two jobs whose runs write
 into their own project's transcript — the case picoclaw structurally cannot serve.
 
-**AC-B3** — A fired job's output is readable through
-`GET /v1/sessions/history` for the conversation it names (FR-B4, FR-B5).
+**AC-B3** — A fired job's run appears in `GET /v1/cron/runs` and its transcript
+is served by the existing run endpoint, with **no** new conversation in
+`GET /v1/sessions/history` (FR-B4, FR-B5). The second half is the assertion that
+discriminates: a run that also created a conversation would still pass a test
+that only checked the panel.
 
-**AC-B4** — A job that fires while a turn is running on the same conversation runs
-**after** it, and the window contains both turns in order (FR-B9).
+**AC-B4** — A job that fires while a member's turn is running on the same
+project runs **after** it, and neither window is corrupted (FR-B9).
 
 **AC-C1** — With the MCP block present, `tools/list` results appear in the tool
 schemas the model sees, and a `tools/call` round-trips against a fake MCP server.
@@ -439,30 +465,27 @@ authenticates a ganglion workspace's MCP calls, from the same secret (FR-C7).
 
 ## Open questions
 
-**OQ-1 — Is the memory graph scoped per project or per member?**
+**OQ-1 — RESOLVED. The graph matches picoclaw's scope.** *(Owner, 2026-09-10:
+"igual no picoclaw, global ou por projeto.")*
 
-The MCP bearer's payload is `tenantID/subsAccID/role/userAccID` — there is **no
-project dimension** — and `memory-graph-mcp` FR-4.2 requires the payload→Scope
-mapping to stay injective, with `Mint` rejecting any field containing the
-delimiter. Adding a project field means changing a security-critical path that was
-specified carefully and is shared with picoclaw.
+picoclaw's graph — which is ours, hosted by the proxy — is scoped per MEMBER:
+the MCP bearer's payload is `tenantID/subsAccID/role/userAccID` and carries no
+project dimension. So matching picoclaw means **per member, spanning a member's
+projects**, and slice C needs no change to a security-critical path that
+`memory-graph-mcp` FR-4.2 specified carefully and that both harnesses share.
 
-**Recommendation: per member, shared across projects, in v1.** It is the cheap
-answer, it needs no proxy security change, and a graph that spans a member's
-projects is arguably the more useful one — "what do I know about this supplier"
-does not stop at a project boundary. If per-project is wanted, it is a token
-payload change with its own injectivity argument, and it should be its own slice.
+**The assumption this records, so it can be corrected rather than discovered:**
+"global or per project" is read as naming the two shapes rather than requesting
+both now, with picoclaw's behaviour as the anchor. Per-project is therefore
+**deliberately additive**: it is one more field in the token payload, with its
+own injectivity argument, and slice C is built so that adding it later changes
+the payload and nothing else. If the intent was to offer the member the choice in
+v1, that is a small extension of C and not a redesign of it.
 
-**Blocking for slice C only.** A and B do not depend on it.
-
-**OQ-2 — Which conversation does a scheduled job write into (FR-B5)?**
-
-Three shapes: (a) the conversation the member scheduled it from, (b) one
-conversation per job, created on first run, (c) a single "Scheduled" conversation
-per project. (a) is most natural to a member and drifts oddly when they delete
-that chat; (b) is tidy and makes the Tasks panel's "open the run" obvious; (c) is
-the smallest. **Recommendation: (b)**, with the job's name as the conversation
-title. Answering this is required before slice B is designed.
+**OQ-2 — RESOLVED, and it made slice B smaller.** See FR-B4. A fired job
+delivers to nobody; its run is stored and read from the Tasks panel, which
+already exists end to end. The three conversation-delivery shapes this section
+used to weigh are all withdrawn.
 
 **OQ-3 — Does the member see project files anywhere?**
 
