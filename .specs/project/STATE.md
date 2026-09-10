@@ -1,7 +1,14 @@
 # State
 
 **Last Updated:** 2026-09-10T00:00:00-03:00
-**Current Work:** **All four harness-parity features implemented.** The fourth,
+**Current Work:** **Round 3 specified; the first of its three features is
+implemented across all three repositories.** `ganglion-reasoning-depth` ships as
+`crab-ganglion-harness#5`, `crab-shell-proxy#43` and
+`crab-exoskeleton-webapp#58`. `ganglion-subagents` and `ganglion-projects` are
+specified — the second in three slices, two of which carry open questions only
+the owner can answer (AD-026).
+
+**Previously in this session:** **All four harness-parity features implemented.** The fourth,
 `ganglion-evolution`, was unblocked the same day by the owner answering its two
 open questions — yes, admin-managed shared skills mount into ganglion
 containers; yes, `apply` requires approval. The second answer had a consequence
@@ -86,6 +93,87 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-026: round 3's premise was wrong in the requester's favour — projects and the graph are OURS, not picoclaw's (2026-09-10)
+
+**Context.** Three features were asked for: reasoning-depth modes the agent
+selects, sub-agent dispatch (parallel and sequential) with a native programmatic
+mechanism, and "the projects picoclaw has — memory, a graph, scheduled tasks and
+separate files in an exclusive workspace — but use a different mechanism if one
+is needed."
+
+**Three findings, each verified at source in picoclaw v0.3.1 before anything was
+designed.**
+
+**1. picoclaw has no projects.** A search for `project` as a type, field, config
+key or tool returns nothing but OAuth `project_id`. Its scoping units are
+*agents* (one workspace directory each, `resolveAgentWorkspace`,
+`pkg/agent/instance.go:365-377`) and a `SessionScope` over
+channel/account/dimensions. **Projects are ours** —
+`crab-shell-proxy/.specs/features/agent-projects/`, already shipped for picoclaw,
+built on `agents.list` plus a glob patch to `agents.dispatch`.
+
+**2. picoclaw has no knowledge graph.** `grep -i 'knowledge.?graph'` over the
+tree returns zero. `pkg/seahorse` is a hierarchical conversation-SUMMARY DAG over
+SQLite with `short_grep`/`short_expand` — no entities, no relations. The graph is
+ours too: the proxy hosts an MCP server at `/v1/mcp` with fifteen tools and
+injects it into each picoclaw workspace.
+
+So feature 3 is not "port a picoclaw feature". It is **give the ganglion harness
+what our own proxy already offers picoclaw** — precisely the DF-1/DF-2/DF-3/DF-5
+row of `.specs/features/crab-ganglion-harness/spec.md`, where
+`harness_gate.go` answers `501` today.
+
+**3. The invitation to use a different mechanism has two concrete targets, and
+both are load-bearing.**
+
+- picoclaw's cron is **one store per container**: `gateway.go:843` builds the path
+  from `cfg.WorkspacePath()`, the *default* workspace, not the routed agent's. Per-project
+  schedules are structurally impossible there, which is already recorded as defect
+  B1 in `agent-projects-scope-fixes`. A fired job also runs in a throwaway
+  session, so it never joins the member's conversation.
+- **The ganglion runs `scale-to-zero`** (`crab-shell-proxy/config.yaml:126`,
+  agent `gamma`, 15s idle). A scheduler inside the harness would be asleep
+  whenever it had work — the same wall `ganglion-evolution` hit, where
+  `cold_path_trigger: scheduled` under `scale-to-zero` became a boot refusal.
+
+**Decision: the clock goes in the proxy**, which is awake and owns the container
+lifecycle, and can wake a stopped container to deliver a turn. That is the
+different mechanism the request invited, and it makes per-project schedules
+possible for the first time in this stack.
+
+**And on reasoning depth, the premise was also partly wrong.** picoclaw has one
+knob, `model_list[].thinking_level`, per model entry, with six values. There is
+no deep research, no deepsearch, no `/think`, and the spawn/delegate/subagent
+schemas expose no effort parameter — `grep -rniE
+"deep_research|deepsearch|ultrathink"` returns **zero hits**. Meanwhile ganglion
+could *already* put `reasoning_effort` on the wire through `extra_body` and
+already decoded reasoning deltas. So the work was never "add a field": it was
+moving depth from static-per-model to chosen-per-turn. The key and its six values
+are adopted verbatim, because the admin editor already renders that field.
+
+**One decision inside it worth recording.** There is deliberately **no provider
+capability table** in the harness. picoclaw needs one because it speaks four
+dialects; ganglion speaks one wire to every endpoint and cannot tell them apart.
+So **declaring `thinking_level` IS the capability declaration**, and a model that
+declared none is never sent a depth field whatever the agent asks for — because
+sending a field an endpoint rejects would turn depth selection into a turn
+failure, which is exactly what `vision-unsupported-glm.patch` already cost us.
+The cost is an operator who forgets the key gets a harness that never thinks
+deeply, so boot says so in a line naming the key.
+
+**Also recorded: picoclaw's sub-agent wiring is three-quarters dead, and this is
+why `ganglion-subagents` does not copy its shape.** `spawn_status` polls a map no
+live caller ever writes (`grep "\.Spawn(" | grep -v _test` returns nothing), so
+it always answers "No subagents have been spawned yet." `spawn`'s result is
+republished as a NEW inbound turn on channel `system` rather than returned to the
+turn that asked, because the `pendingResults` channel is nil at depth 0. And
+`max_concurrent` is enforced on a semaphore that is also nil at depth 0, so
+first-level fan-out is uncapped. Ganglion's answer is one synchronous tool taking
+a batch, with the bounds enforced where the fan-out actually happens.
+
+**Status.** `ganglion-reasoning-depth` implemented (harness#5, proxy#43,
+webapp#58). `ganglion-subagents` and `ganglion-projects` specified.
 
 ### AD-025: evolution ships as a ladder whose top rung cannot yet be climbed (2026-09-10)
 
