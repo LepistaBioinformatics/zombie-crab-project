@@ -1,12 +1,19 @@
 # State
 
 **Last Updated:** 2026-09-10T00:00:00-03:00
-**Current Work:** **Round 3 specified; the first of its three features is
-implemented across all three repositories.** `ganglion-reasoning-depth` ships as
-`crab-ganglion-harness#5`, `crab-shell-proxy#43` and
-`crab-exoskeleton-webapp#58`. `ganglion-subagents` and `ganglion-projects` are
-specified — the second in three slices, two of which carry open questions only
-the owner can answer (AD-026).
+**Current Work:** **Round 3 implemented except the memory graph.**
+`ganglion-reasoning-depth` (`crab-ganglion-harness#5`, `crab-shell-proxy#43`,
+`crab-exoskeleton-webapp#58`), `ganglion-subagents` (`crab-ganglion-harness#6`)
+and `ganglion-projects` slices A (`crab-ganglion-harness#7`,
+`crab-shell-proxy#44`) and B (`crab-shell-proxy#46`) are shipped. Slice C — the
+harness's own MCP client, reaching the graph the proxy already hosts — is
+specified and not started.
+
+Two defects were found by the owner while testing slice A and are recorded as
+AD-027: the proxy read a project transcript under a name the harness never
+writes (`crab-shell-proxy#45`), and the running ganglion image predated the
+slice. Both had the same symptom — the conversation blanking the instant its
+turn finished — and only one of them was in the code.
 
 **Previously in this session:** **All four harness-parity features implemented.** The fourth,
 `ganglion-evolution`, was unblocked the same day by the owner answering its two
@@ -93,6 +100,42 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-027: two independent causes, one symptom — a project conversation that blanks when its turn ends (2026-09-10)
+
+**What the owner saw.** Inside a project on the ganglion agent, a message
+streamed normally and then the whole conversation went empty the moment the turn
+finished.
+
+**Cause one, in the code.** A project conversation's session key is
+`p.<project>.<32-hex>` (`identity.ProjectSessionID`). The harness names a
+transcript after the conversation id but SANITISES it first — its jsonl store
+maps every character outside `[A-Za-z0-9_-]` to `_` — so the file on disk is
+`p_<project>_<32-hex>.jsonl`, while the proxy asked for the dotted name, found
+nothing, and answered with an EMPTY history. No client can tell that apart from
+a conversation with no messages, and the webapp's completion painter replaces
+the live bands with whatever the reload returns. It went unnoticed until
+projects because outside one the key is 32 hex characters, for which the
+sanitiser is the identity function.
+
+**Cause two, in the deployment.** The running `zombie-crab/crab-ganglion:dev`
+image predated slice A, so the container wrote
+`workspace/sessions/p_test_<hash>.jsonl` — the project prefix in the NAME,
+because that comes from the session id, but the main directory, because the
+project scoping was not in that binary. The proxy, correctly, was reading
+`workspace/projects/test/sessions/`.
+
+**Why this is worth recording.** The first fix alone would not have changed what
+the owner saw, and neither would the second. Two independent faults producing one
+indistinguishable symptom is the case where a fix that is right gets judged
+wrong — which is what happened here, and why the second cause was only found by
+reading the bytes on disk rather than the code.
+
+**The lesson, concretely:** when a harness and the proxy each derive a path from
+the same identifier, the derivation belongs to one of them and is mirrored by the
+other with a named function and a round-trip test. `history.harnessBasename` and
+`history.WriteCronMeta`'s test are that, for this pair. And when a symptom
+survives a fix, check the deployed artifact before doubting the diagnosis.
 
 ### AD-026: round 3's premise was wrong in the requester's favour — projects and the graph are OURS, not picoclaw's (2026-09-10)
 
