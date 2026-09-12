@@ -1,13 +1,13 @@
 # State
 
 **Last Updated:** 2026-09-10T00:00:00-03:00
-**Current Work:** **Round 3 implemented except the memory graph.**
+**Current Work:** **Round 3 fully implemented.**
 `ganglion-reasoning-depth` (`crab-ganglion-harness#5`, `crab-shell-proxy#43`,
 `crab-exoskeleton-webapp#58`), `ganglion-subagents` (`crab-ganglion-harness#6`)
-and `ganglion-projects` slices A (`crab-ganglion-harness#7`,
-`crab-shell-proxy#44`) and B (`crab-shell-proxy#46`) are shipped. Slice C — the
-harness's own MCP client, reaching the graph the proxy already hosts — is
-specified and not started.
+and all three slices of `ganglion-projects` are shipped: A
+(`crab-ganglion-harness#7`, `crab-shell-proxy#44`), B (`crab-shell-proxy#46`) and
+C (`crab-ganglion-harness#8`, `crab-shell-proxy#47`). The four `501`s in
+`harness_gate.go` that opened this round are closed.
 
 Two defects were found by the owner while testing slice A and are recorded as
 AD-027: the proxy read a project transcript under a name the harness never
@@ -100,6 +100,38 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-028: the ganglion gets ONE mcp server, and copying picoclaw's shape would stop it booting (2026-09-12)
+
+**The two shapes.** picoclaw's `config.json` carries one MCP server per project
+(`memory`, `memory-seedtrial`, `memory-fieldnotes`, …), each with its own
+project-scoped token. The ganglion's carries exactly one, `memory`, with the
+member's token.
+
+**Why picoclaw needs the fan-out.** Each project there is a separate picoclaw
+AGENT, and `tools.mcp.servers` is GLOBAL to the container — every agent in it
+reads the same block. So a per-project graph cannot come from the token alone; it
+has to come from a per-project SERVER that only that agent is allowed to see,
+which is what the `mcpServers` allowlist in each agent's AGENT.md frontmatter
+does.
+
+**Why the ganglion must not have it.** One agent, project taken as a header. Its
+MCP client registers a remote server's tools under **their own names**, and its
+boot refuses a name collision (FR-C5) — so `memory` and `memory-seedtrial` both
+offering `memory_search` would refuse the boot. The container would start fine
+for a member with no projects and then stop starting the moment they created one,
+which is about the worst shape a failure can have: it arrives later, for one
+member, with no relation in time to the change that caused it.
+
+**Why this is worth writing down.** The one-server form looks like the
+simplification, and picoclaw's form looks like the more capable one. Anyone
+reading the two writers side by side will be tempted to unify them in picoclaw's
+direction. `TestGanglionConfigWritesNoPerProjectMemoryServers` is placed so that
+attempt fails in CI rather than in a member's container.
+
+The member-scoped token was already required by FR-C6a for an unrelated reason —
+the graph spans a member's projects — so the two constraints agree, which is also
+why the collision was not noticed until the writer was built.
 
 ### AD-027: two independent causes, one symptom — a project conversation that blanks when its turn ends (2026-09-10)
 

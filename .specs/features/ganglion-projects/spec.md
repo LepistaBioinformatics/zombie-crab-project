@@ -390,10 +390,31 @@ if the graph is unreachable mid-turn the agent is told and carries on.
 so a ganglion container reaches exactly the graph a picoclaw container in the
 same workspace would.
 
-**FR-C7** — The proxy's per-workspace MCP writer runs for ganglion workspaces too,
-writing the block into the ganglion `config.json` via `ganglionConfigDoc`. The
-bearer token is minted exactly as it is for picoclaw, from the same secret, so no
-new credential path exists.
+**FR-C7** — The proxy writes the block into the ganglion `config.json` via
+`ganglionConfigDoc`. The bearer token is minted exactly as it is for picoclaw,
+from the same secret, so no new credential path exists.
+
+*(Amended during implementation. This said the per-workspace MCP WRITER runs for
+ganglion workspaces too, and it must not: `applyMCPServer` merges a block into a
+file picoclaw also writes, while the ganglion's `config.json` is rendered whole
+on every ensure. There is nothing to merge into, and running the merge would
+leave a block behind when the secret is unset.)*
+
+**FR-C9** — A ganglion workspace gets **exactly one** MCP server, and this is a
+hard constraint rather than a default.
+
+picoclaw gets one entry per project (`ProjectMCPServerName`), because each
+project there is a separate AGENT sharing one global `tools.mcp.servers` map — a
+per-project graph can only come from a per-project server the other agents are
+not allowed to see, gated by the `mcpServers` allowlist in each agent's AGENT.md
+frontmatter.
+
+The ganglion has one agent and takes the project as a header, and its harness
+registers a remote server's tools under **their own names**. N+1 servers all
+offering `memory_search` collide, and FR-C5 refuses exactly that at boot — so
+writing picoclaw's shape here would stop a ganglion container from starting the
+moment its member created a project. The single server carries the member's
+token, which is what FR-C6a already required for a different reason.
 
 **FR-C8** — `featureMemoryGraph` gains an `alsoServedBy` row for ganglion, under
 the same rule as FR-A14, and FR-A16's webapp check applies again.
