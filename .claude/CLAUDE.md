@@ -14,6 +14,10 @@ only apply inside it; this file holds what applies across the stack.
 When a pointer may be committed, and the check that enforces it, are in
 `.claude/rules/submodule-pointers.md`.
 
+**Every harness lays its per-user directory out the way picoclaw does** — a
+project workspace is `workspace-<id>`, a SIBLING of `workspace/`, never a child.
+The layout is shared; the bind set is not. See `.claude/rules/harness-layout.md`.
+
 **Everything here and below is written in English** — code comments, commits, PRs,
 issues, specs, docs. Only the parent `zombie-crab-project-mkt` writes Portuguese.
 See `.claude/rules/language.md`.
