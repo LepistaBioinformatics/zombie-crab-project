@@ -283,8 +283,8 @@ metrics survive the proxy being down). See
   parameter. Bounds are stated as arithmetic (108 model calls at the defaults) and
   enforced at depth 0, which is where picoclaw's are not. See
   `.specs/features/ganglion-subagents/`.
-- **ganglion-projects** (SPEC READY, three slices) — closes DF-3, DF-5, DF-1 and
-  DF-2, which are four `501`s in `harness_gate.go` today. **A** gives a ganglion
+- **ganglion-projects** (SHIPPED, all three slices) — closed DF-3, DF-5, DF-1 and
+  DF-2, which were four `501`s in `harness_gate.go`. **A** gives a ganglion
   turn its own files, transcripts, window and `MEMORY.md` under
   `workspace/projects/<id>/` — a subdirectory of the bind it already has, so no
   new mount and **no container recreate**, at the stated cost that isolation
@@ -292,7 +292,12 @@ metrics survive the proxy being down). See
   the scheduler in the PROXY, because the ganglion runs `scale-to-zero` and a
   clock inside it would sleep through its own work — which also makes
   per-project schedules possible for the first time, something picoclaw's
-  one-store-per-container cron structurally cannot do (defect B1). **C** gives the
-  harness a hand-written MCP client so it reaches the graph the proxy already
-  hosts. Two open questions block B and C respectively. See
+  one-store-per-container cron structurally cannot do (defect B1) — shipped as
+  crab-shell-proxy#46, with the store above the workspace bind so a turn steered
+  by untrusted text cannot schedule its own future turns. **C** gives the harness
+  a hand-written MCP client so it reaches the graph the proxy already hosts —
+  `crab-ganglion-harness#8` and `crab-shell-proxy#47`, with `go.mod` still at zero
+  requires, and with ONE server rather than picoclaw's one-per-project, because
+  the harness registers a remote server's tools under their own names and N+1
+  servers offering the same tool refuse the boot. See
   `.specs/features/ganglion-projects/` and STATE.md AD-026.

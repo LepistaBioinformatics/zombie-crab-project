@@ -307,10 +307,45 @@ cron, because moving it would mean two schedulers racing over one `jobs.json`.
 The spec records that unifying them later is the obvious follow-up and that B1
 would be fixed for picoclaw too by the same code.
 
-**FR-B9** — A schedule that fires while a turn is already running is **queued,
-not dropped and not interleaved**. A run has its own conversation id (FR-B5), so
-it cannot corrupt a member's window — but two turns at once in one container
-share a workspace, and the ganglion's own single-flight is per conversation.
+**FR-B9** — Two **scheduled** turns never overlap in one container: a job that
+comes due while another of that workspace's jobs is running is left due and
+picked up by the next pass. A **member's** turn is a different case and is
+neither blocked by a scheduled run nor blocks one — a run has its own
+conversation id (FR-B5), so the harness's per-conversation single-flight already
+keeps the windows apart, and making a scheduled job wait on a conversation that
+may run for ten minutes would buy nothing.
+
+*(Narrowed during implementation. The original wording — "a schedule that fires
+while a turn is already running is queued" — implied machinery that turned out
+not to be needed. Serialising globally would let one slow task delay every other
+member's schedules; serialising against member turns would be a queue with no
+reader. What is actually worth excluding is two unattended turns sharing one
+workspace with nobody watching either.)*
+
+**FR-B10** — A job is **claimed before it runs**, not recorded after: its next
+occurrence and its last-run stamp are written before the turn starts. A proxy
+that dies mid-turn therefore loses that run rather than re-firing it on every
+boot. At-most-once is the right trade for unattended work — a missed daily
+summary is a gap, a re-fired one is an agent doing real work twice with no one
+watching.
+
+**FR-B11** — A schedule the proxy slept through fires **once** and reschedules
+from now. Replaying every missed occurrence would deliver a weekend of hourly
+turns at once.
+
+**FR-B12** — The two stores are kept apart by **entry point**, not by
+convention: `cron.Load` reads picoclaw's, `cron.Owner` reads and writes the
+proxy's. A caller that reaches for the writer on a picoclaw path has written
+something obviously wrong rather than something subtly wrong. The same split is
+stated in the package doc, which previously said the package exposes no writer
+at all.
+
+**FR-B13** — The READ routes become harness-aware for the same reason the write
+routes exist. `config.CronFile` names a path a ganglion workspace never creates,
+so `/v1/cron/tasks` was answering "no scheduled tasks" for every ganglion member;
+and `fires` was reporting a ganglion schedule as inert because the agent scales
+to zero, when scale-to-zero is precisely what the proxy-side scheduler was
+designed around.
 
 ---
 
@@ -355,10 +390,31 @@ if the graph is unreachable mid-turn the agent is told and carries on.
 so a ganglion container reaches exactly the graph a picoclaw container in the
 same workspace would.
 
-**FR-C7** — The proxy's per-workspace MCP writer runs for ganglion workspaces too,
-writing the block into the ganglion `config.json` via `ganglionConfigDoc`. The
-bearer token is minted exactly as it is for picoclaw, from the same secret, so no
-new credential path exists.
+**FR-C7** — The proxy writes the block into the ganglion `config.json` via
+`ganglionConfigDoc`. The bearer token is minted exactly as it is for picoclaw,
+from the same secret, so no new credential path exists.
+
+*(Amended during implementation. This said the per-workspace MCP WRITER runs for
+ganglion workspaces too, and it must not: `applyMCPServer` merges a block into a
+file picoclaw also writes, while the ganglion's `config.json` is rendered whole
+on every ensure. There is nothing to merge into, and running the merge would
+leave a block behind when the secret is unset.)*
+
+**FR-C9** — A ganglion workspace gets **exactly one** MCP server, and this is a
+hard constraint rather than a default.
+
+picoclaw gets one entry per project (`ProjectMCPServerName`), because each
+project there is a separate AGENT sharing one global `tools.mcp.servers` map — a
+per-project graph can only come from a per-project server the other agents are
+not allowed to see, gated by the `mcpServers` allowlist in each agent's AGENT.md
+frontmatter.
+
+The ganglion has one agent and takes the project as a header, and its harness
+registers a remote server's tools under **their own names**. N+1 servers all
+offering `memory_search` collide, and FR-C5 refuses exactly that at boot — so
+writing picoclaw's shape here would stop a ganglion container from starting the
+moment its member created a project. The single server carries the member's
+token, which is what FR-C6a already required for a different reason.
 
 **FR-C8** — `featureMemoryGraph` gains an `alsoServedBy` row for ganglion, under
 the same rule as FR-A14, and FR-A16's webapp check applies again.

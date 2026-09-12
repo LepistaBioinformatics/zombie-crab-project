@@ -1,12 +1,19 @@
 # State
 
 **Last Updated:** 2026-09-10T00:00:00-03:00
-**Current Work:** **Round 3 specified; the first of its three features is
-implemented across all three repositories.** `ganglion-reasoning-depth` ships as
-`crab-ganglion-harness#5`, `crab-shell-proxy#43` and
-`crab-exoskeleton-webapp#58`. `ganglion-subagents` and `ganglion-projects` are
-specified — the second in three slices, two of which carry open questions only
-the owner can answer (AD-026).
+**Current Work:** **Round 3 fully implemented.**
+`ganglion-reasoning-depth` (`crab-ganglion-harness#5`, `crab-shell-proxy#43`,
+`crab-exoskeleton-webapp#58`), `ganglion-subagents` (`crab-ganglion-harness#6`)
+and all three slices of `ganglion-projects` are shipped: A
+(`crab-ganglion-harness#7`, `crab-shell-proxy#44`), B (`crab-shell-proxy#46`) and
+C (`crab-ganglion-harness#8`, `crab-shell-proxy#47`). The four `501`s in
+`harness_gate.go` that opened this round are closed.
+
+Two defects were found by the owner while testing slice A and are recorded as
+AD-027: the proxy read a project transcript under a name the harness never
+writes (`crab-shell-proxy#45`), and the running ganglion image predated the
+slice. Both had the same symptom — the conversation blanking the instant its
+turn finished — and only one of them was in the code.
 
 **Previously in this session:** **All four harness-parity features implemented.** The fourth,
 `ganglion-evolution`, was unblocked the same day by the owner answering its two
@@ -93,6 +100,74 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 ---
 
 ## Recent Decisions (Last 60 days)
+
+### AD-028: the ganglion gets ONE mcp server, and copying picoclaw's shape would stop it booting (2026-09-12)
+
+**The two shapes.** picoclaw's `config.json` carries one MCP server per project
+(`memory`, `memory-seedtrial`, `memory-fieldnotes`, …), each with its own
+project-scoped token. The ganglion's carries exactly one, `memory`, with the
+member's token.
+
+**Why picoclaw needs the fan-out.** Each project there is a separate picoclaw
+AGENT, and `tools.mcp.servers` is GLOBAL to the container — every agent in it
+reads the same block. So a per-project graph cannot come from the token alone; it
+has to come from a per-project SERVER that only that agent is allowed to see,
+which is what the `mcpServers` allowlist in each agent's AGENT.md frontmatter
+does.
+
+**Why the ganglion must not have it.** One agent, project taken as a header. Its
+MCP client registers a remote server's tools under **their own names**, and its
+boot refuses a name collision (FR-C5) — so `memory` and `memory-seedtrial` both
+offering `memory_search` would refuse the boot. The container would start fine
+for a member with no projects and then stop starting the moment they created one,
+which is about the worst shape a failure can have: it arrives later, for one
+member, with no relation in time to the change that caused it.
+
+**Why this is worth writing down.** The one-server form looks like the
+simplification, and picoclaw's form looks like the more capable one. Anyone
+reading the two writers side by side will be tempted to unify them in picoclaw's
+direction. `TestGanglionConfigWritesNoPerProjectMemoryServers` is placed so that
+attempt fails in CI rather than in a member's container.
+
+The member-scoped token was already required by FR-C6a for an unrelated reason —
+the graph spans a member's projects — so the two constraints agree, which is also
+why the collision was not noticed until the writer was built.
+
+### AD-027: two independent causes, one symptom — a project conversation that blanks when its turn ends (2026-09-10)
+
+**What the owner saw.** Inside a project on the ganglion agent, a message
+streamed normally and then the whole conversation went empty the moment the turn
+finished.
+
+**Cause one, in the code.** A project conversation's session key is
+`p.<project>.<32-hex>` (`identity.ProjectSessionID`). The harness names a
+transcript after the conversation id but SANITISES it first — its jsonl store
+maps every character outside `[A-Za-z0-9_-]` to `_` — so the file on disk is
+`p_<project>_<32-hex>.jsonl`, while the proxy asked for the dotted name, found
+nothing, and answered with an EMPTY history. No client can tell that apart from
+a conversation with no messages, and the webapp's completion painter replaces
+the live bands with whatever the reload returns. It went unnoticed until
+projects because outside one the key is 32 hex characters, for which the
+sanitiser is the identity function.
+
+**Cause two, in the deployment.** The running `zombie-crab/crab-ganglion:dev`
+image predated slice A, so the container wrote
+`workspace/sessions/p_test_<hash>.jsonl` — the project prefix in the NAME,
+because that comes from the session id, but the main directory, because the
+project scoping was not in that binary. The proxy, correctly, was reading
+`workspace/projects/test/sessions/`.
+
+**Why this is worth recording.** The first fix alone would not have changed what
+the owner saw, and neither would the second. Two independent faults producing one
+indistinguishable symptom is the case where a fix that is right gets judged
+wrong — which is what happened here, and why the second cause was only found by
+reading the bytes on disk rather than the code.
+
+**The lesson, concretely:** when a harness and the proxy each derive a path from
+the same identifier, the derivation belongs to one of them and is mirrored by the
+other with a named function and a round-trip test. `history.harnessBasename` and
+`history.WriteCronMeta`'s test are that, for this pair. And when a symptom
+survives a fix, check the deployed artifact before doubting the diagnosis.
 
 ### AD-026: round 3's premise was wrong in the requester's favour — projects and the graph are OURS, not picoclaw's (2026-09-10)
 
