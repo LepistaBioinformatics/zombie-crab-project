@@ -203,6 +203,18 @@ metrics survive the proxy being down). See
 
 - Production hardening (TLS termination, secret rotation, Docker-socket privilege — see AD-009 R2)
 - Per-user (not just per-agent) lifecycle mode overrides
+- **ganglion-mcp-token-indirection** (PROPOSED) — the memory-graph bearer token
+  is the one credential this stack still writes in plaintext to a volume, in
+  `.ganglion-config.json`'s `tools.mcp.servers.memory.headers.Authorization`.
+  The reason is picoclaw's (`tools.mcp.servers` has no env indirection,
+  `env_file` is stdio-only) and does not apply to a harness we own. Proposal:
+  carry it the way model keys already travel — a derived variable name both
+  sides compute, file value kept as fallback. Defence in depth, not a live
+  exposure: Landlock already keeps the file out of the agent's reach, so the
+  gain is at-rest (backups, snapshots, copied user directories). OQ-1 —
+  environment or a second bind — is open, because the environment is visible to
+  `docker inspect`. picoclaw's record is unchanged. See
+  `.specs/features/ganglion-mcp-token-indirection/`.
 - **multi-harness support (DEFERRED — withdrawn 2026-08-09)** — orchestrating a
   non-picoclaw agent runtime behind the same proxy. Hermes Agent (Nous Research)
   was implemented and **verified working end-to-end**, then withdrawn for current
