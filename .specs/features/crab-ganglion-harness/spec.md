@@ -98,8 +98,28 @@ No protocol translation, no WebSocket, no sidecar. The turn ends when the handle
 this is what retires `internal/pico`'s `graceWindow = 500ms`, a heuristic
 `picoclaw-as-library` §5 calls *"tuned rather than solved"*.
 
-**FR-2 — Content is streamed as token-level deltas, as the provider emits them.**
-*Rationale carries an untested assumption, stated so nobody later reads it as verified:*
+**FR-2 — Content is streamed as the provider emits it, at FRAME granularity.**
+
+*Narrowed on 2026-09-13, from token-level to frame-level, by the owner's decision in
+`crab-ganglion-harness` PR #15.* Restoring visible thinking steps requires the harness to
+know whether an iteration's text is narration (the frame ends in `tool_calls`) or the
+answer — and that is not knowable before the stream ends: `domain.Delta` carries content
+and reasoning only, `Stream.Message` is valid only after EOF, and "no call yet" is not
+evidence. The proxy measured **7 of 112 turns** delivering a whole reply in the same frame
+that carried a trailing call.
+
+So a frame is buffered and classified once. Narration leaves the content run entirely and
+arrives as progress; the answer arrives in one emission. The alternative — emit
+optimistically and regroup on reload — is the reply visibly rewriting itself, which is the
+failure the one-message-per-turn shape was bought to avoid.
+
+**This is a real cost and it lands hardest on the simple turn**, which has no tools and
+therefore no steps to fill the silence: its reply now arrives whole rather than word by
+word. Recorded here rather than in a commit message because a later reader comparing this
+product to a token-streaming one will otherwise think it regressed by accident.
+
+*The original rationale carried an untested assumption, kept below so nobody reads it as
+verified:*
 `picoclaw-incremental-streaming/investigation.md` §3(a)–(c) has **not been run**, and it might
 show that picoclaw's one-frame behaviour was a config key all along. That would make streaming
 available without this harness. It does not undo D-2 — FR-7 and FR-8 carry the decision and
@@ -206,6 +226,12 @@ alternative harness in this deployment, and therefore the bar.
 **AC-2 is not the whole of the latency problem, and this spec does not claim it is.** Keeping
 the stream from ever going idle is `turn-stream-continuity` Group A, needed whichever harness
 runs. What FR-2 does is shorten the silence at the source rather than fill it with pings.
+
+**AC-2 is measured differently since FR-2 was narrowed.** "First content byte" on a turn that
+uses tools is now the first narration step, which arrives as progress and is what the member
+actually reads while the work runs. On a turn with no tools there is no earlier byte than the
+answer itself, so AC-2 there measures the whole completion. The 5s target is kept and the
+change in what it measures is stated rather than left for someone to discover in a graph.
 
 ---
 
