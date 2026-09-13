@@ -234,3 +234,144 @@ question, still unanswered.
 **Not covered by the announcement:** the member has no way to *choose*. If they wanted a
 separate turn rather than a correction folded into the running one, the only lever is Stop
 followed by a resend. Making that a choice is the feature, and it is still deferred.
+
+---
+
+## 10. The ganglion (2026-09-13)
+
+**Question asked:** how complex is it to implement steering on the ganglion.
+
+**Answer:** the question has no useful number yet, because the ganglion has no
+definition of what a second POST on a live conversation IS. Everything from §1 to §9
+above is about picoclaw, which has one (`enqueueSteeringMessage`). The ganglion has
+none — not a refusal, not a queue, not a fold. Alpha runs the ganglion
+(`config.yaml:110`), so this is the live behaviour, and it is worse than the one §7
+reported.
+
+### 10.1 What a concurrent POST does on the ganglion today
+
+Three legs, each read rather than assumed:
+
+| Layer | What it does | File |
+|---|---|---|
+| harness HTTP | calls `s.handler(r.Context(), turn, sink)` directly. No claim, no lock, no queue. | `internal/adapter/httpsse/httpsse.go` |
+| harness loop | `Transcript.Append` (the question), then `Context.Load`, then appends and `Save`s per iteration | `internal/runtime/loop.go` |
+| proxy runner | `active[req.SessionID] = cancel`, `defer untrack(id)` | `crab-shell-proxy/internal/ganglion/turn.go` |
+
+Nothing else serializes: `MaxConcurrent` in the harness bounds SUB-agents, not member
+turns, and the proxy's chat handler counts turns without gating on the count.
+
+So two POSTs on one conversation are **two concurrent turns**, with three distinct
+consequences that should not be merged:
+
+**10.1.a — The context window takes a LOST UPDATE.** Turn A loads the window at N
+messages; turn B loads the same N; A appends its work and saves; B appends and saves,
+and A's iterations are gone. The store's mutex guards each `Load` and each `Save`, never
+the read-modify-write that spans a turn. The agent forgets work it just did. This is the
+severe one.
+
+**10.1.b — The served transcript INTERLEAVES.** `jsonl.Store.Append` holds its mutex per
+append, so nothing is corrupted — but the two turns' steps land in arrival order, and the
+member reads one conversation's narration threaded through another's. Confusing,
+recoverable, not destructive.
+
+**10.1.c — Stop stops the wrong turn, or none.** `active` is keyed by session id alone.
+The second turn overwrites the first's cancel func, and whichever turn finishes first
+deletes the entry with `untrack`. After that, `Cancel` is a no-op for the one still
+running.
+
+**And the interface says the opposite of all three.** `handlers.go`'s steering
+announcement (§9) reads `s.turns.Active(scope, sessionID)` with **no harness check**, so
+the ganglion path emits `x_crab_steering: {folded: true}` and the webapp renders "your
+message joined the turn already running". Nothing was folded. A second turn started and
+is about to overwrite the first's window.
+
+**This is a data-loss defect wearing a feature's label, and it is live.** It is
+separable from steering and much smaller — see §10.4.
+
+### 10.2 What is CHEAPER on the ganglion than picoclaw's estimate
+
+Three of §3's costs do not transfer.
+
+**§3.2 (the 500ms `graceWindow`) is void.** The ganglion serves SSE natively and ends a
+turn by closing the stream; `internal/ganglion`'s own package doc says there is no
+analogue of `pico/turn.go`'s heuristic. OQ-2 of this document is answered for this
+harness: **nothing to disturb.**
+
+**§6's OQ-1 answer does not apply.** "The second stream returns the running turn's
+output" was a consequence of picoclaw's `broadcastToSession` fan-out. The ganglion serves
+each request its own stream and broadcasts nothing, so the second POST's stream is a free
+design choice rather than an inherited accident.
+
+**The announcement is already built, end to end.** `x_crab_steering`, `consumeStream`'s
+fifth callback, `TurnState.steering`, `TurnSteering`, copy in both locales (§9). Folding
+would make that frame TRUE rather than retiring it.
+
+### 10.3 What is NEW, and the constraint that sizes it
+
+picoclaw folds for free — it is upstream's code. On the ganglion it is ours to write, and
+one structural rule decides the shape.
+
+**A folded user message may be appended at exactly one place in the window.** An
+assistant message carrying `tool_calls` must be followed by its tool results
+CONTIGUOUSLY, or the provider answers `insufficient tool messages following tool_calls
+message` and the conversation is dead for every later turn — this is not theory, it is
+the 400 traced to `loop.go`'s per-call loop and fixed by holding `media` until the whole
+batch had answered. So the only legal injection point is **after the media append, before
+the next `completeWithFallback`** — where `compact` and `Context.Save` already run. "Inject
+whenever it arrives" is not an option.
+
+Two things check out in the design's favour at that point: `compact` drops from the
+OLDEST end, so a message appended at the tail cannot be evicted before it is sent; and
+`repair`/`dropOrphanTools` only trims LEADING tool results, so a user message at a batch
+boundary is structurally safe by construction.
+
+What has to be built:
+
+1. **A per-session claim in the harness** (`httpsse.go`), the shape picoclaw uses —
+   `LoadOrStore` on the session id. This is the prerequisite for everything, including
+   doing nothing about steering.
+2. **A mailbox on that claim**, and a drain at the batch boundary above.
+3. **A transcript write path for a folded user message.** `record` writes assistant
+   messages only; the member's correction has to land in the served history where it was
+   said, or it vanishes and the answer addresses a question nobody can see. The proxy's
+   reader then sees `user → step → step → user → step → answer`, which
+   `keepAnswerlessTurns` has never been shown.
+4. **A turn-boundary decision.** A message arriving after the final frame has started —
+   the one with no tool calls — has no next iteration to be drained into. It must either
+   become its own turn or force one more iteration. Neither is free, and the choice
+   decides whether "steering" has a deadline the member cannot see.
+5. **A way for the steering POST to REACH the running turn.** Today each POST is its own
+   request into its own goroutine; the second one has to hand its message to the first's
+   mailbox and then answer its own client. This is a harness API question, not a detail.
+6. **`Cancel` keyed per turn, not per session** (§10.1.c), or Stop stays broken the moment
+   two turns exist on purpose.
+7. **The webapp's queue**, unchanged from §3.3: `drain`'s two awaits exist to protect the
+   reveal buffer, and steering means a running turn's reveal receives content provoked by
+   a message sent after it began. That is not an extension of the queue; it is a change to
+   what a turn is on screen.
+
+### 10.4 Sizing
+
+**The prerequisite — define the concurrent POST — is Small.** One file in the harness
+(`httpsse.go`), a claim keyed by session id, and a decision for the loser: refuse with a
+distinct frame, or wait. It removes 10.1.a and 10.1.b outright, and it is the same hook
+steering would later hang the mailbox on. Add the harness check on the proxy's steering
+announcement so the interface stops asserting a fold that did not happen, and a per-turn
+key for `active` (10.1.c). Estimate: one sitting, three files, tests each.
+
+**Steering itself is Large**, and the size is not in any one repo — it is that items 4, 5
+and 7 above are each a decision nobody has made, in three different repos, and 7 was
+already called out as a rethink rather than an extension eighteen days ago. The harness
+mechanics (items 1–3) are the easy half.
+
+**Recommendation:** take the prerequisite now as a defect, on its own. Leave steering
+deferred until someone wants it as a feature, at which point the claim from the
+prerequisite is already the hook and OQ-2 is already answered for this harness.
+
+### 10.5 What this changes about §4's sequencing
+
+§4 deferred steering to "after `turn-stream-continuity`, read together with
+`picoclaw-incremental-streaming`, because both are picoclaw-semantics work". Both of those
+are now about a harness this deployment no longer runs on alpha. The pairing is void; the
+prerequisite in §10.4 stands on its own and depends on neither.
