@@ -114,6 +114,18 @@ that said nothing.
 status, so a member reading a transcript written before this feature still sees which
 tools a step asked for. Nothing is backfilled and no old file is rewritten.
 
+**It is a STAND-IN, applied per TURN, and never beside real events.** An iteration is
+written twice — the narration with its `tool_calls`, then its events — so deriving from
+both lists every call twice: once with its outcome and once saying nobody recorded one.
+A turn either recorded events or it did not, and the span between user messages is where
+that question can be answered; a conversation crossing the upgrade therefore keeps its
+older turns' tool names and its newer turns' outcomes.
+
+**FR-4.5** An absent status is rendered as NOTHING, not as a sentence saying it is
+absent. On a pre-feature transcript every row is status-less, and a sentence repeated
+down a whole conversation says less each time it appears. The row names the tool and its
+arguments, which is what it is for.
+
 ## FR-5 — The block renders them
 
 **FR-5.1** `StepRun` renders each step's narration as it does now, with the step's events
