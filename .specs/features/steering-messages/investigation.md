@@ -375,3 +375,52 @@ prerequisite is already the hook and OQ-2 is already answered for this harness.
 `picoclaw-incremental-streaming`, because both are picoclaw-semantics work". Both of those
 are now about a harness this deployment no longer runs on alpha. The pairing is void; the
 prerequisite in §10.4 stands on its own and depends on neither.
+
+### 10.6 What shipped: the prerequisite (2026-09-13)
+
+§10.4's "take the prerequisite now as a defect, on its own". **Not** steering — a
+message that arrives mid-turn is still not folded on the ganglion, it is queued.
+
+**The harness** (`crab-ganglion-harness#19`). `httpsse.go` claims a conversation for
+the duration of a turn; a second POST WAITS rather than running concurrently. Refusing
+would make the member resend a message while waiting on a turn they cannot see, and
+queueing is what the browser's own queue does when it has not been wiped by a reload —
+so a reloaded page now behaves like one that was never reloaded.
+
+Two properties the implementation is shaped around, and both are load-bearing:
+
+- the wait is **after the headers and the heartbeat**, so the connection carries bytes
+  while it waits and no hop between there and the member reclaims it;
+- the wait is **interruptible**, so a request killed by the proxy's turn budget or by a
+  member navigating away starts no turn at all. That is why it is a channel per
+  conversation rather than a mutex: a goroutine parked on a mutex cannot notice a dead
+  context.
+
+Serialization is per CONVERSATION, not per container. A member with two chats open is
+two conversations, and making them wait for each other would turn a correctness fix
+into a queue nobody asked for.
+
+**The proxy** (`crab-shell-proxy#60`). Two things that were saying something untrue.
+
+`internal/ganglion`'s `active` kept one cancel func per session (§10.1.c); it is a map
+per session now and `Cancel` stops every turn on the conversation — the member asked for
+the chat to stop, not for one of its requests to.
+
+And the steering announcement stopped being harness-blind. The frame carries `folded`
+and `queued`, exactly one true, read from the AGENT for the same reason the
+streaming-mode header is: it is flushed before `EnsureRunning`, so the docker target does
+not exist yet.
+
+**The webapp** (`crab-exoskeleton-webapp#69`). `TurnState.steering` is
+`"folded" | "queued" | null` and the banner renders a sentence for each. `folded` is read
+first and explicitly, so a proxy that predates `queued` still reads as a fold rather than
+as neither.
+
+**What this closes, from §10.1:** the lost update on the context window (a), the
+interleaved transcript (b), the Stop that stopped the wrong turn (c), and the
+announcement asserting a fold that did not happen.
+
+**What it does not close:** steering itself. §10.3's items 4, 5 and 7 — the turn
+boundary, how a second POST reaches the running turn, and the webapp's reveal queue —
+are each still a decision nobody has made. The claim is now the hook they would hang on,
+and OQ-2 stays answered for this harness: there is no graceWindow to disturb.
