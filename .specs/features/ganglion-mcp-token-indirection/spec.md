@@ -1,6 +1,11 @@
 # ganglion-mcp-token-indirection — Specification
 
-**Status:** Proposed. Nothing implemented.
+**Status:** RECORDED — nothing implemented, and no work scheduled. The owner's
+decision on 2026-09-13 was to write this down and stop there. It is kept because
+the exception it describes is invisible from the code that contains it: a reader
+of `desiredMCPServer` sees a header being written, not a constraint inherited
+from a harness we do not control. The requirements below are what an
+implementation WOULD have to satisfy, not a queue.
 **Date:** 2026-09-13.
 **Spans:** `crab-ganglion-harness`, `crab-shell-proxy`.
 **Does not touch:** picoclaw's `config.json`, or `crab-exoskeleton-webapp`.

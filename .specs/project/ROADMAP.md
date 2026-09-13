@@ -203,8 +203,9 @@ metrics survive the proxy being down). See
 
 - Production hardening (TLS termination, secret rotation, Docker-socket privilege — see AD-009 R2)
 - Per-user (not just per-agent) lifecycle mode overrides
-- **ganglion-mcp-token-indirection** (PROPOSED) — the memory-graph bearer token
-  is the one credential this stack still writes in plaintext to a volume, in
+- **ganglion-mcp-token-indirection** (RECORDED — no work scheduled) — the
+  memory-graph bearer token is the one credential this stack still writes in
+  plaintext to a volume, in
   `.ganglion-config.json`'s `tools.mcp.servers.memory.headers.Authorization`.
   The reason is picoclaw's (`tools.mcp.servers` has no env indirection,
   `env_file` is stdio-only) and does not apply to a harness we own. Proposal:
