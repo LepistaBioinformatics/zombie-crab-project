@@ -134,6 +134,39 @@ services:
     entrypoint: ["/bin/true"]
     restart: "no"
 
+  # THE SECOND HARNESS'S IMAGE, and the reason this service exists at all.
+  #
+  # `CRAB_GANGLION_IMAGE` defaults to `zombie-crab/crab-ganglion:dev`, a tag that
+  # lives only on the machine that built it -- there is no registry copy, because
+  # nothing publishes one (the product ships a release workflow for the patched
+  # picoclaw and none for this). Nothing in this file built it either, so the tag
+  # survived only as long as the daemon's image store did.
+  #
+  # `docker system prune` is what that costs. It removes an unused image, this one
+  # goes, and no compose run brings it back -- while picoclaw's comes back on the
+  # next `up`, because the service above builds it. The proxy's EnsureImage then
+  # finds nothing locally and falls through to a PULL, which 404s on a tag no
+  # registry has: every ganglion agent is dead until someone remembers to run
+  # `docker build` by hand.
+  #
+  # A build-only service, exactly like picoclaw-image: it produces the tag and
+  # exits, and the proxy waits for it. The two harnesses are now recovered the
+  # same way by the same command.
+  #
+  # Note what this build runs: crab-ganglion-harness's Dockerfile does `go vet` and
+  # `go test` before it links the binary, deliberately -- "the tests ARE this
+  # image's acceptance check". So a failing test stops the stack from coming up.
+  # That is the intent for a development compose and is why it is stated here.
+  ganglion-image:
+    build:
+      context: ./crab/crab-ganglion-harness
+      # Same reason as picoclaw-image above: `go mod download` fetches from the
+      # internet, and a build container has one usable resolver and no fallback.
+      network: host
+    image: ${CRAB_GANGLION_IMAGE:-zombie-crab/crab-ganglion:dev}
+    entrypoint: ["/bin/true"]
+    restart: "no"
+
   crab-shell-proxy:
     build:
       context: ./crab/crab-shell-proxy
@@ -142,6 +175,8 @@ services:
       network: host
     depends_on:
       picoclaw-image:
+        condition: service_completed_successfully
+      ganglion-image:
         condition: service_completed_successfully
     restart: unless-stopped
     networks:
@@ -163,10 +198,13 @@ services:
       # exact string equality, so the wildcard rule the proxy writes per project
       # never matches and every project chat is answered by the main agent.
       #
-      # EnsureImage takes a local image as-is and never tries to pull it
-      # (internal/docker/client.go), which is what lets an unpublished local tag
-      # work here. That is also why the prod file does NOT default to it — it
-      # pulls from a registry.
+      # EnsureImage takes a local image as-is (internal/docker/client.go), which is
+      # what lets an unpublished local tag work here. It does NOT stop there when the
+      # image is missing, though -- it falls through to a pull, which 404s on a tag no
+      # registry has. So an unpublished tag works exactly as long as the local image
+      # exists, and the build-only services above are what keep that true across a
+      # `docker system prune`. That is also why the prod file does NOT default to a
+      # local tag -- it pulls from a registry.
       #
       # Set it back to docker.io/sipeed/picoclaw:latest to run stock picoclaw
       # (projects stop working; nothing else changes).
