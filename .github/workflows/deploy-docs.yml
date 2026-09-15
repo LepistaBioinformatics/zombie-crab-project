@@ -1,0 +1,75 @@
+name: Deploy documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/book/**'
+      - '.github/workflows/deploy-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one halfway: a cancelled deploy can
+# leave the published site pointing at a partial artifact.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up mdBook
+        uses: peaceiris/actions-mdbook@v1
+        with:
+          mdbook-version: '0.5.2'
+
+      - name: Cache cargo bin
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: cargo-bin-mdbook-i18n-helpers-0.4.0
+
+      - name: Install mdbook-i18n-helpers
+        run: |
+          if ! command -v mdbook-gettext > /dev/null; then
+            cargo install mdbook-i18n-helpers --version 0.4.0 --locked
+          fi
+
+      # English is the source. `src/` holds it, and this build reads it directly.
+      - name: Build the English book
+        run: mdbook build
+        working-directory: docs/book
+
+      # Portuguese is a translation: the same `src/`, run through po/pt-BR.po by
+      # the gettext preprocessor. It is nested inside the English book so that a
+      # single Pages artifact carries both languages.
+      - name: Build the Portuguese book
+        run: |
+          MDBOOK_BOOK__LANGUAGE=pt-BR mdbook build --dest-dir /tmp/book-pt-br
+          mv /tmp/book-pt-br book/pt-BR
+        working-directory: docs/book
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs/book/book
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

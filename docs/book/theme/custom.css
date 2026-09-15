@@ -1,0 +1,44 @@
+/* zombie-crab-project documentation — a few small adjustments on top of the
+   stock mdBook themes. Nothing here changes layout; it only makes callouts,
+   tables and the language switch easier to read. */
+
+:root {
+    --crab-accent: #d2542f;
+    --crab-accent-soft: rgba(210, 84, 47, 0.12);
+}
+
+.navy, .coal, .ayu {
+    --crab-accent: #ff7a4d;
+    --crab-accent-soft: rgba(255, 122, 77, 0.16);
+}
+
+/* Blockquotes read as asides: a note, a warning, a "you can skip this". */
+blockquote {
+    border-inline-start: 3px solid var(--crab-accent);
+    background: var(--crab-accent-soft);
+    padding: 0.8rem 1rem;
+}
+
+blockquote > :first-child { margin-top: 0; }
+blockquote > :last-child { margin-bottom: 0; }
+
+/* Tables carry a lot of this book's detail, so give them room and rules. */
+table {
+    width: 100%;
+    display: table;
+}
+
+table thead th {
+    border-bottom: 2px solid var(--crab-accent);
+}
+
+/* The language switch sits at the top of the introduction of each book. */
+.language-switch {
+    font-size: 0.9em;
+    opacity: 0.85;
+}
+
+/* Long command lines wrap rather than scroll on a phone. */
+@media (max-width: 700px) {
+    pre > code { white-space: pre-wrap; word-break: break-word; }
+}
