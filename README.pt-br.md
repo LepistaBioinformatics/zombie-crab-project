@@ -143,7 +143,7 @@ done
 O crab-shell-proxy clona o template (o seu ou o default embutido) no dir de cada
 novo usuário e injeta o provider/model, um token de canal pico novo e a chave de
 API no provisionamento — então o template continua um scaffold cru e sem
-segredos. Veja [Criando um Agente Customizado](./docs/CREATE_CUSTOM_AGENT.pt-br.md)
+segredos. Veja [Criando um agente customizado](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/31-custom-agent.html)
 para moldar um template, e [Rodando e resetando do zero](#rodando-e-resetando-do-zero)
 para o comportamento de auto-recuperação.
 
@@ -408,7 +408,7 @@ dois passos via `docker exec` no container `mycelium-postgres`.
 
 Gerenciar modelos, skills compartilhadas, secrets compartilhados, arquivos,
 personas, membros e branding é feito pela **área de admin do chat-webapp** —
-veja o [Guia do Administrador](./docs/ADMIN_GUIDE.pt-br.md).
+veja o [guia do administrador](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/30-admin-guide.html) na documentação.
 
 ## O que há neste repositório
 
@@ -435,9 +435,12 @@ O `crab-shell-proxy` é um submódulo com seu próprio
 [README](./crab/crab-shell-proxy/README.md) detalhando o modelo de isolamento, e
 o `crab-ganglion-harness` tem um sobre o runtime do agente.
 
-A pasta [`docs/`](./docs/) reúne guias para tarefas comuns —
-[**Criando um Agente Customizado**](./docs/CREATE_CUSTOM_AGENT.pt-br.md) e o
-[**Guia do Administrador**](./docs/ADMIN_GUIDE.pt-br.md) (modelos, skills, secrets, membros).
+A documentação completa está [no livro](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/),
+construído a partir de [`docs/book/`](./docs/book/) e publicado a cada push na
+`main`. Ele tem um [início rápido](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/01-quick-start.html),
+um capítulo por componente, e os guias de operação que antes ficavam soltos em
+`docs/` — [criando um agente customizado](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/31-custom-agent.html)
+e o [guia do administrador](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/30-admin-guide.html).
 
 ## Antes de levar isto para produção
 

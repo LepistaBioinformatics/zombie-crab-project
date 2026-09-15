@@ -139,7 +139,7 @@ done
 crab-shell-proxy clones the template (yours or the embedded default) into each
 new user's dir and injects the provider/model, a fresh pico-channel token, and
 the API key at provisioning time — so the template stays a bare, secret-free
-scaffold. See [Creating a Custom Agent](./docs/CREATE_CUSTOM_AGENT.md) to shape
+scaffold. See [Creating a custom agent](https://lepistabioinformatics.github.io/zombie-crab-project/31-custom-agent.html) to shape
 a template, and [Running and resetting from scratch](#running-and-resetting-from-scratch)
 for the self-heal behavior.
 
@@ -395,7 +395,7 @@ not driven by this repo's compose, run the same two steps via `docker exec` on t
 
 Managing models, shared skills, shared secrets, files, personas, members, and
 branding is done from the **chat-webapp admin area** — see the
-[Admin Guide](./docs/ADMIN_GUIDE.md).
+[admin guide](https://lepistabioinformatics.github.io/zombie-crab-project/30-admin-guide.html) in the documentation.
 
 ## What's in this repo
 
@@ -422,9 +422,12 @@ data/                      # per-agent templates + per-user volumes + shared mat
 [README](./crab/crab-shell-proxy/README.md) going deeper on the isolation model,
 and `crab-ganglion-harness` has one for the agent runtime.
 
-The [`docs/`](./docs/) folder holds guides for common tasks —
-[**Creating a Custom Agent**](./docs/CREATE_CUSTOM_AGENT.md) and the
-[**Admin Guide**](./docs/ADMIN_GUIDE.md) (models, skills, secrets, members).
+The full documentation lives in [the book](https://lepistabioinformatics.github.io/zombie-crab-project/),
+which is built from [`docs/book/`](./docs/book/) and published on every push to
+`main`. It has a [quick start](https://lepistabioinformatics.github.io/zombie-crab-project/01-quick-start.html),
+a chapter per component, and the operator guides that used to sit loose in
+`docs/` — [creating a custom agent](https://lepistabioinformatics.github.io/zombie-crab-project/31-custom-agent.html)
+and the [admin guide](https://lepistabioinformatics.github.io/zombie-crab-project/30-admin-guide.html).
 
 ## Before you take this to production
 

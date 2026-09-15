@@ -1,0 +1,259 @@
+
+msgid ""
+msgstr ""
+"Project-Id-Version: zombie-crab-project\n"
+"POT-Creation-Date: 2026-09-15T12:49:53-03:00\n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: pt-BR\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: src/SUMMARY.md:1
+msgid "Summary"
+msgstr "Sumário"
+
+#: src/SUMMARY.md:3
+msgid "Introduction"
+msgstr ""
+
+#: src/SUMMARY.md:5
+msgid "Getting Started"
+msgstr "Primeiros passos"
+
+#: src/SUMMARY.md:7
+msgid "Quick Start"
+msgstr ""
+
+#: src/SUMMARY.md:8
+msgid "Installation"
+msgstr ""
+
+#: src/SUMMARY.md:9
+msgid "Configuration"
+msgstr ""
+
+#: src/SUMMARY.md:11
+msgid "Core Concepts"
+msgstr ""
+
+#: src/SUMMARY.md:13
+msgid "How the stack fits together"
+msgstr ""
+
+#: src/SUMMARY.md:14
+msgid "Harnesses"
+msgstr ""
+
+#: src/SUMMARY.md:15
+msgid "Agents, workspaces and projects"
+msgstr ""
+
+#: src/SUMMARY.md:16
+msgid "Skills and memory"
+msgstr ""
+
+#: src/SUMMARY.md:17
+msgid "Files and delivery"
+msgstr ""
+
+#: src/SUMMARY.md:19
+msgid "Using It"
+msgstr ""
+
+#: src/SUMMARY.md:21
+msgid "The chat client"
+msgstr ""
+
+#: src/SUMMARY.md:22
+msgid "Working with projects"
+msgstr ""
+
+#: src/SUMMARY.md:23
+msgid "Scheduled tasks"
+msgstr ""
+
+#: src/SUMMARY.md:25
+msgid "Administration"
+msgstr ""
+
+#: src/SUMMARY.md:27
+msgid "Admin guide"
+msgstr ""
+
+#: src/SUMMARY.md:28
+msgid "Creating a custom agent"
+msgstr ""
+
+#: src/SUMMARY.md:29
+msgid "Models and providers"
+msgstr ""
+
+#: src/SUMMARY.md:31
+msgid "Operations"
+msgstr ""
+
+#: src/SUMMARY.md:33
+msgid "Deployment"
+msgstr ""
+
+#: src/SUMMARY.md:34
+msgid "Database and migrations"
+msgstr ""
+
+#: src/SUMMARY.md:35
+msgid "Observability"
+msgstr ""
+
+#: src/SUMMARY.md:36
+msgid "Troubleshooting"
+msgstr ""
+
+#: src/SUMMARY.md:38
+msgid "The Components"
+msgstr ""
+
+#: src/SUMMARY.md:40
+msgid "crab-shell-proxy"
+msgstr ""
+
+#: src/SUMMARY.md:41
+msgid "crab-ganglion-harness"
+msgstr ""
+
+#: src/SUMMARY.md:42
+msgid "crab-exoskeleton-webapp"
+msgstr ""
+
+#: src/SUMMARY.md:43
+msgid "harness-sphere"
+msgstr ""
+
+#: src/SUMMARY.md:45
+msgid "Development"
+msgstr ""
+
+#: src/SUMMARY.md:47
+msgid "Working on the stack"
+msgstr ""
+
+#: src/SUMMARY.md:48
+msgid "Contributing"
+msgstr ""
+
+#: src/00-introduction.md:1
+msgid "00-introduction"
+msgstr ""
+
+#: src/00-introduction.md:3 src/01-quick-start.md:3 src/02-installation.md:3
+#: src/03-configuration.md:3 src/10-architecture.md:3 src/11-harnesses.md:3
+#: src/12-agents-and-workspaces.md:3 src/13-skills-and-memory.md:3
+#: src/14-files-and-delivery.md:3 src/20-chat-client.md:3 src/21-projects.md:3
+#: src/22-scheduled-tasks.md:3 src/30-admin-guide.md:3 src/31-custom-agent.md:3
+#: src/32-models-and-providers.md:3 src/40-deployment.md:3 src/41-database.md:3
+#: src/42-observability.md:3 src/43-troubleshooting.md:3
+#: src/50-crab-shell-proxy.md:3 src/51-crab-ganglion-harness.md:3
+#: src/52-crab-exoskeleton-webapp.md:3 src/53-harness-sphere.md:3
+#: src/60-development.md:3 src/61-contributing.md:3
+msgid "Stub."
+msgstr ""
+
+#: src/01-quick-start.md:1
+msgid "01-quick-start"
+msgstr ""
+
+#: src/02-installation.md:1
+msgid "02-installation"
+msgstr ""
+
+#: src/03-configuration.md:1
+msgid "03-configuration"
+msgstr ""
+
+#: src/10-architecture.md:1
+msgid "10-architecture"
+msgstr ""
+
+#: src/11-harnesses.md:1
+msgid "11-harnesses"
+msgstr ""
+
+#: src/12-agents-and-workspaces.md:1
+msgid "12-agents-and-workspaces"
+msgstr ""
+
+#: src/13-skills-and-memory.md:1
+msgid "13-skills-and-memory"
+msgstr ""
+
+#: src/14-files-and-delivery.md:1
+msgid "14-files-and-delivery"
+msgstr ""
+
+#: src/20-chat-client.md:1
+msgid "20-chat-client"
+msgstr ""
+
+#: src/21-projects.md:1
+msgid "21-projects"
+msgstr ""
+
+#: src/22-scheduled-tasks.md:1
+msgid "22-scheduled-tasks"
+msgstr ""
+
+#: src/30-admin-guide.md:1
+msgid "30-admin-guide"
+msgstr ""
+
+#: src/31-custom-agent.md:1
+msgid "31-custom-agent"
+msgstr ""
+
+#: src/32-models-and-providers.md:1
+msgid "32-models-and-providers"
+msgstr ""
+
+#: src/40-deployment.md:1
+msgid "40-deployment"
+msgstr ""
+
+#: src/41-database.md:1
+msgid "41-database"
+msgstr ""
+
+#: src/42-observability.md:1
+msgid "42-observability"
+msgstr ""
+
+#: src/43-troubleshooting.md:1
+msgid "43-troubleshooting"
+msgstr ""
+
+#: src/50-crab-shell-proxy.md:1
+msgid "50-crab-shell-proxy"
+msgstr ""
+
+#: src/51-crab-ganglion-harness.md:1
+msgid "51-crab-ganglion-harness"
+msgstr ""
+
+#: src/52-crab-exoskeleton-webapp.md:1
+msgid "52-crab-exoskeleton-webapp"
+msgstr ""
+
+#: src/53-harness-sphere.md:1
+msgid "53-harness-sphere"
+msgstr ""
+
+#: src/60-development.md:1
+msgid "60-development"
+msgstr ""
+
+#: src/61-contributing.md:1
+msgid "61-contributing"
+msgstr ""
+
