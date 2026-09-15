@@ -2,6 +2,8 @@
 
 **Dê a cada usuário o seu próprio agente de IA real e isolado — atrás de uma única porta de entrada autenticada.**
 
+**[Leia a documentação](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/)** — o início rápido, os conceitos e o detalhe, em inglês e português.
+
 *[Read this in English](./README.md)*
 
 ## O problema
@@ -84,10 +86,12 @@ A camada do agente não é um programa só. O `harness:` de cada agente no
   uma ferramenta de sistema de arquivos, e um shell que o kernel confina ao
   workspace do próprio turno. É para onde vai o trabalho novo.
 - **[PicoClaw](https://github.com/sipeed/picoclaw)** — onde este projeto começou,
-  e **em depreciação**. Continua suportado, e continua sendo o que um agente
-  recebe quando não declara harness. Note que ele não roda de fábrica: a imagem é
-  uma build corrigida, porque o upstream casa seletores de dispatch por igualdade
-  exata e agentes por projeto precisam de curinga.
+  e **em depreciação**. Continua totalmente suportado, e continua sendo o valor
+  certo a declarar para um agente que precisa dele — mas não é mais o que uma
+  chave omitida significa: `config.DefaultHarness` é o ganglion. Note que ele não
+  roda de fábrica: a imagem é uma build corrigida, porque o upstream casa
+  seletores de dispatch por igualdade exata e agentes por projeto precisam de
+  curinga.
 
 Eles são próximos, mas não idênticos, e uma capacidade que um harness não serve
 responde **501 nomeando o harness** em vez de fingir sucesso. Projetos, escolha
@@ -139,7 +143,7 @@ done
 O crab-shell-proxy clona o template (o seu ou o default embutido) no dir de cada
 novo usuário e injeta o provider/model, um token de canal pico novo e a chave de
 API no provisionamento — então o template continua um scaffold cru e sem
-segredos. Veja [Criando um Agente Customizado](./docs/CREATE_CUSTOM_AGENT.pt-br.md)
+segredos. Veja [Criando um agente customizado](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/31-custom-agent.html)
 para moldar um template, e [Rodando e resetando do zero](#rodando-e-resetando-do-zero)
 para o comportamento de auto-recuperação.
 
@@ -152,10 +156,20 @@ para o comportamento de auto-recuperação.
 - `MYC_STANDALONE_BOOTSTRAP_SECRET` — libera o bootstrap único de Staff.
 
 A stack traz dois agentes: **`alpha` no harness ganglion** e **`beta` no
-picoclaw** — um de cada, para um checkout novo exercitar os dois. Cada um precisa do
-seu token e da sua chave LLM definidos, ou o proxy não sobe — para adicionar ou
-remover agentes, edite o `config.yaml` do proxy junto com o bloco de serviço
-correspondente no Gateway.
+picoclaw** — um de cada, para um checkout novo exercitar os dois. Os dois declaram
+o harness explicitamente, de propósito: uma chave omitida resolve para o ganglion,
+e runtime não é coisa que uma configuração deva escolher por omissão. Para
+adicionar ou remover agentes, edite o `config.yaml` do proxy junto com o bloco de
+serviço correspondente no Gateway.
+
+Cada agente precisa do seu token e da sua chave LLM, e os dois harnesses falham de
+formas diferentes quando falta uma delas. No **picoclaw** um token que não resolve
+é fatal e o proxy se recusa a subir, em vez de tirar o acesso de um membro em
+silêncio; já a chave LLM dele é escrita por usuário no provisionamento, então uma
+chave vazia aparece como erro de autenticação na primeira mensagem. No
+**ganglion** os dois casos desabilitam aquele agente — as rotas dele respondem 404
+e o log de boot nomeia a variável — para que um agente não provisionado não derrube
+os que funcionam.
 
 Qual provider/model cada agente usa é declarado em
 [`crab/crab-shell-proxy/config.yaml`](./crab/crab-shell-proxy/config.yaml) (ex.:
@@ -245,7 +259,8 @@ serve cada um.
 > `/v1/cron/*`, então o gateway precisa de um bloco `[[<agente>.path]]`
 > correspondente, senão ele responde
 > `400 "Request path does not match any service"` antes de o proxy ser
-> alcançado. Os três perfis em [`deploy/`](./deploy/) já têm, um bloco por agente.
+> alcançado. Os dois modos de deploy em [`deploy/`](./deploy/) — `standalone` e
+> `prod` — já têm, um bloco por agente.
 
 ## Rodando e resetando do zero
 
@@ -260,7 +275,8 @@ docker rm -f $(docker ps -aq --filter 'name=crabshell') 2>/dev/null   # agentes 
 
 # o estado em disco pertence aos agentes (não-root) spawnados -> sudo
 sudo rm -rf data/templates data/tenants data/effective-secrets \
-            data/effective-skills data/user-secrets data/registered-models
+            data/effective-skills data/effective-persona data/managed-skills \
+            data/user-secrets data/restart data/model-registry.db
 
 docker compose up -d --build   # --build é OBRIGATÓRIO: o template de fallback é embutido no binário do proxy
 ```
@@ -392,7 +408,7 @@ dois passos via `docker exec` no container `mycelium-postgres`.
 
 Gerenciar modelos, skills compartilhadas, secrets compartilhados, arquivos,
 personas, membros e branding é feito pela **área de admin do chat-webapp** —
-veja o [Guia do Administrador](./docs/ADMIN_GUIDE.pt-br.md).
+veja o [guia do administrador](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/30-admin-guide.html) na documentação.
 
 ## O que há neste repositório
 
@@ -419,9 +435,12 @@ O `crab-shell-proxy` é um submódulo com seu próprio
 [README](./crab/crab-shell-proxy/README.md) detalhando o modelo de isolamento, e
 o `crab-ganglion-harness` tem um sobre o runtime do agente.
 
-A pasta [`docs/`](./docs/) reúne guias para tarefas comuns —
-[**Criando um Agente Customizado**](./docs/CREATE_CUSTOM_AGENT.pt-br.md) e o
-[**Guia do Administrador**](./docs/ADMIN_GUIDE.pt-br.md) (modelos, skills, secrets, membros).
+A documentação completa está [no livro](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/),
+construído a partir de [`docs/book/`](./docs/book/) e publicado a cada push na
+`main`. Ele tem um [início rápido](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/01-quick-start.html),
+um capítulo por componente, e os guias de operação que antes ficavam soltos em
+`docs/` — [criando um agente customizado](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/31-custom-agent.html)
+e o [guia do administrador](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/30-admin-guide.html).
 
 ## Antes de levar isto para produção
 

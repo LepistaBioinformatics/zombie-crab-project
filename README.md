@@ -2,6 +2,8 @@
 
 **Give every user their own real, isolated AI agent — behind a single, authenticated front door.**
 
+**[Read the documentation](https://lepistabioinformatics.github.io/zombie-crab-project/)** — the quick start, the concepts and the detail, in English and Portuguese.
+
 *[Leia isso em português](./README.pt-br.md)*
 
 ## The problem
@@ -81,10 +83,11 @@ The agent layer is not one program. `harness:` on each agent in the proxy's
   more than they saved. A static Go binary on alpine: one filesystem tool, and a
   shell the kernel confines to the turn's own workspace. Where new work goes.
 - **[PicoClaw](https://github.com/sipeed/picoclaw)** — where this project
-  started, and **on its way out**. Still supported, and still what an agent gets
-  when it declares no harness. Note it does not run stock: the image is a patched
-  build, because upstream matches dispatch selectors by exact string equality and
-  per-project agents need a wildcard.
+  started, and **on its way out**. Still fully supported, and still the right
+  value to declare for an agent that needs it — but no longer what an omitted
+  key means: `config.DefaultHarness` is the ganglion. Note it does not run
+  stock: the image is a patched build, because upstream matches dispatch
+  selectors by exact string equality and per-project agents need a wildcard.
 
 They are close but not identical, and a capability a harness cannot serve answers
 **501 naming the harness** rather than quietly succeeding. Projects, personal
@@ -136,7 +139,7 @@ done
 crab-shell-proxy clones the template (yours or the embedded default) into each
 new user's dir and injects the provider/model, a fresh pico-channel token, and
 the API key at provisioning time — so the template stays a bare, secret-free
-scaffold. See [Creating a Custom Agent](./docs/CREATE_CUSTOM_AGENT.md) to shape
+scaffold. See [Creating a custom agent](https://lepistabioinformatics.github.io/zombie-crab-project/31-custom-agent.html) to shape
 a template, and [Running and resetting from scratch](#running-and-resetting-from-scratch)
 for the self-heal behavior.
 
@@ -149,11 +152,21 @@ for the self-heal behavior.
 - `MYC_STANDALONE_BOOTSTRAP_SECRET` — gates the one-time Staff bootstrap.
 
 The stack ships two agents: **`alpha` on the ganglion harness** and **`beta` on
-picoclaw** — one of each, so a fresh checkout exercises both. Each needs its token
-and its LLM key set, or the proxy will not start — add or remove agents in the
-proxy's `config.yaml` together with the matching Gateway service block. A ganglion
-agent additionally needs `CRAB_GANGLION_IMAGE`; the development compose defaults
-it to an image it builds itself.
+picoclaw** — one of each, so a fresh checkout exercises both. Both declare their
+harness explicitly, which is deliberate: an omitted key resolves to the ganglion,
+and a runtime is not something a configuration should choose by omission. Add or
+remove agents in the proxy's `config.yaml` together with the matching Gateway
+service block.
+
+Each agent needs its token and its LLM key, and the two harnesses fail
+differently when one is missing. For **picoclaw** a token that resolves to
+nothing is fatal and the proxy refuses to start, rather than quietly removing a
+member's access; its LLM key is written per user at provisioning time, so an
+empty one surfaces as an auth error on the first message instead. For the
+**ganglion** both cases disable that one agent — its routes answer 404 and the
+boot log names the variable — so one unprovisioned agent cannot take the working
+ones down with it. A ganglion agent additionally needs `CRAB_GANGLION_IMAGE`; the
+development compose defaults it to an image it builds itself.
 
 Which provider/model each agent uses is declared in
 [`crab/crab-shell-proxy/config.yaml`](./crab/crab-shell-proxy/config.yaml) (e.g.
@@ -239,8 +252,8 @@ from the composer — see the landing page at `/` for what each is for.
 > Operator note: these read routes live on crab-shell-proxy at `/v1/cron/*`, so
 > the gateway needs a matching `[[<agent>.path]]` block or it answers
 > `400 "Request path does not match any service"` before the proxy is reached.
-> All three profiles under [`deploy/`](./deploy/) already carry it, one block per
-> agent.
+> Both deployment modes under [`deploy/`](./deploy/) — `standalone` and `prod` —
+> already carry it, one block per agent.
 
 ## Running and resetting from scratch
 
@@ -255,7 +268,8 @@ docker rm -f $(docker ps -aq --filter 'name=crabshell') 2>/dev/null   # agents s
 
 # on-disk state is owned by the spawned (non-root) agents -> sudo
 sudo rm -rf data/templates data/tenants data/effective-secrets \
-            data/effective-skills data/user-secrets data/registered-models
+            data/effective-skills data/effective-persona data/managed-skills \
+            data/user-secrets data/restart data/model-registry.db
 
 docker compose up -d --build   # --build is REQUIRED: the fallback template is baked into the proxy binary
 ```
@@ -381,7 +395,7 @@ not driven by this repo's compose, run the same two steps via `docker exec` on t
 
 Managing models, shared skills, shared secrets, files, personas, members, and
 branding is done from the **chat-webapp admin area** — see the
-[Admin Guide](./docs/ADMIN_GUIDE.md).
+[admin guide](https://lepistabioinformatics.github.io/zombie-crab-project/30-admin-guide.html) in the documentation.
 
 ## What's in this repo
 
@@ -408,9 +422,12 @@ data/                      # per-agent templates + per-user volumes + shared mat
 [README](./crab/crab-shell-proxy/README.md) going deeper on the isolation model,
 and `crab-ganglion-harness` has one for the agent runtime.
 
-The [`docs/`](./docs/) folder holds guides for common tasks —
-[**Creating a Custom Agent**](./docs/CREATE_CUSTOM_AGENT.md) and the
-[**Admin Guide**](./docs/ADMIN_GUIDE.md) (models, skills, secrets, members).
+The full documentation lives in [the book](https://lepistabioinformatics.github.io/zombie-crab-project/),
+which is built from [`docs/book/`](./docs/book/) and published on every push to
+`main`. It has a [quick start](https://lepistabioinformatics.github.io/zombie-crab-project/01-quick-start.html),
+a chapter per component, and the operator guides that used to sit loose in
+`docs/` — [creating a custom agent](https://lepistabioinformatics.github.io/zombie-crab-project/31-custom-agent.html)
+and the [admin guide](https://lepistabioinformatics.github.io/zombie-crab-project/30-admin-guide.html).
 
 ## Before you take this to production
 

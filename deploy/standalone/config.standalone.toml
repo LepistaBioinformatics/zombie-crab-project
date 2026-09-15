@@ -197,7 +197,7 @@ serviceType = "rest-api"
 isContextApi = false
 openapiPath = "/doc/openapi.json"
 capabilities = ["chat"]
-description = "PicoClaw agent 'alpha' - an OpenAI-compatible personal chat agent. Each user gets an isolated container; send chat via POST /v1/chat/completions."
+description = "Agent 'alpha' - an OpenAI-compatible personal chat agent. Each user gets an isolated container; send chat via POST /v1/chat/completions."
 
 [[alpha.secret]]
 name = "alpha-authorization-header"
