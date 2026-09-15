@@ -31,7 +31,8 @@ So there are really two problems to solve at once:
    one never becomes a compromise of everyone.
 
 PicoClaw answers neither on its own. This project is the missing structure
-around it.
+around it — and that structure has since outgrown the assistant it was built
+for: the agent layer is a swappable **harness** now, and picoclaw is one of two.
 
 ## The structure (and why it's shaped this way)
 
@@ -44,8 +45,8 @@ project:
 | Layer | Component | Its one job |
 |---|---|---|
 | **1 · Edge** | [**Mycelium**](https://github.com/LepistaBioinformatics/mycelium) (standalone) | The only thing exposed. Authenticates the caller, enforces RBAC, and injects a **verified, unforgeable** account profile into the request. Nothing downstream is reachable except through it. |
-| **2 · Orchestration** | [**crab-shell-proxy**](https://github.com/LepistaBioinformatics/crab-shell-proxy) (Go) | Reads the agent from the injected service name and the user from the profile's `accId`, then ensures that user's own PicoClaw container is running — spinning it up on demand, tearing it down when idle. Speaks OpenAI HTTP outward and Pico Protocol inward. |
-| **3 · Agent** | [**PicoClaw**](https://github.com/sipeed/picoclaw) | The actual assistant, one **isolated, non-root container per `(agent, user)`**, with its own volume for workspace, memory, and sessions. |
+| **2 · Orchestration** | [**crab-shell-proxy**](https://github.com/LepistaBioinformatics/crab-shell-proxy) (Go) | Reads the agent from the injected service name and the user from the profile's `accId`, then ensures that user's own agent container is running — spinning it up on demand, tearing it down when idle. Speaks OpenAI HTTP outward and the harness's own protocol inward. |
+| **3 · Agent** | a **harness** — [**crab-ganglion-harness**](https://github.com/LepistaBioinformatics/crab-ganglion-harness) (Go) or [**PicoClaw**](https://github.com/sipeed/picoclaw) | The actual assistant, one **isolated, non-root container per `(agent, user)`**, with its own volume for workspace, memory, and sessions. Which of the two answers is declared per agent — see below. |
 
 **Why this separation matters — it's defense in depth, and the isolation is real:**
 
@@ -65,9 +66,31 @@ project:
   kept only as a human-readable marker for operators. Change your email; your
   agent and its history stay yours.
 - **Each layer is replaceable and auditable on its own.** Auth/RBAC lives in one
-  gateway config; isolation and lifecycle live in one small Go service;
-  the agent stays the stock PicoClaw binary, unmodified. One place to reason
-  about each concern.
+  gateway config; isolation and lifecycle live in one small Go service; and the
+  agent is a **harness behind a fixed contract**, swappable without touching
+  either of the other two. One place to reason about each concern — and the
+  agent layer proved that claim by growing a second implementation.
+
+### Two harnesses, chosen per agent
+
+The agent layer is not one program. `harness:` on each agent in the proxy's
+`config.yaml` decides which runs, and both are supported today:
+
+- **[crab-ganglion-harness](https://github.com/LepistaBioinformatics/crab-ganglion-harness)**
+  — this project's own runtime, written once picoclaw's limits started to cost
+  more than they saved. A static Go binary on alpine: one filesystem tool, and a
+  shell the kernel confines to the turn's own workspace. Where new work goes.
+- **[PicoClaw](https://github.com/sipeed/picoclaw)** — where this project
+  started, and **on its way out**. Still supported, and still what an agent gets
+  when it declares no harness. Note it does not run stock: the image is a patched
+  build, because upstream matches dispatch selectors by exact string equality and
+  per-project agents need a wildcard.
+
+They are close but not identical, and a capability a harness cannot serve answers
+**501 naming the harness** rather than quietly succeeding. Projects, personal
+model selection and the knowledge graph began as picoclaw constructs and the
+ganglion has since grown all three; creating scheduled tasks over the API is the
+other way round — see [In the chat client](#in-the-chat-client).
 
 ### Lifecycle: scale-to-zero and continuous
 
@@ -78,9 +101,10 @@ modes:
   is stopped after a configurable idle window (data preserved), freeing RAM.
   Ideal for API-only usage.
 - **continuous** — never auto-stopped. Required when the agent is also reached
-  through PicoClaw's **native connectors** (Telegram, MS Teams, …), which dial
+  through picoclaw's **native connectors** (Telegram, MS Teams, …), which dial
   *out* from inside the container and don't pass through the proxy, so the
-  proxy can't see that activity to keep it alive.
+  proxy can't see that activity to keep it alive. A ganglion agent has no such
+  side door, so the mode is a plain cost decision there.
 
 ## A first-time walkthrough
 
@@ -93,10 +117,13 @@ git clone --recurse-submodules https://github.com/LepistaBioinformatics/zombie-c
 cd zombie-crab-project
 ```
 
-**2. (Optional) Pre-seed a template per agent.** You can skip this — the proxy
-**auto-bootstraps** a default picoclaw template the first time a user chats if
-`data/templates/<agent>/` is missing, so a fresh checkout works out of the box.
-Pre-seed only when you want a **custom persona/skills** from the start:
+**2. (Optional) Pre-seed a template per agent.** You can skip this — for a
+picoclaw agent the proxy **auto-bootstraps** a default template the first time a
+user chats if `data/templates/<agent>/` is missing, so a fresh checkout works out
+of the box. A ganglion agent is provisioned with **no template at all**, on
+purpose: the template is a picoclaw `config.json` plus a `.security.yml`, and
+seeding one there would leave two files nothing reads. Pre-seed only when you
+want a **custom persona/skills** from the start:
 
 ```bash
 for a in alpha beta; do
@@ -121,9 +148,12 @@ for the self-heal behavior.
   key, read from the environment (never stored in config or images).
 - `MYC_STANDALONE_BOOTSTRAP_SECRET` — gates the one-time Staff bootstrap.
 
-The stack ships two agents, `alpha` and `beta`, both picoclaw. Each needs its
-token and its LLM key set, or the proxy will not start — add or remove agents in
-the proxy's `config.yaml` together with the matching Gateway service block.
+The stack ships two agents: **`alpha` on the ganglion harness** and **`beta` on
+picoclaw** — one of each, so a fresh checkout exercises both. Each needs its token
+and its LLM key set, or the proxy will not start — add or remove agents in the
+proxy's `config.yaml` together with the matching Gateway service block. A ganglion
+agent additionally needs `CRAB_GANGLION_IMAGE`; the development compose defaults
+it to an image it builds itself.
 
 Which provider/model each agent uses is declared in
 [`crab/crab-shell-proxy/config.yaml`](./crab/crab-shell-proxy/config.yaml) (e.g.
@@ -162,8 +192,9 @@ so the identity lives in the container's labels, not in its name).
 ## In the chat client
 
 What a signed-in member gets, beyond the conversation itself. The right-hand
-**Workspace** panel holds four sections; the left sidebar switches between
-workspaces and that workspace's conversations.
+**Workspace** panel holds five sections — memory, the knowledge graph, scheduled
+tasks, files and secrets; the left sidebar switches between workspaces and that
+workspace's conversations.
 
 **Scheduled tasks** (Workspace → Tasks). Ask the agent to do something on a
 schedule — "compile a report every evening at six" — and it will, unattended.
@@ -177,13 +208,17 @@ task or a single run into the composer, so you can ask the agent about it.
 Three things about it are worth stating plainly, because they are deliberate and
 a reader would otherwise go looking for controls that do not exist:
 
-- **It is read-only.** Creating, changing, disabling or deleting a task is done
-  by asking the agent. picoclaw owns the job store and holds the live schedule in
-  memory, and whether it reloads a store edited from outside is unverified — so a
-  toggle in the panel could disagree with the timers actually running.
+- **On picoclaw it is read-only**, and creating, changing, disabling or deleting
+  a task is done by asking the agent: picoclaw owns the job store and holds the
+  live schedule in memory, and whether it reloads a store edited from outside is
+  unverified — so a toggle in the panel could disagree with the timers actually
+  running. On the **ganglion** the proxy owns the schedule instead, above the
+  container, so the write routes are served there and the API answers `501` on
+  picoclaw saying as much.
 - **There is no per-run success mark.** No outcome is recorded per execution
   anywhere. A run shows its instant, how long it took and how much it logged;
-  the task shows picoclaw's own status for its most recent run and nothing more.
+  the task shows the harness's own status for its most recent run and nothing
+  more.
 - **Finished one-off tasks are hidden by default**, behind a switch that always
   says how many rows it is hiding. A recurring task is never hidden, even
   disabled — disabling is reversible, and hiding it would read as deletion.
@@ -357,6 +392,8 @@ deploy/                    # per-mode configs: .env examples + mycelium/proxy co
 crab/                      # the crab side (per-user isolation + its chat client)
   crab-shell-proxy/        # git submodule — the Go per-user isolation orchestrator
   crab-exoskeleton-webapp/ # git submodule — the Next.js chat client (BFF)
+  crab-ganglion-harness/   # git submodule — this project's own agent harness (Go)
+  harness-sphere/          # git submodule — the watcher; observability only
 fungi/                     # the mycelium side (gateway + its admin UI)
   mycelium/
     Dockerfile.standalone  # builds mycelium-api from upstream git (no local source)
@@ -368,7 +405,8 @@ data/                      # per-agent templates + per-user volumes + shared mat
 ```
 
 `crab-shell-proxy` is a submodule with its own
-[README](./crab/crab-shell-proxy/README.md) going deeper on the isolation model.
+[README](./crab/crab-shell-proxy/README.md) going deeper on the isolation model,
+and `crab-ganglion-harness` has one for the agent runtime.
 
 The [`docs/`](./docs/) folder holds guides for common tasks —
 [**Creating a Custom Agent**](./docs/CREATE_CUSTOM_AGENT.md) and the
