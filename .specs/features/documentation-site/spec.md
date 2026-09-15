@@ -83,11 +83,16 @@ translation.
 
 ## Out of scope, and flagged
 
-**Production has no published ganglion image.** `docker-compose.prod.yaml` does
-not set `CRAB_GANGLION_IMAGE` and no workflow publishes one — only
-`release-picoclaw-glob.yml` exists. A reader who follows a deployment chapter on
-a server today cannot start a ganglion agent. The book must say so where it
-matters instead of describing a capability that is not shipped.
+**Production does not point at a published ganglion image.** The sharper version
+of this, established while writing the deployment chapter: `crab-ganglion-harness`
+*does* publish `ghcr.io/lepistabioinformatics/crab-ganglion:sha-<short-sha>` on
+every push to its `main`. What is missing is on this side — `docker-compose.prod.yaml`
+never sets `CRAB_GANGLION_IMAGE` and `deploy/prod/.env.example` never mentions it,
+so the base file's `zombie-crab/crab-ganglion:dev` carries through: a local-only
+tag. A prod `up -d` on a host holding the submodules builds it and works; a
+command that leaves the build-only service out — `up -d crab-shell-proxy`, a
+prune, a pull-only deploy — reaches `EnsureImage`, misses locally, and 404s on
+the pull. The book says this where the deployment chapter lives.
 
 **The default harness is picoclaw in code.** `requireHarnessFeature` falls back
 to `HarnessPicoclaw` when an agent declares no `harness:` key, so a book that

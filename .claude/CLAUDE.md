@@ -3,11 +3,12 @@
 Monorepo-wide rules. Each submodule has its own `.claude/CLAUDE.md` for rules that
 only apply inside it; this file holds what applies across the stack.
 
-## The three submodules
+## The four submodules
 
 | Path | What it is |
 |---|---|
-| `crab/crab-shell-proxy` | the orchestrator — spawns one picoclaw per (tenant, subscription, agent, user) |
+| `crab/crab-shell-proxy` | the orchestrator — spawns one agent container per (tenant, subscription, agent, user) |
+| `crab/crab-ganglion-harness` | this project's own agent runtime, and the default harness |
 | `crab/crab-exoskeleton-webapp` | the member-facing UI. **Its compose service is `chat-webapp`**, not the repo name |
 | `crab/harness-sphere` | the watcher. Observability only; exclusive to this stack |
 
