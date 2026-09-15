@@ -116,6 +116,11 @@ tells the agent to name the path in its reply:
 
 > Salvei o relatório em `public/attachments/relatorio-q2.pdf`.
 
+That example is in Portuguese because it is quoted verbatim from the shipped
+document, which is written for a deployment whose members write Portuguese. The
+instruction it carries is the point, not the language: name the path you wrote
+to, in the reply.
+
 and forbids it from announcing a file it did not actually write, or a path it did
 not actually use. picoclaw's own stock line — "Requested output delivered via
 tool attachment." — names nothing, and a reply that says only that becomes, after
