@@ -83,11 +83,11 @@ conversation, `meta.json` `count: 22`, one stable `sk_v1_` key throughout):
  1 user      13:06:57 | Enriqueça informações sobre bacterias fixadoras de nitrogenio
  …            (15 entries: web_search, web_fetch, memory-graph writes, final answer)
 17 user      13:07:51 | ?
-18 assistant 13:07:53 | Olá! 👋 Sou a Eva, sua assistente. Como posso ajudar você hoje?
+18 assistant 13:07:53 | Olá! 👋 Sou a sua assistente. Como posso ajudar você hoje?
 19 user      13:08:19 | Quantas mensagens trocamos nessa sessão?
 20 assistant 13:08:22 | … Esta é a primeira mensagem que recebo nesta sessão.
 21 user      13:17:19 | ?
-22 assistant 13:17:22 | Olá! 👋 Sou a Eva, sua assistente natural. …
+22 assistant 13:17:22 | Olá! 👋 Sou a sua assistente. …
 ```
 
 `sk_v1_acc8478b….jsonl` in the same workspace rules out "the agent only forgets after a
