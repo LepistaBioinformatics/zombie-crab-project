@@ -81,7 +81,7 @@ consumeIntervalInSecs = 15
 # ------------------------------------------------------------------------------
 
 [auth.internal.define]
-jwtExpiresIn = 43200                                                  # 12 hours
+jwtExpiresIn = 432000                                                  # 12 hours
 tmpExpiresIn = 300                                                    # 5 minutes
 jwtSecret = "replaced-at-boot-by-standalone-secret-resolution"
 
@@ -409,6 +409,26 @@ methods = ["GET"]
 # no user-file write route (FR-7 privacy invariant).
 
 [[alpha.path]]
+# Approvals (ganglion-approval-endpoint): the member's half of the agent's
+# permission requests.
+#
+# THE AGENT'S HALF IS NOT HERE, and must not be. It posts to /v1/approvals
+# directly on the container network with a scoped token in its URL, the same way
+# it reaches /v1/mcp -- a container is not a mycelium caller and has no profile
+# header to present. These two routes are the other direction: a person
+# answering.
+#
+# GET lists what is waiting on this member; POST answers one. A turn is BLOCKED
+# on that answer and the harness refuses it after a few minutes if none comes, so
+# the write here unblocks a conversation rather than changing a stored setting --
+# which is why it needs write on the role, like every other member write.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/approvals/*"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST"]
+
+[[alpha.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
 # proxy enforces the exact path+method per route. Collapsed to one
 # wildcard (mycelium matches via the wildmatch crate).
@@ -671,6 +691,26 @@ methods = ["GET"]
 # no user-file write route (FR-7 privacy invariant).
 
 [[gamma.path]]
+# Approvals (ganglion-approval-endpoint): the member's half of the agent's
+# permission requests.
+#
+# THE AGENT'S HALF IS NOT HERE, and must not be. It posts to /v1/approvals
+# directly on the container network with a scoped token in its URL, the same way
+# it reaches /v1/mcp -- a container is not a mycelium caller and has no profile
+# header to present. These two routes are the other direction: a person
+# answering.
+#
+# GET lists what is waiting on this member; POST answers one. A turn is BLOCKED
+# on that answer and the harness refuses it after a few minutes if none comes, so
+# the write here unblocks a conversation rather than changing a stored setting --
+# which is why it needs write on the role, like every other member write.
+group = { protectedByRoles = [{ name = "gamma", permission = "write" }] }
+path = "/v1/approvals/*"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST"]
+
+[[gamma.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
 # proxy enforces the exact path+method per route. Collapsed to one
 # wildcard (mycelium matches via the wildmatch crate).
@@ -870,6 +910,26 @@ methods = ["GET"]
 
 # admin-shared-content (see the alpha /v1/admin comment). `protected`,
 # tier resolved in-proxy; no user-file content/write route (FR-7).
+
+[[beta.path]]
+# Approvals (ganglion-approval-endpoint): the member's half of the agent's
+# permission requests.
+#
+# THE AGENT'S HALF IS NOT HERE, and must not be. It posts to /v1/approvals
+# directly on the container network with a scoped token in its URL, the same way
+# it reaches /v1/mcp -- a container is not a mycelium caller and has no profile
+# header to present. These two routes are the other direction: a person
+# answering.
+#
+# GET lists what is waiting on this member; POST answers one. A turn is BLOCKED
+# on that answer and the harness refuses it after a few minutes if none comes, so
+# the write here unblocks a conversation rather than changing a stored setting --
+# which is why it needs write on the role, like every other member write.
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/approvals/*"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST"]
 
 [[beta.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
