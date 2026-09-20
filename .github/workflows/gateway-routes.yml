@@ -1,0 +1,41 @@
+# A route the proxy serves and the gateway does not list does not exist.
+#
+# The gateway matches a request against an explicit per-role path list. Anything
+# absent gets 400 "Request path does not match any service" -- which names
+# neither the route nor the gateway, looks identical for a typo and for an
+# omission, and only happens in a deployment. Three routes shipped that way:
+# /v1/chat/cancel, so Stop did nothing under either harness, and /v1/turns/active
+# and /v1/turns/running with it.
+#
+# Written as a check rather than as a sentence in an instruction file for the
+# reason the submodule-pointer one was: the failure is at the merge button, and
+# only a check is there too.
+name: gateway routes
+
+on:
+  pull_request:
+    paths:
+      - "crab/crab-shell-proxy"
+      - "deploy/**/*.toml"
+      - "scripts/gateway_routes.py"
+      - ".github/workflows/gateway-routes.yml"
+  push:
+    branches: [main]
+
+jobs:
+  reachable:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The proxy's own source is read for its mux registrations, so this one
+          # submodule has to be on disk. The rest are not touched.
+          submodules: false
+      - name: Check out crab-shell-proxy
+        run: git submodule update --init --depth 1 crab/crab-shell-proxy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 scripts/gateway_routes.py
