@@ -81,7 +81,7 @@ consumeIntervalInSecs = 15
 # ------------------------------------------------------------------------------
 
 [auth.internal.define]
-jwtExpiresIn = 43200                                                  # 12 hours
+jwtExpiresIn = 432000                                                  # 12 hours
 tmpExpiresIn = 300                                                    # 5 minutes
 jwtSecret = "replaced-at-boot-by-standalone-secret-resolution"
 
@@ -211,6 +211,20 @@ acceptInsecureRouting = true
 methods = ["POST"]
 
 [[alpha.path]]
+# STOPPING a turn, and the same authority as starting one: it acts on the
+# member's own conversation and on nothing else.
+#
+# It was missing, and that was the whole of "Stop does not work" -- the gateway
+# matches a request against this list and answers 400 "Request path does not
+# match any service" for anything absent, so the stop never reached the proxy,
+# under either harness. Nothing downstream was ever asked.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/chat/cancel"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[alpha.path]]
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/models"
 secretName = "alpha-authorization-header"
@@ -238,6 +252,27 @@ methods = ["GET", "POST", "PUT", "DELETE"]
 [[alpha.path]]
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/sessions/history"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
+# WHAT IS STILL RUNNING. /v1/turns/active answers it for one conversation,
+# /v1/turns/running for every conversation this member has -- the background-turn
+# dock is built on the second and the stop flow on the first, which is why they
+# were missing together and failing together.
+#
+# Read only, so the role NAME is the whole gate: these say whether a turn is in
+# flight, never what it is saying.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/turns/active"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/turns/running"
 secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
@@ -407,6 +442,26 @@ methods = ["GET"]
 # secretName injects the bearer token so the proxy's resolveAgent anti-bypass
 # still applies. There is deliberately NO /v1/admin/users/files/content route and
 # no user-file write route (FR-7 privacy invariant).
+
+[[alpha.path]]
+# Approvals (ganglion-approval-endpoint): the member's half of the agent's
+# permission requests.
+#
+# THE AGENT'S HALF IS NOT HERE, and must not be. It posts to /v1/approvals
+# directly on the container network with a scoped token in its URL, the same way
+# it reaches /v1/mcp -- a container is not a mycelium caller and has no profile
+# header to present. These two routes are the other direction: a person
+# answering.
+#
+# GET lists what is waiting on this member; POST answers one. A turn is BLOCKED
+# on that answer and the harness refuses it after a few minutes if none comes, so
+# the write here unblocks a conversation rather than changing a stored setting --
+# which is why it needs write on the role, like every other member write.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/approvals/*"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST"]
 
 [[alpha.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
@@ -473,6 +528,20 @@ acceptInsecureRouting = true
 methods = ["POST"]
 
 [[gamma.path]]
+# STOPPING a turn, and the same authority as starting one: it acts on the
+# member's own conversation and on nothing else.
+#
+# It was missing, and that was the whole of "Stop does not work" -- the gateway
+# matches a request against this list and answers 400 "Request path does not
+# match any service" for anything absent, so the stop never reached the proxy,
+# under either harness. Nothing downstream was ever asked.
+group = { protectedByRoles = [{ name = "gamma", permission = "write" }] }
+path = "/v1/chat/cancel"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[gamma.path]]
 group = { protectedByRoles = [{ name = "gamma" }] }
 path = "/v1/models"
 secretName = "gamma-authorization-header"
@@ -500,6 +569,27 @@ methods = ["GET", "POST", "PUT", "DELETE"]
 [[gamma.path]]
 group = { protectedByRoles = [{ name = "gamma" }] }
 path = "/v1/sessions/history"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[gamma.path]]
+# WHAT IS STILL RUNNING. /v1/turns/active answers it for one conversation,
+# /v1/turns/running for every conversation this member has -- the background-turn
+# dock is built on the second and the stop flow on the first, which is why they
+# were missing together and failing together.
+#
+# Read only, so the role NAME is the whole gate: these say whether a turn is in
+# flight, never what it is saying.
+group = { protectedByRoles = [{ name = "gamma" }] }
+path = "/v1/turns/active"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[gamma.path]]
+group = { protectedByRoles = [{ name = "gamma" }] }
+path = "/v1/turns/running"
 secretName = "gamma-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
@@ -671,6 +761,26 @@ methods = ["GET"]
 # no user-file write route (FR-7 privacy invariant).
 
 [[gamma.path]]
+# Approvals (ganglion-approval-endpoint): the member's half of the agent's
+# permission requests.
+#
+# THE AGENT'S HALF IS NOT HERE, and must not be. It posts to /v1/approvals
+# directly on the container network with a scoped token in its URL, the same way
+# it reaches /v1/mcp -- a container is not a mycelium caller and has no profile
+# header to present. These two routes are the other direction: a person
+# answering.
+#
+# GET lists what is waiting on this member; POST answers one. A turn is BLOCKED
+# on that answer and the harness refuses it after a few minutes if none comes, so
+# the write here unblocks a conversation rather than changing a stored setting --
+# which is why it needs write on the role, like every other member write.
+group = { protectedByRoles = [{ name = "gamma", permission = "write" }] }
+path = "/v1/approvals/*"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST"]
+
+[[gamma.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
 # proxy enforces the exact path+method per route. Collapsed to one
 # wildcard (mycelium matches via the wildmatch crate).
@@ -703,6 +813,20 @@ acceptInsecureRouting = true
 methods = ["POST"]
 
 [[beta.path]]
+# STOPPING a turn, and the same authority as starting one: it acts on the
+# member's own conversation and on nothing else.
+#
+# It was missing, and that was the whole of "Stop does not work" -- the gateway
+# matches a request against this list and answers 400 "Request path does not
+# match any service" for anything absent, so the stop never reached the proxy,
+# under either harness. Nothing downstream was ever asked.
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/chat/cancel"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[beta.path]]
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/models"
 secretName = "beta-authorization-header"
@@ -730,6 +854,27 @@ methods = ["GET", "POST", "PUT", "DELETE"]
 [[beta.path]]
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/sessions/history"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+# WHAT IS STILL RUNNING. /v1/turns/active answers it for one conversation,
+# /v1/turns/running for every conversation this member has -- the background-turn
+# dock is built on the second and the stop flow on the first, which is why they
+# were missing together and failing together.
+#
+# Read only, so the role NAME is the whole gate: these say whether a turn is in
+# flight, never what it is saying.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/turns/active"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/turns/running"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
@@ -870,6 +1015,26 @@ methods = ["GET"]
 
 # admin-shared-content (see the alpha /v1/admin comment). `protected`,
 # tier resolved in-proxy; no user-file content/write route (FR-7).
+
+[[beta.path]]
+# Approvals (ganglion-approval-endpoint): the member's half of the agent's
+# permission requests.
+#
+# THE AGENT'S HALF IS NOT HERE, and must not be. It posts to /v1/approvals
+# directly on the container network with a scoped token in its URL, the same way
+# it reaches /v1/mcp -- a container is not a mycelium caller and has no profile
+# header to present. These two routes are the other direction: a person
+# answering.
+#
+# GET lists what is waiting on this member; POST answers one. A turn is BLOCKED
+# on that answer and the harness refuses it after a few minutes if none comes, so
+# the write here unblocks a conversation rather than changing a stored setting --
+# which is why it needs write on the role, like every other member write.
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/approvals/*"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "POST"]
 
 [[beta.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
