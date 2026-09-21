@@ -11,3 +11,6 @@ deploy/**/.env
 
 # Git worktrees created by tooling under .claude/ — never part of the tree
 .claude/worktrees/
+
+# Left by scripts/gateway_routes.py when the check is run locally.
+__pycache__/

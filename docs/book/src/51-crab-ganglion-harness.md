@@ -72,7 +72,44 @@ which of these were switched on.
 conversation that has a transcript and no window — the state every conversation
 migrated from picoclaw arrives in — has its window rebuilt from the transcript,
 so the member does not see their history on screen while the agent answers as
-though the conversation had just begun.
+though the conversation had just begun. A rebuilt window says how much of the
+transcript it left behind, rather than starting mid-conversation with nothing
+marking the cut.
+
+**Shortening the window without losing anything.** The window holds only the
+most recent messages — a fixed count, not yet a configuration key — and
+everything it drops is still in the transcript, except for one thing that never
+reached it. A **tool result** is written to the window and nowhere else, because
+the member never saw it, so the window used to be its only copy: dropping it
+destroyed the bytes rather than merely shortening the context. And it is the
+largest thing there — one `sh` result can be 64 KiB, which the budget counts as
+a single message.
+
+So a large result is **parked** on the way in: the whole output goes to a file
+under the turn's own workspace and the message keeps its first and last lines,
+its size and the path. The agent can read the rest back with the shell whenever
+it wants it. Once the result is a few iterations old, compaction replaces even
+the excerpt with the path alone — recent tool output is context, old tool output
+is a filename. Nothing here calls a model.
+
+A turn that dropped messages records that it did, once, as an entry the member
+sees as a divider in the transcript and the model never sees at all. The count
+and the note ride in it; what the member scrolls through is untouched.
+
+**Reading back what left the window.** The agent is told how many messages are
+missing — that note is delivered as a system message — and `search_history` is
+how it goes and reads one: a case-insensitive search over the conversation's own
+transcript, capped, quoting each match in its surroundings and saying how far
+back it sits. Nothing is summarized and no second model is called; the cost of
+compaction moves to the turns that actually reach back, rather than being paid
+on every turn that does not.
+
+Parked outputs are the one thing here that is swept. A conversation keeps its
+most recent ones and older files are deleted — far more than a window can hold
+pointers to, so nothing the agent might still follow is removed. It is the only
+place this harness deletes what it wrote, and it is deliberate: a transcript
+entry is the member's and may never be shortened, while a parked result is the
+agent's scratch.
 
 **Keeping the layout the stack expects.** Everything lives under the `workspace`
 segment, because that is where the proxy looks from outside the container. A

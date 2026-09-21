@@ -207,6 +207,20 @@ acceptInsecureRouting = true
 methods = ["POST"]
 
 [[alpha.path]]
+# STOPPING a turn, and the same authority as starting one: it acts on the
+# member's own conversation and on nothing else.
+#
+# It was missing, and that was the whole of "Stop does not work" -- the gateway
+# matches a request against this list and answers 400 "Request path does not
+# match any service" for anything absent, so the stop never reached the proxy,
+# under either harness. Nothing downstream was ever asked.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/chat/cancel"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[alpha.path]]
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/models"
 secretName = "alpha-authorization-header"
@@ -234,6 +248,27 @@ methods = ["GET", "POST", "PUT", "DELETE"]
 [[alpha.path]]
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/sessions/history"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
+# WHAT IS STILL RUNNING. /v1/turns/active answers it for one conversation,
+# /v1/turns/running for every conversation this member has -- the background-turn
+# dock is built on the second and the stop flow on the first, which is why they
+# were missing together and failing together.
+#
+# Read only, so the role NAME is the whole gate: these say whether a turn is in
+# flight, never what it is saying.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/turns/active"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/turns/running"
 secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
@@ -433,6 +468,20 @@ acceptInsecureRouting = true
 methods = ["POST"]
 
 [[beta.path]]
+# STOPPING a turn, and the same authority as starting one: it acts on the
+# member's own conversation and on nothing else.
+#
+# It was missing, and that was the whole of "Stop does not work" -- the gateway
+# matches a request against this list and answers 400 "Request path does not
+# match any service" for anything absent, so the stop never reached the proxy,
+# under either harness. Nothing downstream was ever asked.
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/chat/cancel"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[beta.path]]
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/models"
 secretName = "beta-authorization-header"
@@ -460,6 +509,27 @@ methods = ["GET", "POST", "PUT", "DELETE"]
 [[beta.path]]
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/sessions/history"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+# WHAT IS STILL RUNNING. /v1/turns/active answers it for one conversation,
+# /v1/turns/running for every conversation this member has -- the background-turn
+# dock is built on the second and the stop flow on the first, which is why they
+# were missing together and failing together.
+#
+# Read only, so the role NAME is the whole gate: these say whether a turn is in
+# flight, never what it is saying.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/turns/active"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/turns/running"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
