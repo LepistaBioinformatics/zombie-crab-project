@@ -45,6 +45,20 @@ NOT_EXPOSED = {
     # harness-sphere's inventory. Gated by CRAB_TELEMETRY_TOKEN and reached on
     # zombie_net; unset, the route is not registered at all. Never a member's.
     ("GET", "/v1/instances"),
+    # The AGENT's half of an approval request, and the one route here whose
+    # exclusion is a security property rather than a deployment fact.
+    #
+    # A container posts it on zombie_net with a scoped mcptoken in the URL, the
+    # same way it reaches /v1/mcp: a container is not a mycelium caller and has
+    # no profile header to present. The member's half -- GET /v1/approvals/pending
+    # and POST /v1/approvals/answer, a person answering -- is exposed as
+    # /v1/approvals/* and stays exposed.
+    #
+    # Opening this one would let any member post an approval REQUEST into
+    # somebody's turn. Both deploy configs already say so at the block that
+    # exposes the other half ("THE AGENT'S HALF IS NOT HERE, and must not be");
+    # this is that decision in the place the check reads.
+    ("POST", "/v1/approvals"),
     # The member's own scheduled-task WRITES, and this one is a deferral rather
     # than a decision about authority.
     #
