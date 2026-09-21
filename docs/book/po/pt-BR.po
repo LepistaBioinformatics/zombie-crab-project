@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: zombie-crab-project\n"
-"POT-Creation-Date: 2026-09-15T13:24:02-03:00\n"
+"POT-Creation-Date: 2026-09-18T20:46:13-03:00\n"
 "PO-Revision-Date: 2026-09-15T13:12:18-03:00\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -149,7 +149,9 @@ msgstr "Contribuindo"
 msgid ""
 "_[Leia esta documentação em português](https://lepistabioinformatics.github."
 "io/zombie-crab-project/pt-BR/)_"
-msgstr "_[Read this documentation in English](https://lepistabioinformatics.github.io/zombie-crab-project/)_"
+msgstr ""
+"_[Read this documentation in English](https://lepistabioinformatics.github."
+"io/zombie-crab-project/)_"
 
 #: src/00-introduction.md:5
 msgid ""
@@ -1007,7 +1009,7 @@ msgstr ""
 #: src/11-harnesses.md:191 src/12-agents-and-workspaces.md:186
 #: src/13-skills-and-memory.md:205 src/14-files-and-delivery.md:164
 #: src/20-chat-client.md:224 src/21-projects.md:148
-#: src/22-scheduled-tasks.md:155 src/30-admin-guide.md:352
+#: src/22-scheduled-tasks.md:168 src/30-admin-guide.md:352
 #: src/31-custom-agent.md:237 src/32-models-and-providers.md:277
 #: src/40-deployment.md:223 src/41-database.md:164 src/42-observability.md:224
 #: src/43-troubleshooting.md:256 src/50-crab-shell-proxy.md:149
@@ -2313,14 +2315,14 @@ msgid ""
 "the socket for — attributing a container to its tenant — is served instead "
 "by `GET /v1/instances` on the proxy, behind its own token."
 msgstr ""
-"O `harness-sphere`, o observador da stack, **nunca recebe um socket "
-"do Docker**, e isso é uma regra permanente e deliberada, não um descuido. "
-"Ele roda como root para percorrer a árvore de tenants criada pelo proxy, e "
-"três restrições mantêm isso estreito: seu bind `/data` é somente leitura, "
-"ele não publica portas e não recebe socket. Um segundo detentor de socket "
-"dobraria o raio de alcance do pior comprometimento da stack. Aquilo para que "
-"ele precisaria do socket — atribuir um container ao seu tenant — é atendido "
-"em vez disso por `GET /v1/instances` no proxy, atrás de um token próprio."
+"O `harness-sphere`, o observador da stack, **nunca recebe um socket do "
+"Docker**, e isso é uma regra permanente e deliberada, não um descuido. Ele "
+"roda como root para percorrer a árvore de tenants criada pelo proxy, e três "
+"restrições mantêm isso estreito: seu bind `/data` é somente leitura, ele não "
+"publica portas e não recebe socket. Um segundo detentor de socket dobraria o "
+"raio de alcance do pior comprometimento da stack. Aquilo para que ele "
+"precisaria do socket — atribuir um container ao seu tenant — é atendido em "
+"vez disso por `GET /v1/instances` no proxy, atrás de um token próprio."
 
 #: src/10-architecture.md:134
 msgid ""
@@ -4174,7 +4176,11 @@ msgid ""
 "document, which is written for a deployment whose members write Portuguese. "
 "The instruction it carries is the point, not the language: name the path you "
 "wrote to, in the reply."
-msgstr "Esse exemplo é citado literalmente do documento que a plataforma entrega, escrito para um deploy cujos membros escrevem em português. O que importa nele é a instrução, não o idioma: diga no texto da resposta o caminho em que você escreveu."
+msgstr ""
+"Esse exemplo é citado literalmente do documento que a plataforma entrega, "
+"escrito para um deploy cujos membros escrevem em português. O que importa "
+"nele é a instrução, não o idioma: diga no texto da resposta o caminho em que "
+"você escreveu."
 
 #: src/14-files-and-delivery.md:124
 msgid ""
@@ -5527,89 +5533,127 @@ msgid ""
 "The reason the ganglion can be written is the mirror image. It has no "
 "scheduler at all; the orchestrator holds the schedule, in a file kept "
 "_above_ the container's workspace mount, and fires the jobs itself. There is "
-"no second writer to disagree with. Keeping that file out of the container is "
-"also a safety property: nothing inside the agent can reach it, so a turn "
-"steered by untrusted text cannot schedule its own future turns."
+"no second writer to disagree with."
 msgstr ""
-"A razão de o ganglion poder ser escrito é a imagem espelhada. Ele não tem "
-"agendador nenhum; o orquestrador guarda o agendamento, num arquivo mantido "
-"_acima_ do ponto de montagem do workspace do container, e dispara os jobs "
-"ele mesmo. Não há um segundo escritor para discordar. Manter esse arquivo "
-"fora do container também é uma propriedade de segurança: nada dentro do "
-"agente o alcança, então um turno conduzido por texto não confiável não "
-"consegue agendar os próprios turnos futuros."
+"A razão de o ganglion ser gravável é a imagem espelhada. Ele não tem "
+"agendador nenhum; o orquestrador guarda a agenda, num arquivo mantido "
+"_acima_ do mount do workspace do contêiner, e dispara os jobs ele mesmo. Não "
+"há um segundo escritor para discordar."
 
-#: src/22-scheduled-tasks.md:89
+#: src/22-scheduled-tasks.md:87
+msgid ""
+"Keeping that file out of the container is also a safety property, and it "
+"still is. The agent cannot read or write the schedule as a file. What it can "
+"do is _ask_ — and asking stops the turn until you answer."
+msgstr ""
+"Manter esse arquivo fora do contêiner também é uma propriedade de segurança, "
+"e continua sendo. O agente não consegue ler nem escrever a agenda como "
+"arquivo. O que ele consegue é _pedir_ — e pedir para o turno até você "
+"responder."
+
+#: src/22-scheduled-tasks.md:91
 msgid ""
 "**The web app writes neither.** However your agent is configured, the pane "
-"today is read-only — the app's server layer exposes only the two read "
-"routes, and there is no create button anywhere in the chat. So in practice:"
+"is read-only: there is no create button anywhere in the chat. A task comes "
+"into being by asking the agent, on both harnesses now:"
 msgstr ""
-"**O app web não escreve nem um nem outro.** Seja como for que o seu agente "
-"esteja configurado, o painel hoje é somente leitura — a camada de servidor "
-"do app expõe só as duas rotas de leitura, e não há botão de criar em lugar "
-"nenhum do chat. Então, na prática:"
+"**A aplicação web não escreve em nenhum dos dois.** Seja qual for a "
+"configuração do seu agente, o painel é somente leitura: não há botão de "
+"criar em lugar nenhum do chat. Uma tarefa passa a existir pedindo ao agente, "
+"agora nos dois harnesses:"
 
-#: src/22-scheduled-tasks.md:93
+#: src/22-scheduled-tasks.md:95
 msgid "Your agent runs"
 msgstr "O seu agente roda"
 
-#: src/22-scheduled-tasks.md:93
+#: src/22-scheduled-tasks.md:95
 msgid "How a task comes into being"
 msgstr "Como uma tarefa passa a existir"
 
-#: src/22-scheduled-tasks.md:95
+#: src/22-scheduled-tasks.md:97
 msgid "picoclaw"
 msgstr ""
 
-#: src/22-scheduled-tasks.md:95
+#: src/22-scheduled-tasks.md:97
 msgid "You ask the agent in a conversation; it schedules its own job"
 msgstr "Você pede ao agente numa conversa; ele agenda o próprio job"
 
-#: src/22-scheduled-tasks.md:96
+#: src/22-scheduled-tasks.md:98
 msgid "the ganglion"
 msgstr "o ganglion"
 
-#: src/22-scheduled-tasks.md:96
-msgid "Nothing a member touches creates one yet"
-msgstr "Nada que um membro toque cria uma ainda"
-
 #: src/22-scheduled-tasks.md:98
-msgid ""
-"That second row is the honest state of things, and it is worth spelling out. "
-"Asking a ganglion agent to schedule something will not work: it cannot reach "
-"the store, and its own workspace guide tells it so — \"There is no `cron/` "
-"either: your scheduled work is held outside this tree, where you cannot "
-"reach it.\" The web app has no create control. And the write routes cannot "
-"be called from the browser either, because the browser holds a session "
-"cookie and nothing else: no token, no upstream address. The routes are built "
-"and the storage is in place, but the surface that would let a member reach "
-"them has not been written."
-msgstr ""
-"Essa segunda linha é o estado honesto das coisas, e vale soletrar. Pedir a "
-"um agente ganglion que agende algo não vai funcionar: ele não alcança o "
-"armazenamento, e o guia do próprio workspace dele diz isso a ele — \"Também "
-"não existe `cron/`: o seu trabalho agendado é guardado fora desta árvore, "
-"onde você não alcança.\" O app web não tem controle de criar. E as rotas de "
-"escrita também não podem ser chamadas do navegador, porque o navegador "
-"guarda um cookie de sessão e nada mais: nenhum token, nenhum endereço de "
-"destino. As rotas estão construídas e o armazenamento está no lugar, mas a "
-"superfície que deixaria um membro chegar até elas não foi escrita."
+msgid "You ask the agent; it asks you to approve, and then schedules it"
+msgstr "Você pede ao agente; ele pede sua aprovação e então agenda"
 
-#: src/22-scheduled-tasks.md:107
+#: src/22-scheduled-tasks.md:100
 msgid ""
-"The pane's \"ask the agent\" sentence therefore describes the picoclaw case, "
-"and is the one piece of the screen that does not yet distinguish the two "
-"harnesses."
+"The difference in that second row is the approval, and it is worth spelling "
+"out."
 msgstr ""
-"A frase \"peça ao agente\" do painel descreve, portanto, o caso do picoclaw, "
-"e é o único pedaço da tela que ainda não distingue os dois harnesses."
+"A diferença naquela segunda linha é a aprovação, e vale explicá-la."
 
-#: src/22-scheduled-tasks.md:110
+#: src/22-scheduled-tasks.md:102
+msgid ""
+"When a ganglion agent decides to schedule something, the turn stops. A card "
+"appears in the conversation showing what would run and when, with **Allow** "
+"and **Refuse**. Nothing is created until you answer. If you refuse, you can "
+"say why, and the agent reads your reason — so it can explain itself rather "
+"than reporting an error. If you are not at the screen, nothing happens: the "
+"request is refused after a few minutes and the agent is told nobody answered."
+msgstr ""
+"Quando um agente ganglion decide agendar algo, o turno para. Um cartão "
+"aparece na conversa mostrando o que rodaria e quando, com **Permitir** e "
+"**Recusar**. Nada é criado até você responder. Se recusar, pode dizer por "
+"quê, e o agente lê o seu motivo — então ele consegue se explicar em vez de "
+"reportar um erro. Se você não estiver na tela, nada acontece: o pedido é "
+"recusado depois de alguns minutos e o agente é informado de que ninguém "
+"respondeu."
+
+#: src/22-scheduled-tasks.md:109
+msgid ""
+"That last part is the point rather than a limitation. A scheduled run is a "
+"turn nobody is watching, and a turn nobody is watching is exactly the one "
+"that should not be able to schedule more of itself. An agent that has been "
+"talked into something by a web page it read cannot get past a person who is "
+"not there."
+msgstr ""
+"Essa última parte é o objetivo, não uma limitação. Uma execução agendada é "
+"um turno que ninguém está vendo, e um turno que ninguém está vendo é "
+"justamente o que não pode agendar mais de si mesmo. Um agente convencido por "
+"uma página web que leu não passa por uma pessoa que não está lá."
+
+#: src/22-scheduled-tasks.md:114
+msgid ""
+"The limits are the other half. A ganglion agent may not schedule anything "
+"more frequent than every fifteen minutes, may not create more than five "
+"tasks in an hour, and cannot take the workspace past twenty tasks in total. "
+"It also cannot _edit_ a task — only create, list and remove — because an "
+"edit is how a task you approved becomes a different task without a second "
+"approval."
+msgstr ""
+"Os limites são a outra metade. Um agente ganglion não pode agendar nada mais "
+"frequente que a cada quinze minutos, não pode criar mais de cinco tarefas "
+"por hora, e não pode levar o workspace além de vinte tarefas no total. Ele "
+"também não pode _editar_ uma tarefa — só criar, listar e remover — porque "
+"editar é como uma tarefa que você aprovou vira outra tarefa sem uma segunda "
+"aprovação."
+
+#: src/22-scheduled-tasks.md:120
+msgid ""
+"Tasks the agent created are marked as such in the record, along with who "
+"approved them. A task you did not type is one you can always tell apart from "
+"one you did."
+msgstr ""
+"As tarefas criadas pelo agente são marcadas como tais no registro, junto com "
+"quem as aprovou. Uma tarefa que você não digitou é sempre distinguível de "
+"uma que você digitou."
+
+#: src/22-scheduled-tasks.md:123
 msgid "What the difference actually costs you"
 msgstr "O que a diferença custa a você de verdade"
 
-#: src/22-scheduled-tasks.md:112
+#: src/22-scheduled-tasks.md:125
 msgid ""
 "If you only ever read your tasks, the harness barely shows. Where it shows "
 "is whether the schedule fires at all."
@@ -5617,7 +5661,7 @@ msgstr ""
 "Se você só lê as suas tarefas, o harness quase não aparece. Onde ele aparece "
 "é em se o agendamento dispara ou não."
 
-#: src/22-scheduled-tasks.md:115
+#: src/22-scheduled-tasks.md:128
 msgid ""
 "A picoclaw schedule is in-process timers, so a stopped container fires "
 "nothing. On an agent configured to shut down when idle, the tasks are real, "
@@ -5630,7 +5674,7 @@ msgstr ""
 "**inertes** — e o painel diz isso, em vez de deixar você supor que a tarefa "
 "rodou:"
 
-#: src/22-scheduled-tasks.md:119
+#: src/22-scheduled-tasks.md:132
 msgid ""
 "These tasks are not running. This instance shuts down when idle, and a "
 "schedule only fires while it is up. The tasks below are still recorded — an "
@@ -5641,7 +5685,7 @@ msgstr ""
 "abaixo continuam registradas — um administrador precisa mudar esta instância "
 "para contínua para que voltem a rodar."
 
-#: src/22-scheduled-tasks.md:123
+#: src/22-scheduled-tasks.md:136
 msgid ""
 "A ganglion schedule is held by the orchestrator, which is always up and "
 "which _starts_ the container to deliver the turn. Scale-to-zero is precisely "
@@ -5653,7 +5697,7 @@ msgstr ""
 "exatamente o que aquele desenho tinha em mente, então o aviso nunca aparece "
 "para um agente ganglion."
 
-#: src/22-scheduled-tasks.md:127
+#: src/22-scheduled-tasks.md:140
 msgid ""
 "Three more properties of the orchestrator's scheduler are worth knowing, "
 "because they are choices rather than accidents:"
@@ -5661,7 +5705,7 @@ msgstr ""
 "Mais três propriedades do agendador do orquestrador valem saber, porque são "
 "escolhas e não acidentes:"
 
-#: src/22-scheduled-tasks.md:130
+#: src/22-scheduled-tasks.md:143
 msgid ""
 "**A job is claimed before it runs, not recorded after.** An orchestrator "
 "that dies mid-turn loses that run rather than re-firing it on every boot. "
@@ -5674,7 +5718,7 @@ msgstr ""
 "diário perdido é uma lacuna; um redisparado é um agente fazendo trabalho de "
 "verdade duas vezes, sem ninguém vendo."
 
-#: src/22-scheduled-tasks.md:134
+#: src/22-scheduled-tasks.md:147
 msgid ""
 "**A schedule that was slept through fires once.** Replaying every missed "
 "occurrence would deliver a weekend of hourly turns at once."
@@ -5683,7 +5727,7 @@ msgstr ""
 "cada ocorrência perdida entregaria de uma vez um fim de semana de turnos de "
 "hora em hora."
 
-#: src/22-scheduled-tasks.md:136
+#: src/22-scheduled-tasks.md:149
 msgid ""
 "**Two scheduled turns never overlap in one workspace.** A job that comes due "
 "while another of yours is running is left due and picked up on the next "
@@ -5696,11 +5740,11 @@ msgstr ""
 "das direções — uma execução agendada nem as bloqueia nem é bloqueada por "
 "elas."
 
-#: src/22-scheduled-tasks.md:141
+#: src/22-scheduled-tasks.md:154
 msgid "Tasks and projects"
 msgstr "Tarefas e projetos"
 
-#: src/22-scheduled-tasks.md:143
+#: src/22-scheduled-tasks.md:156
 msgid ""
 "Scheduled tasks are scoped like everything else in a [project](./21-projects."
 "md): inside a project you see that project's tasks and nothing else, and "
@@ -5716,7 +5760,7 @@ msgstr ""
 "jobs de todos os projetos caem num repositório só, o que é uma limitação "
 "daquele harness e não uma decisão."
 
-#: src/22-scheduled-tasks.md:150
+#: src/22-scheduled-tasks.md:163
 msgid ""
 "One consequence is worth repeating from the projects chapter. Deleting a "
 "project drops its routing but **not** its scheduled jobs, so they keep "
@@ -5730,7 +5774,7 @@ msgstr ""
 "lista os jobs órfãos de um projeto excluído na lista de tarefas do próprio "
 "agente, onde você ainda consegue achá-los e pará-los."
 
-#: src/22-scheduled-tasks.md:157
+#: src/22-scheduled-tasks.md:170
 msgid ""
 "[Harnesses](./11-harnesses.md) explains the choice this whole chapter turns "
 "on and why an unstated `harness:` key still means picoclaw today. [Working "
@@ -12273,3 +12317,37 @@ msgstr ""
 "exoskeleton-webapp](./52-crab-exoskeleton-webapp.md) e [harness-sphere](./53-"
 "harness-sphere.md) — descrevem o layout de código de cada repositório que "
 "você talvez esteja prestes a mudar."
+
+#~ msgid "Nothing a member touches creates one yet"
+#~ msgstr "Nada que um membro toque cria uma ainda"
+
+#~ msgid ""
+#~ "That second row is the honest state of things, and it is worth spelling "
+#~ "out. Asking a ganglion agent to schedule something will not work: it "
+#~ "cannot reach the store, and its own workspace guide tells it so — \"There "
+#~ "is no `cron/` either: your scheduled work is held outside this tree, "
+#~ "where you cannot reach it.\" The web app has no create control. And the "
+#~ "write routes cannot be called from the browser either, because the "
+#~ "browser holds a session cookie and nothing else: no token, no upstream "
+#~ "address. The routes are built and the storage is in place, but the "
+#~ "surface that would let a member reach them has not been written."
+#~ msgstr ""
+#~ "Essa segunda linha é o estado honesto das coisas, e vale soletrar. Pedir "
+#~ "a um agente ganglion que agende algo não vai funcionar: ele não alcança o "
+#~ "armazenamento, e o guia do próprio workspace dele diz isso a ele — "
+#~ "\"Também não existe `cron/`: o seu trabalho agendado é guardado fora "
+#~ "desta árvore, onde você não alcança.\" O app web não tem controle de "
+#~ "criar. E as rotas de escrita também não podem ser chamadas do navegador, "
+#~ "porque o navegador guarda um cookie de sessão e nada mais: nenhum token, "
+#~ "nenhum endereço de destino. As rotas estão construídas e o armazenamento "
+#~ "está no lugar, mas a superfície que deixaria um membro chegar até elas "
+#~ "não foi escrita."
+
+#~ msgid ""
+#~ "The pane's \"ask the agent\" sentence therefore describes the picoclaw "
+#~ "case, and is the one piece of the screen that does not yet distinguish "
+#~ "the two harnesses."
+#~ msgstr ""
+#~ "A frase \"peça ao agente\" do painel descreve, portanto, o caso do "
+#~ "picoclaw, e é o único pedaço da tela que ainda não distingue os dois "
+#~ "harnesses."

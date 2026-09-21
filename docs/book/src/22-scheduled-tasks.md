@@ -82,30 +82,43 @@ better to debug.
 The reason the ganglion can be written is the mirror image. It has no scheduler at
 all; the orchestrator holds the schedule, in a file kept *above* the container's
 workspace mount, and fires the jobs itself. There is no second writer to disagree
-with. Keeping that file out of the container is also a safety property: nothing
-inside the agent can reach it, so a turn steered by untrusted text cannot schedule
-its own future turns.
+with.
 
-**The web app writes neither.** However your agent is configured, the pane today
-is read-only — the app's server layer exposes only the two read routes, and there
-is no create button anywhere in the chat. So in practice:
+Keeping that file out of the container is also a safety property, and it still is.
+The agent cannot read or write the schedule as a file. What it can do is *ask* —
+and asking stops the turn until you answer.
+
+**The web app writes neither.** However your agent is configured, the pane is
+read-only: there is no create button anywhere in the chat. A task comes into
+being by asking the agent, on both harnesses now:
 
 | Your agent runs | How a task comes into being |
 |---|---|
 | picoclaw | You ask the agent in a conversation; it schedules its own job |
-| the ganglion | Nothing a member touches creates one yet |
+| the ganglion | You ask the agent; it asks you to approve, and then schedules it |
 
-That second row is the honest state of things, and it is worth spelling out.
-Asking a ganglion agent to schedule something will not work: it cannot reach the
-store, and its own workspace guide tells it so — "There is no `cron/` either:
-your scheduled work is held outside this tree, where you cannot reach it." The
-web app has no create control. And the write routes cannot be called from the
-browser either, because the browser holds a session cookie and nothing else: no
-token, no upstream address. The routes are built and the storage is in place, but
-the surface that would let a member reach them has not been written.
+The difference in that second row is the approval, and it is worth spelling out.
 
-The pane's "ask the agent" sentence therefore describes the picoclaw case, and is
-the one piece of the screen that does not yet distinguish the two harnesses.
+When a ganglion agent decides to schedule something, the turn stops. A card
+appears in the conversation showing what would run and when, with **Allow** and
+**Refuse**. Nothing is created until you answer. If you refuse, you can say why,
+and the agent reads your reason — so it can explain itself rather than reporting
+an error. If you are not at the screen, nothing happens: the request is refused
+after a few minutes and the agent is told nobody answered.
+
+That last part is the point rather than a limitation. A scheduled run is a turn
+nobody is watching, and a turn nobody is watching is exactly the one that should
+not be able to schedule more of itself. An agent that has been talked into
+something by a web page it read cannot get past a person who is not there.
+
+The limits are the other half. A ganglion agent may not schedule anything more
+frequent than every fifteen minutes, may not create more than five tasks in an
+hour, and cannot take the workspace past twenty tasks in total. It also cannot
+*edit* a task — only create, list and remove — because an edit is how a task you
+approved becomes a different task without a second approval.
+
+Tasks the agent created are marked as such in the record, along with who approved
+them. A task you did not type is one you can always tell apart from one you did.
 
 ## What the difference actually costs you
 
