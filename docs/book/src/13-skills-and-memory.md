@@ -142,6 +142,19 @@ Because the member can change it between any two turns, the shipped
 `shared-content` skill tells the agent to re-read the current file whenever it is
 relevant rather than trusting what it remembers of it.
 
+**`memory/SIGNED_IN_USER.md`** names the account the workspace is running for —
+the member's name, username and e-mail, as the gateway resolved them. The proxy
+writes it on every turn that carries an identity, so it is derived rather than
+remembered, and a restart with no caller leaves it alone rather than blanking it.
+It carries no account, tenant or subscription id: those are isolation keys, and
+the only thing an agent can do with a UUID it is handed every turn is repeat it.
+
+It is a **sibling of `memory/USER.md`**, never that file, and the distinction
+matters. `USER.md` is where the agent accumulates what it *learns* about the
+person — how they like to work, what they are working on — and it is the agent's
+to write. `SIGNED_IN_USER.md` is a fact about the login and is replaced whenever
+it changes. Merging them would destroy the first on every turn.
+
 Three more files in `memory/` are the operator's, mounted read-only:
 
 - **`CONTEXT_RECOVERY.md`** tells the agent that its live context can be reset
