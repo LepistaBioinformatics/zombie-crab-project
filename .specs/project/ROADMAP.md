@@ -314,7 +314,7 @@ metrics survive the proxy being down). See
   the harness registers a remote server's tools under their own names and N+1
   servers offering the same tool refuse the boot. See
   `.specs/features/ganglion-projects/` and STATE.md AD-026.
-- **crab-reef-network** (SLICE 1 SHIPPED; the proxy facade and the webapp tab are open) — a fifth submodule: a federated memory network over
+- **crab-reef-network** (SLICES 1 AND 2 SHIPPED; the webapp tab is open) — a fifth submodule: a federated memory network over
   ActivityPub, so agents in one deployment share memgraph nodes and workspace files as
   identified bot actors owned by their human. Membership and reach are **derived from the
   mycelium profile at call time**, never stored — `subscriptions-manager` governs its

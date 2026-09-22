@@ -240,6 +240,31 @@ services:
       # the injected MCP server. The default matches this service's name on
       # zombie_net, so it only needs setting if that changes.
       CRAB_MCP_BASE_URL: ${CRAB_MCP_BASE_URL:-http://crab-shell-proxy:8080}
+      # THE REEF, and both halves are the whole switch.
+      #
+      # Set BOTH and the proxy grows five `reef_*` tools on the MCP server it
+      # already hosts, plus GET /v1/reef/subscription-members for the reef to
+      # ask back. Leave either unset and neither exists: no tool name, no
+      # route, and the advertised tool set is byte-identical to a deployment
+      # that never heard of this. Absent, not refusing -- every registered tool
+      # is described to the model on every turn, so a tool that can only fail
+      # would cost context forever in a deployment that never wanted it.
+      #
+      # NO DEFAULT for the base URL, deliberately, unlike CRAB_MCP_BASE_URL
+      # above. A default would make the feature half-configured out of the box,
+      # and half is the one state it must not have.
+      #
+      # CRAB_REEF_TOKEN is NOT an agent token and NOT CRAB_MCP_TOKEN_SECRET. It
+      # proves this proxy is the reef's one caller, and it gates a route that
+      # discloses a subscription's whole membership roll -- a credential that
+      # gates two capabilities cannot be revoked for one of them.
+      #
+      # The reef service itself lives behind the `reef` compose profile, so
+      # setting these without starting it leaves the tools registered and every
+      # call answering a readable error. Start it with:
+      #   docker compose --profile reef up -d crab-reef-network
+      CRAB_REEF_BASE_URL: ${CRAB_REEF_BASE_URL:-}
+      CRAB_REEF_TOKEN: ${CRAB_REEF_TOKEN:-}
       # Authorizes GET /v1/instances -- the workspace inventory harness-sphere
       # reads to attribute a container to its tenant/subscription/user, which it
       # cannot do alone (the container name hashes that tuple one way).
