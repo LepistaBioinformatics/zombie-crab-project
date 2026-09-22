@@ -571,10 +571,26 @@ services:
       # that can disagree with mycelium.
       MANGROVE_PROXY_BASE_URL: http://crab-shell-proxy:8080
     volumes:
-      # Actors, their ed25519 private keys, and the append-only log. A named
-      # volume rather than a bind under data/: these keys are the mangrove's
-      # identity, and nothing outside this container has a reason to read them.
-      - mangrove-data:/data/mangrove
+      # Actors, their ed25519 private keys, and the append-only log.
+      #
+      # A BIND UNDER data/, not a named volume. Both are on disk -- a named
+      # volume was never "in memory" -- but a named volume lives under Docker's
+      # own directory, which means backing this up, inspecting it or moving it
+      # between machines all go through `docker` rather than through the
+      # filesystem. The operator owning the path is the point.
+      #
+      # THE DIRECTORY HAS TO BE WRITABLE BY UID 10001, which is the unprivileged
+      # user the image runs as. This is the one thing a bind does not do for you:
+      # a named volume inherits the image's ownership on first use, a bind keeps
+      # whatever the host gave it. Create it once with
+      #
+      #   mkdir -p data/mangrove
+      #   docker run --rm -v "$PWD/data/mangrove:/x" alpine chown -R 10001:10001 /x
+      #
+      # A root container rather than sudo, so it works the same wherever docker
+      # does. Without it the service boots and fails its first write, which is a
+      # worse failure than not booting -- the port answers and nothing persists.
+      - ./data/mangrove:/data/mangrove
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/healthz"]
       interval: 30s
@@ -589,4 +605,3 @@ services:
 volumes:
   mycelium-data:
   chat-webapp-postgres-data:
-  mangrove-data:
