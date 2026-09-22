@@ -3,7 +3,7 @@
 Monorepo-wide rules. Each submodule has its own `.claude/CLAUDE.md` for rules that
 only apply inside it; this file holds what applies across the stack.
 
-## The four submodules
+## The five submodules
 
 | Path | What it is |
 |---|---|
@@ -11,9 +11,18 @@ only apply inside it; this file holds what applies across the stack.
 | `crab/crab-ganglion-harness` | this project's own agent runtime, and the default harness |
 | `crab/crab-exoskeleton-webapp` | the member-facing UI. **Its compose service is `chat-webapp`**, not the repo name |
 | `crab/harness-sphere` | the watcher. Observability only; exclusive to this stack |
+| `crab/crab-reef-network` | **EXPERIMENTAL.** Federated memory sharing between agents, over ActivityPub. **Optional** — unconfigured, it registers no tool and nothing depends on it |
 
 When a pointer may be committed, and the check that enforces it, are in
 `.claude/rules/submodule-pointers.md`.
+
+**The reef reaches agents through the MCP server the proxy ALREADY hosts** — a
+`reef_` namespace on `POST /v1/mcp`, never a second configured server. The
+ganglion refuses its boot both on a tool-name collision and on an unreachable
+server, so a second entry would make every member's container unbootable
+whenever the reef was down. It is also OPTIONAL: unconfigured it registers
+nothing, and no existing capability may acquire it as a dependency. See
+`.specs/features/crab-reef-network/` and AD-029.
 
 **Every harness lays its per-user directory out the way picoclaw does** — a
 project workspace is `workspace-<id>`, a SIBLING of `workspace/`, never a child.
