@@ -1,7 +1,7 @@
 # crab-reef-network — Tasks
 
 **Spec:** `spec.md` · **Design:** `design.md`
-**Status:** Slice 1 SHIPPED (crab-reef-network@30925b3, on `main`). Slices 2 and 3 open.
+**Status:** Slices 1 and 2 SHIPPED (crab-reef-network@30925b3, on `main`). Slices 2 and 3 open.
 
 Three repositories. Slice 1 is self-contained and blocks nothing; slices 2 and 3 are **siblings**
 that both gate this repository's pointer bump.
@@ -81,20 +81,22 @@ Shipped as the repository's first commit. `go build`, `go vet`, `gofmt -l` and
 
 ---
 
-## Slice 2 — `crab-shell-proxy` (sibling)
+## Slice 2 — `crab-shell-proxy` (sibling) — DONE
 
-### T2.1 — `reef_*` tools on the existing `/v1/mcp`
+Shipped as crab-shell-proxy#68 (`ca691a4`).
+
+### T2.1 (done) — `reef_*` tools on the existing `/v1/mcp`
 - **What:** the seven tools from DD-4, registered **only** when `CRAB_REEF_BASE_URL` and
   `CRAB_REEF_TOKEN` are both set.
 - **Covers:** FR-D1..D6, D3a, J1, J2.
 - **Tests:** `TestNoReefToolsWhenUnconfigured`; a collision test over the whole registered set;
   `TestGanglionConfigStillOneServer` beside the existing per-project test.
 
-### T2.2 — subscription membership endpoint
+### T2.2 (done) — subscription membership endpoint
 - **What:** the one thing DD-3 needs from the proxy.
 - **Reuses:** `ListSubscriptionUsers` (`internal/docker/shared.go:310-333`) as-is.
 
-### T2.3 — gate `reef_publish` / `reef_share`
+### T2.3 (done) — gate `reef_publish` / `reef_share`
 - **What:** add both to the gated-tool list. **No wire change** — the approver contract is fixed by
   published image tags.
 - **Covers:** FR-E1, AC-5.
@@ -179,3 +181,33 @@ source for that is T2.2's membership endpoint. With the proxy absent the gate
 fails CLOSED rather than assuming membership — correct, and it makes T2.2 a
 prerequisite for exercising the direct-share dimension at all. `scripts/smoke.sh`
 reports that section as a skip with the reason, rather than as a pass.
+
+---
+
+## What slice 2 shipped, against what it promised
+
+**Five tools, not seven.** DD-4 named `reef_follow` and `reef_fetch`, and neither
+has an endpoint on the service — they were specified against a surface that does
+not exist, so they are dropped rather than invented. `decide` and `revoke` do
+exist but are human actions with no agent path. What ships: `reef_publish`,
+`reef_share`, `reef_timeline`, `reef_react`, `reef_admit`.
+
+**The agent path hard-codes `tenantLicensed=false`**, as a named constant rather
+than a literal, so DD-3's consequence is visible where it is enforced rather than
+only where it is argued. `TestAgentCallsNeverClaimTenantLicence` drives a real
+MCP call and reads the wire.
+
+**Gating is conditional on the reef being configured.** `reef_publish` and
+`reef_share` join `schedule_create` in `GANGLION_GATED_TOOLS` only when the reef
+is on — a gated tool that does not exist is a name the harness checks on every
+call and can never match. `reef_timeline`, `reef_react` and `reef_admit` are not
+gated: two read, and admit only moves something into this member's own memory
+that their person already chose to receive.
+
+**The optionality test came for free.** The existing golden schema test counts
+advertised tools and its harness configures no reef, so it now proves FR-J2
+without being taught anything about this feature. A new
+`newHarnessWithReef` constructor exists precisely so that stays true.
+
+**Still not exercisable end to end from an agent** until slice 3 gives the human
+somewhere to answer the gate and read what arrived.
