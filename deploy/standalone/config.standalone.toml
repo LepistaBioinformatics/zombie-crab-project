@@ -496,6 +496,28 @@ acceptInsecureRouting = true
 methods = ["GET"]
 
 [[alpha.path]]
+# Find somebody to share with. Answered only within the caller's own subscription, which is the set they could already address.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/mangrove/directory"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
+# The caller's own ids, to hand to somebody whose deployment cannot search for them. Never anybody else's.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/mangrove/identity"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
 # Let something addressed at this member into their own agent's memory.
 group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
 path = "/v1/mangrove/admit"
@@ -869,6 +891,28 @@ acceptInsecureRouting = true
 methods = ["GET"]
 
 [[gamma.path]]
+# Find somebody to share with. Answered only within the caller's own subscription, which is the set they could already address.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "gamma" }] }
+path = "/v1/mangrove/directory"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[gamma.path]]
+# The caller's own ids, to hand to somebody whose deployment cannot search for them. Never anybody else's.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "gamma" }] }
+path = "/v1/mangrove/identity"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[gamma.path]]
 # Let something addressed at this member into their own agent's memory.
 group = { protectedByRoles = [{ name = "gamma", permission = "write" }] }
 path = "/v1/mangrove/admit"
@@ -1176,6 +1220,28 @@ methods = ["GET"]
 # Whether this member governs the scope. The UI hides the pending reading rather than showing one it would refuse.
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/mangrove/capabilities"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+# Find somebody to share with. Answered only within the caller's own subscription, which is the set they could already address.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/mangrove/directory"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+# The caller's own ids, to hand to somebody whose deployment cannot search for them. Never anybody else's.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/mangrove/identity"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
