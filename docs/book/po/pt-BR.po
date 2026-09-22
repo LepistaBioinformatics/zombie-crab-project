@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: zombie-crab-project\n"
-"POT-Creation-Date: 2026-09-18T20:46:13-03:00\n"
+"POT-Creation-Date: 2026-09-21T22:55:29-03:00\n"
 "PO-Revision-Date: 2026-09-15T13:12:18-03:00\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -1006,14 +1006,14 @@ msgstr ""
 
 #: src/01-quick-start.md:226 src/02-installation.md:169
 #: src/03-configuration.md:205 src/10-architecture.md:172
-#: src/11-harnesses.md:191 src/12-agents-and-workspaces.md:186
-#: src/13-skills-and-memory.md:205 src/14-files-and-delivery.md:164
+#: src/11-harnesses.md:191 src/12-agents-and-workspaces.md:222
+#: src/13-skills-and-memory.md:218 src/14-files-and-delivery.md:164
 #: src/20-chat-client.md:224 src/21-projects.md:148
 #: src/22-scheduled-tasks.md:168 src/30-admin-guide.md:352
 #: src/31-custom-agent.md:237 src/32-models-and-providers.md:277
 #: src/40-deployment.md:223 src/41-database.md:164 src/42-observability.md:224
 #: src/43-troubleshooting.md:256 src/50-crab-shell-proxy.md:149
-#: src/51-crab-ganglion-harness.md:185 src/52-crab-exoskeleton-webapp.md:166
+#: src/51-crab-ganglion-harness.md:226 src/52-crab-exoskeleton-webapp.md:166
 #: src/53-harness-sphere.md:182 src/60-development.md:189
 #: src/61-contributing.md:141
 msgid "Where to go next"
@@ -2774,7 +2774,7 @@ msgstr "Seleção pessoal de modelo"
 msgid "`personal model selection`"
 msgstr ""
 
-#: src/11-harnesses.md:120 src/13-skills-and-memory.md:165
+#: src/11-harnesses.md:120 src/13-skills-and-memory.md:178
 msgid "The memory graph"
 msgstr "O grafo de memória"
 
@@ -3377,7 +3377,106 @@ msgstr ""
 "uma lista de modelos gravável deixaria uma ferramenta conduzida por texto "
 "não confiável escolher o endpoint para onde vão as chaves do próprio deploy."
 
+#: src/12-agents-and-workspaces.md:186
+msgid "A workspace migrated from picoclaw"
+msgstr "Um workspace migrado do picoclaw"
+
 #: src/12-agents-and-workspaces.md:188
+msgid ""
+"An account that ran on **picoclaw** before this deployment moved to the "
+"ganglion keeps everything that matters — its transcripts, its memory, its "
+"files, its projects — and also keeps a handful of files that belong to the "
+"other harness and that nothing reads any more:"
+msgstr "Uma conta que rodava no **picoclaw** antes desta instalação migrar para o ganglion mantém tudo que importa — seus transcritos, sua memória, seus arquivos, seus projetos — e mantém também um punhado de arquivos que pertencem ao outro harness e que nada mais lê:"
+
+#: src/12-agents-and-workspaces.md:193
+msgid "left over"
+msgstr "o que sobrou"
+
+#: src/12-agents-and-workspaces.md:193
+msgid "where"
+msgstr "onde"
+
+#: src/12-agents-and-workspaces.md:195
+msgid "`config.json`"
+msgstr ""
+
+#: src/12-agents-and-workspaces.md:195
+msgid "beside the workspace; the ganglion reads `.ganglion-config.json`"
+msgstr "ao lado do workspace; o ganglion lê `.ganglion-config.json`"
+
+#: src/12-agents-and-workspaces.md:196
+msgid "`.security.yml`"
+msgstr ""
+
+#: src/12-agents-and-workspaces.md:196
+msgid ""
+"beside the workspace; the ganglion takes credentials from its environment"
+msgstr "ao lado do workspace; o ganglion recebe credenciais pelo ambiente"
+
+#: src/12-agents-and-workspaces.md:197
+msgid "`.secrets/`"
+msgstr ""
+
+#: src/12-agents-and-workspaces.md:197
+msgid "in the workspace; the ganglion has none"
+msgstr "dentro do workspace; o ganglion não tem nenhum"
+
+#: src/12-agents-and-workspaces.md:198
+msgid "`cron/`"
+msgstr ""
+
+#: src/12-agents-and-workspaces.md:198
+msgid ""
+"in the workspace; a ganglion's schedules are `.schedules.json`, outside the "
+"bind"
+msgstr "dentro do workspace; os agendamentos de um ganglion ficam em `.schedules.json`, fora do bind"
+
+#: src/12-agents-and-workspaces.md:199
+msgid "the native picoclaw skills"
+msgstr "as skills nativas do picoclaw"
+
+#: src/12-agents-and-workspaces.md:199
+msgid ""
+"`skills/agent-browser`, `github`, `tmux`, `hardware`, … — they describe a "
+"machine the ganglion image is not"
+msgstr "`skills/agent-browser`, `github`, `tmux`, `hardware`, … — descrevem uma máquina que a imagem do ganglion não é"
+
+#: src/12-agents-and-workspaces.md:201
+msgid ""
+"The orchestrator moves these into `.picoclaw-backup/<timestamp>/` the next "
+"time it readies the workspace, mirroring the path each one had. **Nothing is "
+"deleted**, and the backup sits beside the workspace rather than inside it, "
+"so the agent cannot read it back — which matters most for the memory "
+"directory, where every `.md` is folded into the prompt on every turn."
+msgstr "O orquestrador move tudo isso para `.picoclaw-backup/<timestamp>/` na próxima vez que prepara o workspace, espelhando o caminho que cada arquivo tinha. **Nada é apagado**, e o backup fica ao lado do workspace e não dentro dele, de modo que o agente não consegue lê-lo de volta — o que importa sobretudo no diretório de memória, onde todo `.md` é dobrado no prompt a cada turno."
+
+#: src/12-agents-and-workspaces.md:207
+msgid ""
+"A workspace created as a ganglion never had any of this and the sweep finds "
+"nothing there."
+msgstr "Um workspace criado como ganglion nunca teve nada disso, e a varredura não encontra nada lá."
+
+#: src/12-agents-and-workspaces.md:210
+msgid ""
+"**A skill you edited is yours and stays.** Each candidate is compared "
+"against the copy this project ships, byte for byte, and only an untouched "
+"one moves — because `skills/github` in a workspace is as likely to be "
+"something the agent wrote as it is to be the template's. `skills/skill-"
+"creator` is never touched at all: both harnesses are given a managed one at "
+"that exact path."
+msgstr "**Uma skill que você editou é sua e fica.** Cada candidata é comparada byte a byte com a cópia que este projeto publica, e só uma intocada é movida — porque `skills/github` num workspace tem tanta chance de ser algo que o agente escreveu quanto de ser a do template. `skills/skill-creator` nunca é tocada: os dois harnesses recebem uma versão gerenciada exatamente nesse caminho."
+
+#: src/12-agents-and-workspaces.md:216
+msgid ""
+"Two picoclaw things are deliberately left in place. `logs/` and `.picoclaw."
+"pid` are named as that harness's runtime state but nothing in the platform "
+"reads or writes them, and `SOUL.md` and `HEARTBEAT.md` — which the ganglion "
+"never reads — arrive as read-only mounts for both harnesses, so removing "
+"them is a change to what gets mounted rather than a file to move."
+msgstr "Duas coisas do picoclaw são deixadas de propósito. `logs/` e `.picoclaw.pid` são descritos como estado de execução daquele harness, mas nada na plataforma lê ou escreve neles; e `SOUL.md` e `HEARTBEAT.md` — que o ganglion nunca lê — chegam como bind mounts somente-leitura para os dois harnesses, então removê-los é mudar o que é montado, não mover um arquivo."
+
+#: src/12-agents-and-workspaces.md:224
 msgid ""
 "[Skills and memory](./13-skills-and-memory.md) covers what lives inside "
 "`memory/` and `skills/`; [Files and delivery](./14-files-and-delivery.md) "
@@ -3743,11 +3842,32 @@ msgstr ""
 "relevante, em vez de confiar no que lembra dele."
 
 #: src/13-skills-and-memory.md:145
+msgid ""
+"**`memory/SIGNED_IN_USER.md`** names the account the workspace is running "
+"for — the member's name, username and e-mail, as the gateway resolved them. "
+"The proxy writes it on every turn that carries an identity, so it is derived "
+"rather than remembered, and a restart with no caller leaves it alone rather "
+"than blanking it. It carries no account, tenant or subscription id: those "
+"are isolation keys, and the only thing an agent can do with a UUID it is "
+"handed every turn is repeat it."
+msgstr "**`memory/SIGNED_IN_USER.md`** nomeia a conta para a qual o workspace está rodando — o nome, o usuário e o e-mail da pessoa, como o gateway os resolveu. O proxy o escreve em todo turno que carrega uma identidade, então ele é derivado e não lembrado, e um restart sem chamador o deixa intacto em vez de esvaziá-lo. Ele não carrega id de conta, de tenant nem de subscription: essas são chaves de isolamento, e a única coisa que um agente faz com um UUID entregue a cada turno é repeti-lo."
+
+#: src/13-skills-and-memory.md:152
+msgid ""
+"It is a **sibling of `memory/USER.md`**, never that file, and the "
+"distinction matters. `USER.md` is where the agent accumulates what it "
+"_learns_ about the person — how they like to work, what they are working on "
+"— and it is the agent's to write. `SIGNED_IN_USER.md` is a fact about the "
+"login and is replaced whenever it changes. Merging them would destroy the "
+"first on every turn."
+msgstr "Ele é um **irmão do `memory/USER.md`**, nunca aquele arquivo, e a distinção importa. O `USER.md` é onde o agente acumula o que _aprende_ sobre a pessoa — como ela gosta de trabalhar, no que está trabalhando — e é dele para escrever. O `SIGNED_IN_USER.md` é um fato sobre o login e é substituído sempre que muda. Juntar os dois destruiria o primeiro a cada turno."
+
+#: src/13-skills-and-memory.md:158
 msgid "Three more files in `memory/` are the operator's, mounted read-only:"
 msgstr ""
 "Outros três arquivos em `memory/` são do operador, montados somente leitura:"
 
-#: src/13-skills-and-memory.md:147
+#: src/13-skills-and-memory.md:160
 msgid ""
 "**`CONTEXT_RECOVERY.md`** tells the agent that its live context can be reset "
 "when the container restarts — idle scale-down, a settings change, a redeploy "
@@ -3764,7 +3884,7 @@ msgstr ""
 "mensagens anteriores, ele é instruído a reler esse arquivo em vez de "
 "adivinhar."
 
-#: src/13-skills-and-memory.md:153
+#: src/13-skills-and-memory.md:166
 msgid ""
 "**`FILE_DELIVERY.md`** is the rule about where a produced file goes. See "
 "[Files and delivery](./14-files-and-delivery.md)."
@@ -3772,7 +3892,7 @@ msgstr ""
 "**`FILE_DELIVERY.md`** é a regra sobre para onde vai um arquivo produzido. "
 "Veja [Arquivos e entrega](./14-files-and-delivery.md)."
 
-#: src/13-skills-and-memory.md:155
+#: src/13-skills-and-memory.md:168
 msgid ""
 "**`MEMORY_ROUTING.md`** says which memory to write to, and is mounted **only "
 "when the memory graph is enabled**. With no graph the agent has no "
@@ -3784,7 +3904,7 @@ msgstr ""
 "ferramenta `mcp_memory_*` alguma, e um documento mandando preferi-las "
 "estaria ativamente errado — pior do que silencioso."
 
-#: src/13-skills-and-memory.md:160
+#: src/13-skills-and-memory.md:173
 msgid ""
 "These are memory files rather than skills for a reason worth understanding. "
 "Skills are loaded by relevance: the agent has to decide to go looking for "
@@ -3797,7 +3917,7 @@ msgstr ""
 "encontrada no momento em que fosse menos necessária. O diretório de memória "
 "é lido a cada turno."
 
-#: src/13-skills-and-memory.md:167
+#: src/13-skills-and-memory.md:180
 msgid ""
 "When it is enabled, the agent also has a knowledge graph: entities, "
 "observations about them, and named relations between them. It is the memory "
@@ -3809,7 +3929,7 @@ msgstr ""
 "memória que o membro pode navegar, buscar e auditar pelo cliente de chat, e "
 "é a única que registra de qual conversa um fato veio."
 
-#: src/13-skills-and-memory.md:172
+#: src/13-skills-and-memory.md:185
 msgid ""
 "It is served by the proxy itself. The proxy writes an MCP server block named "
 "`memory` into the workspace's `config.json`, pointing at its own `/v1/mcp` "
@@ -3826,7 +3946,7 @@ msgstr ""
 "cliente MCP próprio e alcança o mesmo grafo que um container picoclaw no "
 "mesmo workspace alcançaria."
 
-#: src/13-skills-and-memory.md:179
+#: src/13-skills-and-memory.md:192
 msgid ""
 "The graph is scoped to the **member** and spans their projects, rather than "
 "being a separate graph per project."
@@ -3834,7 +3954,7 @@ msgstr ""
 "O grafo tem escopo de **membro** e abrange os projetos dele, em vez de ser "
 "um grafo separado por projeto."
 
-#: src/13-skills-and-memory.md:182
+#: src/13-skills-and-memory.md:195
 msgid ""
 "The tools the agent gets are all prefixed `mcp_memory_`: "
 "`mcp_memory_create_entities`, `mcp_memory_add_observations`, "
@@ -3859,7 +3979,7 @@ msgstr ""
 "relações é um ponto ao qual nada leva; e mantenha o `entityType` "
 "consistente, porque é por ele que o membro filtra a lista."
 
-#: src/13-skills-and-memory.md:193
+#: src/13-skills-and-memory.md:206
 msgid ""
 "**Enabling it is one environment variable**, `CRAB_MCP_TOKEN_SECRET`, and "
 "**leaving it unset is supported**: the `/v1/mcp` route is not registered at "
@@ -3875,7 +3995,7 @@ msgstr ""
 "tem de ficar sem memória, em vez de ganhar um endpoint sem autenticação "
 "alcançável por todo container da rede."
 
-#: src/13-skills-and-memory.md:200
+#: src/13-skills-and-memory.md:213
 msgid ""
 "Facts go in the graph; the agent's own working notes go in `MEMORY.md`. The "
 "routing document also forbids the agent from claiming a save it did not "
@@ -3888,7 +4008,7 @@ msgstr ""
 "algo ao `MEMORY.md` e então dizendo ao membro que tinha escrito no grafo "
 "também."
 
-#: src/13-skills-and-memory.md:207
+#: src/13-skills-and-memory.md:220
 msgid ""
 "[Files and delivery](./14-files-and-delivery.md) for `public/`, the other "
 "member-visible directory in a workspace, and the [Admin guide](./30-admin-"
@@ -5590,8 +5710,7 @@ msgstr "Você pede ao agente; ele pede sua aprovação e então agenda"
 msgid ""
 "The difference in that second row is the approval, and it is worth spelling "
 "out."
-msgstr ""
-"A diferença naquela segunda linha é a aprovação, e vale explicá-la."
+msgstr "A diferença naquela segunda linha é a aprovação, e vale explicá-la."
 
 #: src/22-scheduled-tasks.md:102
 msgid ""
@@ -10207,7 +10326,7 @@ msgstr ""
 "execução, que existe para que nada mais na stack precise perguntar ao "
 "próprio Docker."
 
-#: src/50-crab-shell-proxy.md:85 src/51-crab-ganglion-harness.md:83
+#: src/50-crab-shell-proxy.md:85 src/51-crab-ganglion-harness.md:120
 #: src/52-crab-exoskeleton-webapp.md:92 src/53-harness-sphere.md:62
 msgid "What it is not responsible for"
 msgstr "Pelo que ele não é responsável"
@@ -10249,7 +10368,7 @@ msgstr ""
 "harness-sphere.md), e a divisão sustenta peso: como o proxy já segura um "
 "socket do Docker, nada mais na stack ganha um."
 
-#: src/50-crab-shell-proxy.md:103 src/51-crab-ganglion-harness.md:106
+#: src/50-crab-shell-proxy.md:103 src/51-crab-ganglion-harness.md:147
 #: src/52-crab-exoskeleton-webapp.md:106 src/53-harness-sphere.md:124
 msgid "How it is built and tested"
 msgstr "Como é construído e testado"
@@ -10294,7 +10413,7 @@ msgstr ""
 "imagem continua utilizável em vários deploys. Veja [Configuração](./03-"
 "configuration.md)."
 
-#: src/50-crab-shell-proxy.md:127 src/51-crab-ganglion-harness.md:152
+#: src/50-crab-shell-proxy.md:127 src/51-crab-ganglion-harness.md:193
 #: src/52-crab-exoskeleton-webapp.md:144 src/53-harness-sphere.md:155
 msgid "How the code is laid out"
 msgstr "Como o código está organizado"
@@ -10584,16 +10703,63 @@ msgid ""
 "A conversation that has a transcript and no window — the state every "
 "conversation migrated from picoclaw arrives in — has its window rebuilt from "
 "the transcript, so the member does not see their history on screen while the "
-"agent answers as though the conversation had just begun."
-msgstr ""
-"**Persistir a conversa.** A transcrição é um JSONL só de acréscimo em "
-"`workspace/sessions`, e a janela de contexto é um artefato derivado, "
-"separado. Uma conversa que tem transcrição e não tem janela — o estado em "
-"que chega toda conversa migrada do picoclaw — tem a janela reconstruída a "
-"partir da transcrição, para que o membro não veja o histórico na tela "
-"enquanto o agente responde como se a conversa tivesse acabado de começar."
+"agent answers as though the conversation had just begun. A rebuilt window "
+"says how much of the transcript it left behind, rather than starting mid-"
+"conversation with nothing marking the cut."
+msgstr "**Persistir a conversa.** O transcrito é JSONL somente-append em `workspace/sessions`, e a janela de contexto é um artefato derivado separado. Uma conversa que tem transcrito e não tem janela — o estado em que chega toda conversa migrada do picoclaw — tem a janela reconstruída a partir do transcrito, para que a pessoa não veja seu histórico na tela enquanto o agente responde como se a conversa tivesse acabado de começar. Uma janela reconstruída diz quanto do transcrito ela deixou para trás, em vez de começar no meio da conversa sem nada marcando o corte."
 
-#: src/51-crab-ganglion-harness.md:77
+#: src/51-crab-ganglion-harness.md:79
+msgid ""
+"**Shortening the window without losing anything.** The window holds only the "
+"most recent messages — a fixed count, not yet a configuration key — and "
+"everything it drops is still in the transcript, except for one thing that "
+"never reached it. A **tool result** is written to the window and nowhere "
+"else, because the member never saw it, so the window used to be its only "
+"copy: dropping it destroyed the bytes rather than merely shortening the "
+"context. And it is the largest thing there — one `sh` result can be 64 KiB, "
+"which the budget counts as a single message."
+msgstr "**Encurtar a janela sem perder nada.** A janela guarda apenas as mensagens mais recentes — uma quantidade fixa, ainda não uma chave de configuração — e tudo que ela descarta continua no transcrito, exceto uma coisa que nunca chegou lá. Um **resultado de ferramenta** é escrito na janela e em nenhum outro lugar, porque a pessoa nunca o viu, então a janela era a única cópia dele: descartá-lo destruía os bytes em vez de apenas encurtar o contexto. E é a maior coisa que existe ali — um único resultado de `sh` pode ter 64 KiB, que o orçamento conta como uma mensagem só."
+
+#: src/51-crab-ganglion-harness.md:88
+msgid ""
+"So a large result is **parked** on the way in: the whole output goes to a "
+"file under the turn's own workspace and the message keeps its first and last "
+"lines, its size and the path. The agent can read the rest back with the "
+"shell whenever it wants it. Once the result is a few iterations old, "
+"compaction replaces even the excerpt with the path alone — recent tool "
+"output is context, old tool output is a filename. Nothing here calls a model."
+msgstr "Então um resultado grande é **estacionado** na entrada: a saída inteira vai para um arquivo dentro do workspace do próprio turno e a mensagem guarda suas primeiras e últimas linhas, o tamanho e o caminho. O agente pode ler o resto de volta com o shell quando quiser. Quando o resultado tem algumas iterações de idade, a compactação troca até o trecho pelo caminho sozinho — saída de ferramenta recente é contexto, saída antiga é um nome de arquivo. Nada disso chama um modelo."
+
+#: src/51-crab-ganglion-harness.md:95
+msgid ""
+"A turn that dropped messages records that it did, once, as an entry the "
+"member sees as a divider in the transcript and the model never sees at all. "
+"The count and the note ride in it; what the member scrolls through is "
+"untouched."
+msgstr "Um turno que descartou mensagens registra que descartou, uma vez, como uma entrada que a pessoa vê como um divisor no transcrito e que o modelo nunca vê. A contagem e a nota viajam nela; o que a pessoa rola na tela fica intacto."
+
+#: src/51-crab-ganglion-harness.md:99
+msgid ""
+"**Reading back what left the window.** The agent is told how many messages "
+"are missing — that note is delivered as a system message — and "
+"`search_history` is how it goes and reads one: a case-insensitive search "
+"over the conversation's own transcript, capped, quoting each match in its "
+"surroundings and saying how far back it sits. Nothing is summarized and no "
+"second model is called; the cost of compaction moves to the turns that "
+"actually reach back, rather than being paid on every turn that does not."
+msgstr "**Ler de volta o que saiu da janela.** O agente é informado de quantas mensagens estão faltando — essa nota é entregue como mensagem de sistema — e o `search_history` é como ele vai ler uma: uma busca sem diferenciar maiúsculas sobre o transcrito da própria conversa, limitada, citando cada acerto no seu entorno e dizendo a que distância ele está. Nada é resumido e nenhum segundo modelo é chamado; o custo da compactação passa para os turnos que de fato olham para trás, em vez de ser pago em todo turno que não olha."
+
+#: src/51-crab-ganglion-harness.md:107
+msgid ""
+"Parked outputs are the one thing here that is swept. A conversation keeps "
+"its most recent ones and older files are deleted — far more than a window "
+"can hold pointers to, so nothing the agent might still follow is removed. It "
+"is the only place this harness deletes what it wrote, and it is deliberate: "
+"a transcript entry is the member's and may never be shortened, while a "
+"parked result is the agent's scratch."
+msgstr "Saídas estacionadas são a única coisa aqui que é varrida. Uma conversa mantém as mais recentes e os arquivos mais antigos são apagados — muito mais do que uma janela consegue guardar ponteiros para, então nada que o agente ainda possa seguir é removido. É o único lugar em que este harness apaga o que escreveu, e é deliberado: uma entrada de transcrito é da pessoa e nunca pode ser encurtada, enquanto um resultado estacionado é rascunho do agente."
+
+#: src/51-crab-ganglion-harness.md:114
 msgid ""
 "**Keeping the layout the stack expects.** Everything lives under the "
 "`workspace` segment, because that is where the proxy looks from outside the "
@@ -10608,7 +10774,7 @@ msgstr ""
 "dele; o harness migra no boot uma subárvore deixada no caminho antigo. Veja "
 "[Agentes, workspaces e projetos](./12-agents-and-workspaces.md)."
 
-#: src/51-crab-ganglion-harness.md:85
+#: src/51-crab-ganglion-harness.md:122
 msgid ""
 "It does not start, stop or provision anything, including itself. Container "
 "lifecycle, volumes and their ownership, secrets materialization, mycelium "
@@ -10623,26 +10789,25 @@ msgstr ""
 "(./50-crab-shell-proxy.md). A especificação do harness lista isso como "
 "permanentemente fora de escopo."
 
-#: src/51-crab-ganglion-harness.md:92
+#: src/51-crab-ganglion-harness.md:129
 msgid ""
 "It does not decide who may approve a gated action. The harness has the "
-"`Approver` port and the mid-turn suspension behind it, and its first adapter "
-"calls back to the proxy, which owns member identity — the harness only asks. "
-"The other half of that round trip is not built: there is no approval "
-"endpoint on the proxy, and with `GANGLION_APPROVAL_ENDPOINT` unset the loop "
-"installs an allow-all approver. Treat the approval flow as a seam that "
-"exists rather than a feature you can switch on."
-msgstr ""
-"Ele não decide quem pode aprovar uma ação sujeita a aprovação. O harness tem "
-"a porta `Approver` e a suspensão no meio do turno atrás dela, e o primeiro "
-"adaptador dela chama de volta o proxy, que é dono da identidade do membro — "
-"o harness só pergunta. A outra metade dessa ida e volta não está construída: "
-"não existe endpoint de aprovação no proxy, e com "
-"`GANGLION_APPROVAL_ENDPOINT` não definida o laço instala um aprovador que "
-"aceita tudo. Trate o fluxo de aprovação como uma costura que existe, não "
-"como um recurso que você pode ligar."
+"`Approver` port and the mid-turn suspension behind it, and its adapter calls "
+"back to the proxy, which owns member identity — the harness only asks."
+msgstr "Ele não decide quem pode aprovar uma ação sujeita a autorização. O harness tem a porta `Approver` e a suspensão no meio do turno atrás dela, e seu adaptador chama de volta o proxy, que é o dono da identidade da pessoa — o harness apenas pergunta."
 
-#: src/51-crab-ganglion-harness.md:100
+#: src/51-crab-ganglion-harness.md:133
+msgid ""
+"That round trip is complete now: the proxy answers at `/v1/approvals`, the "
+"member answers from the chat client, and the turn stays suspended until they "
+"do or until the harness gives up waiting. With `GANGLION_APPROVAL_ENDPOINT` "
+"unset the loop still installs an allow-all approver, which is what a "
+"deployment that cannot mint the scoped token falls back to — so the flag is "
+"what switches the gate on, not whether the other half exists. See [Scheduled "
+"tasks](./22-scheduled-tasks.md), the first feature to use it."
+msgstr "Essa ida e volta está completa agora: o proxy responde em `/v1/approvals`, a pessoa responde pelo cliente de chat, e o turno fica suspenso até ela responder ou até o harness desistir de esperar. Com `GANGLION_APPROVAL_ENDPOINT` vazio o loop ainda instala um aprovador que aceita tudo, que é o fallback de uma instalação incapaz de emitir o token com escopo — então a variável é o que liga a trava, não o que decide se a outra metade existe. Veja [Tarefas agendadas](./22-scheduled-tasks.md), a primeira funcionalidade a usá-la."
+
+#: src/51-crab-ganglion-harness.md:141
 msgid ""
 "It has **no `.secrets/` directory**. Credentials reach this harness as "
 "environment variables. A value that must not sit in plaintext can be "
@@ -10656,7 +10821,7 @@ msgstr ""
 "stdin, nunca como argumento, e imprime o valor `enc://` para você colar no "
 "ambiente do deploy."
 
-#: src/51-crab-ganglion-harness.md:108
+#: src/51-crab-ganglion-harness.md:149
 msgid ""
 "This is the only one of the four repositories with a pull-request gate that "
 "runs the test suite. `.github/workflows/ci.yml` runs, on every pull request "
@@ -10666,7 +10831,7 @@ msgstr ""
 "roda a suíte de testes. `.github/workflows/ci.yml` roda, em cada pull "
 "request e em cada push para `main`:"
 
-#: src/51-crab-ganglion-harness.md:119
+#: src/51-crab-ganglion-harness.md:160
 msgid ""
 "`-race` is deliberate rather than habitual: the SSE writer has two writers "
 "by construction, the turn and the heartbeat, and interleaved output would "
@@ -10676,7 +10841,7 @@ msgstr ""
 "construção, o turno e o heartbeat, e uma saída intercalada corromperia um "
 "frame que o cliente está no meio de interpretar."
 
-#: src/51-crab-ganglion-harness.md:123
+#: src/51-crab-ganglion-harness.md:164
 msgid ""
 "The same tests run a second time inside the Dockerfile, before the binary is "
 "linked, so the image cannot be built without them passing. `release.yml` "
@@ -10690,7 +10855,7 @@ msgstr ""
 "por isso — reaproveitar os testes de um cache faria uma execução verde "
 "deixar de ser evidência de que eles rodaram para estes bytes."
 
-#: src/51-crab-ganglion-harness.md:129
+#: src/51-crab-ganglion-harness.md:170
 msgid ""
 "The runtime image is Alpine rather than distroless, and the Dockerfile "
 "explains that this was found by running it: distroless has no `/bin/sh`, so "
@@ -10704,7 +10869,7 @@ msgstr ""
 "que é o mesmo para o qual o proxy faz chown do volume de cada membro, e "
 "escuta na porta 18800."
 
-#: src/51-crab-ganglion-harness.md:134
+#: src/51-crab-ganglion-harness.md:175
 msgid ""
 "**Every published image is addressed by the commit that produced it.** There "
 "is no `:latest` and no `:main`; `release.yml` publishes `ghcr.io/"
@@ -10723,7 +10888,7 @@ msgstr ""
 "rodando bytes antigos indefinidamente sem nada nos logs. Aconteceu uma vez, "
 "por três semanas."
 
-#: src/51-crab-ganglion-harness.md:142
+#: src/51-crab-ganglion-harness.md:183
 msgid ""
 "The consequence for a deployment is that the image reference is a decision "
 "somebody makes. `docker-compose.prod.yaml` sets no `CRAB_GANGLION_IMAGE` and "
@@ -10746,7 +10911,7 @@ msgstr ""
 "impede a stack de desenvolvimento de subir. Veja [Deploy](./40-deployment."
 "md)."
 
-#: src/51-crab-ganglion-harness.md:154
+#: src/51-crab-ganglion-harness.md:195
 msgid ""
 "The repository is hexagonal, and the shape is enforced by tests rather than "
 "by convention."
@@ -10754,7 +10919,7 @@ msgstr ""
 "O repositório é hexagonal, e o formato é garantido por testes, não por "
 "convenção."
 
-#: src/51-crab-ganglion-harness.md:157
+#: src/51-crab-ganglion-harness.md:198
 msgid ""
 "```\n"
 "cmd/crab-ganglion/main.go   the composition root: the only place adapters "
@@ -10780,7 +10945,7 @@ msgstr ""
 "internal/skillfile/         leitura de arquivos de skill\n"
 "```"
 
-#: src/51-crab-ganglion-harness.md:167
+#: src/51-crab-ganglion-harness.md:208
 msgid ""
 "`internal/domain/arch_test.go` holds two rules. The first fails if the "
 "domain package imports anything outside the standard library, because the "
@@ -10796,7 +10961,7 @@ msgstr ""
 "importar outro, e é isso que faz de um segundo provedor ou de um segundo "
 "ingresso um arquivo novo, e não uma refatoração."
 
-#: src/51-crab-ganglion-harness.md:173
+#: src/51-crab-ganglion-harness.md:214
 msgid ""
 "The adapters are grouped by what they drive: `httpsse` is the way in; "
 "`provider/openai` and `provider/router` are the way out to a model; `store/"
@@ -10814,7 +10979,7 @@ msgstr ""
 "ferramenta é um arquivo mais uma linha de registro em `main.go` — não uma "
 "mudança no laço, na porta ou no registro."
 
-#: src/51-crab-ganglion-harness.md:181
+#: src/51-crab-ganglion-harness.md:222
 msgid ""
 "The specification for all of this lives in the product repository, at `."
 "specs/features/crab-ganglion-harness/`, along with the design notes and the "
@@ -10824,7 +10989,7 @@ msgstr ""
 "features/crab-ganglion-harness/`, junto com as notas de design e os "
 "identificadores de requisito que os comentários do código citam."
 
-#: src/51-crab-ganglion-harness.md:187
+#: src/51-crab-ganglion-harness.md:228
 msgid ""
 "[Harnesses](./11-harnesses.md) compares the two runtimes and explains what "
 "the proxy does when a feature is not available on one of them. "
@@ -12317,6 +12482,39 @@ msgstr ""
 "exoskeleton-webapp](./52-crab-exoskeleton-webapp.md) e [harness-sphere](./53-"
 "harness-sphere.md) — descrevem o layout de código de cada repositório que "
 "você talvez esteja prestes a mudar."
+
+#~ msgid ""
+#~ "**Persisting the conversation.** The transcript is append-only JSONL "
+#~ "under `workspace/sessions`, and the context window is a separate derived "
+#~ "artifact. A conversation that has a transcript and no window — the state "
+#~ "every conversation migrated from picoclaw arrives in — has its window "
+#~ "rebuilt from the transcript, so the member does not see their history on "
+#~ "screen while the agent answers as though the conversation had just begun."
+#~ msgstr ""
+#~ "**Persistir a conversa.** A transcrição é um JSONL só de acréscimo em "
+#~ "`workspace/sessions`, e a janela de contexto é um artefato derivado, "
+#~ "separado. Uma conversa que tem transcrição e não tem janela — o estado em "
+#~ "que chega toda conversa migrada do picoclaw — tem a janela reconstruída a "
+#~ "partir da transcrição, para que o membro não veja o histórico na tela "
+#~ "enquanto o agente responde como se a conversa tivesse acabado de começar."
+
+#~ msgid ""
+#~ "It does not decide who may approve a gated action. The harness has the "
+#~ "`Approver` port and the mid-turn suspension behind it, and its first "
+#~ "adapter calls back to the proxy, which owns member identity — the harness "
+#~ "only asks. The other half of that round trip is not built: there is no "
+#~ "approval endpoint on the proxy, and with `GANGLION_APPROVAL_ENDPOINT` "
+#~ "unset the loop installs an allow-all approver. Treat the approval flow as "
+#~ "a seam that exists rather than a feature you can switch on."
+#~ msgstr ""
+#~ "Ele não decide quem pode aprovar uma ação sujeita a aprovação. O harness "
+#~ "tem a porta `Approver` e a suspensão no meio do turno atrás dela, e o "
+#~ "primeiro adaptador dela chama de volta o proxy, que é dono da identidade "
+#~ "do membro — o harness só pergunta. A outra metade dessa ida e volta não "
+#~ "está construída: não existe endpoint de aprovação no proxy, e com "
+#~ "`GANGLION_APPROVAL_ENDPOINT` não definida o laço instala um aprovador que "
+#~ "aceita tudo. Trate o fluxo de aprovação como uma costura que existe, não "
+#~ "como um recurso que você pode ligar."
 
 #~ msgid "Nothing a member touches creates one yet"
 #~ msgstr "Nada que um membro toque cria uma ainda"
