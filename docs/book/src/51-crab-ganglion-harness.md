@@ -127,12 +127,16 @@ scheduled tasks all stay in
 this as permanently out of scope.
 
 It does not decide who may approve a gated action. The harness has the
-`Approver` port and the mid-turn suspension behind it, and its first adapter
-calls back to the proxy, which owns member identity — the harness only asks. The
-other half of that round trip is not built: there is no approval endpoint on the
-proxy, and with `GANGLION_APPROVAL_ENDPOINT` unset the loop installs an
-allow-all approver. Treat the approval flow as a seam that exists rather than a
-feature you can switch on.
+`Approver` port and the mid-turn suspension behind it, and its adapter calls
+back to the proxy, which owns member identity — the harness only asks.
+
+That round trip is complete now: the proxy answers at `/v1/approvals`, the member
+answers from the chat client, and the turn stays suspended until they do or until
+the harness gives up waiting. With `GANGLION_APPROVAL_ENDPOINT` unset the loop
+still installs an allow-all approver, which is what a deployment that cannot mint
+the scoped token falls back to — so the flag is what switches the gate on, not
+whether the other half exists. See
+[Scheduled tasks](./22-scheduled-tasks.md), the first feature to use it.
 
 It has **no `.secrets/` directory**. Credentials reach this harness as
 environment variables. A value that must not sit in plaintext can be encrypted

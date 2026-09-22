@@ -183,6 +183,42 @@ that root, read-only, outside every workspace: the workspace is the only
 hierarchy a command can reach, so a writable model list would let a tool steered
 by untrusted text choose the endpoint the deployment's own keys are sent to.
 
+## A workspace migrated from picoclaw
+
+An account that ran on **picoclaw** before this deployment moved to the ganglion
+keeps everything that matters — its transcripts, its memory, its files, its
+projects — and also keeps a handful of files that belong to the other harness and
+that nothing reads any more:
+
+| left over | where |
+|---|---|
+| `config.json` | beside the workspace; the ganglion reads `.ganglion-config.json` |
+| `.security.yml` | beside the workspace; the ganglion takes credentials from its environment |
+| `.secrets/` | in the workspace; the ganglion has none |
+| `cron/` | in the workspace; a ganglion's schedules are `.schedules.json`, outside the bind |
+| the native picoclaw skills | `skills/agent-browser`, `github`, `tmux`, `hardware`, … — they describe a machine the ganglion image is not |
+
+The orchestrator moves these into `.picoclaw-backup/<timestamp>/` the next time it
+readies the workspace, mirroring the path each one had. **Nothing is deleted**, and
+the backup sits beside the workspace rather than inside it, so the agent cannot
+read it back — which matters most for the memory directory, where every `.md` is
+folded into the prompt on every turn.
+
+A workspace created as a ganglion never had any of this and the sweep finds
+nothing there.
+
+**A skill you edited is yours and stays.** Each candidate is compared against the
+copy this project ships, byte for byte, and only an untouched one moves — because
+`skills/github` in a workspace is as likely to be something the agent wrote as it
+is to be the template's. `skills/skill-creator` is never touched at all: both
+harnesses are given a managed one at that exact path.
+
+Two picoclaw things are deliberately left in place. `logs/` and `.picoclaw.pid`
+are named as that harness's runtime state but nothing in the platform reads or
+writes them, and `SOUL.md` and `HEARTBEAT.md` — which the ganglion never reads —
+arrive as read-only mounts for both harnesses, so removing them is a change to
+what gets mounted rather than a file to move.
+
 ## Where to go next
 
 [Skills and memory](./13-skills-and-memory.md) covers what lives inside
