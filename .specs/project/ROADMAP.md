@@ -334,7 +334,7 @@ metrics survive the proxy being down). See
   unconfigured registers no tool, renders no tab, and adds no dependency to anything that works
   today — and a deployment that enables it can disable it again without losing memory.
   The submodule exists and is public (`crab/crab-reef-network`, `MIT OR Apache-2.0`,
-  pointer at `da560a1` on its default branch): actors, the signed append-only log, the
+  pointer at `389a6cf` on its default branch): actors, the signed append-only log, the
   LWW-per-author reduction, the single containment gate and the internal API, in Go with
   **zero external dependencies** enforced in CI. It is **EXPERIMENTAL** and says so before
   anything else in its README, next to a threat model that states what is NOT protected.

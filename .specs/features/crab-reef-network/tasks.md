@@ -1,7 +1,7 @@
 # crab-reef-network — Tasks
 
 **Spec:** `spec.md` · **Design:** `design.md`
-**Status:** Slice 1 SHIPPED (crab-reef-network@da560a1, on `main`). Slices 2 and 3 open.
+**Status:** Slice 1 SHIPPED (crab-reef-network@389a6cf, on `main`). Slices 2 and 3 open.
 
 Three repositories. Slice 1 is self-contained and blocks nothing; slices 2 and 3 are **siblings**
 that both gate this repository's pointer bump.

@@ -2,7 +2,7 @@
 
 **Spec:** `.specs/features/crab-reef-network/spec.md`
 **Context:** `.specs/features/crab-reef-network/context.md`
-**Status:** Approved; slice 1 implemented (crab-reef-network@da560a1)
+**Status:** Approved; slice 1 implemented (crab-reef-network@389a6cf)
 
 This design closes four of the five open questions. Each closure is marked **DD-n** and says which
 `OQ` it answers, so a reader can tell a decision from an assumption.
