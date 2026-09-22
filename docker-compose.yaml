@@ -240,10 +240,10 @@ services:
       # the injected MCP server. The default matches this service's name on
       # zombie_net, so it only needs setting if that changes.
       CRAB_MCP_BASE_URL: ${CRAB_MCP_BASE_URL:-http://crab-shell-proxy:8080}
-      # THE REEF, and both halves are the whole switch.
+      # THE MANGROVE, and both halves are the whole switch.
       #
-      # Set BOTH and the proxy grows five `reef_*` tools on the MCP server it
-      # already hosts, plus GET /v1/reef/subscription-members for the reef to
+      # Set BOTH and the proxy grows five `mangrove_*` tools on the MCP server it
+      # already hosts, plus GET /v1/mangrove/subscription-members for the mangrove to
       # ask back. Leave either unset and neither exists: no tool name, no
       # route, and the advertised tool set is byte-identical to a deployment
       # that never heard of this. Absent, not refusing -- every registered tool
@@ -254,17 +254,17 @@ services:
       # above. A default would make the feature half-configured out of the box,
       # and half is the one state it must not have.
       #
-      # CRAB_REEF_TOKEN is NOT an agent token and NOT CRAB_MCP_TOKEN_SECRET. It
-      # proves this proxy is the reef's one caller, and it gates a route that
+      # CRAB_MANGROVE_TOKEN is NOT an agent token and NOT CRAB_MCP_TOKEN_SECRET. It
+      # proves this proxy is the mangrove's one caller, and it gates a route that
       # discloses a subscription's whole membership roll -- a credential that
       # gates two capabilities cannot be revoked for one of them.
       #
-      # The reef service itself lives behind the `reef` compose profile, so
+      # The mangrove service itself lives behind the `mangrove` compose profile, so
       # setting these without starting it leaves the tools registered and every
       # call answering a readable error. Start it with:
-      #   docker compose --profile reef up -d crab-reef-network
-      CRAB_REEF_BASE_URL: ${CRAB_REEF_BASE_URL:-}
-      CRAB_REEF_TOKEN: ${CRAB_REEF_TOKEN:-}
+      #   docker compose --profile mangrove up -d crab-mangrove-network
+      CRAB_MANGROVE_BASE_URL: ${CRAB_MANGROVE_BASE_URL:-}
+      CRAB_MANGROVE_TOKEN: ${CRAB_MANGROVE_TOKEN:-}
       # Authorizes GET /v1/instances -- the workspace inventory harness-sphere
       # reads to attribute a container to its tenant/subscription/user, which it
       # cannot do alone (the container name hashes that tuple one way).
@@ -529,31 +529,31 @@ services:
     # to produce.
     # No ports: it is observed through its exporter, not over HTTP.
 
-  # EXPERIMENTAL, and OPTIONAL BY CONSTRUCTION -- see crab/crab-reef-network's
-  # README and `.specs/features/crab-reef-network/`.
+  # EXPERIMENTAL, and OPTIONAL BY CONSTRUCTION -- see crab/crab-mangrove-network's
+  # README and `.specs/features/crab-mangrove-network/`.
   #
-  # IT DOES NOT START WITH `docker compose up`. It sits behind the `reef`
+  # IT DOES NOT START WITH `docker compose up`. It sits behind the `mangrove`
   # profile, so the stack anybody runs today is the stack they ran before this
   # service existed. That is FR-J, and a compose profile is the cheapest honest
   # way to hold it: not "starts but does nothing", not "starts and errors" --
   # simply absent unless asked for.
   #
-  #   docker compose --profile reef up -d --build crab-reef-network
+  #   docker compose --profile mangrove up -d --build crab-mangrove-network
   #
-  # Nothing else in the stack references it yet. The proxy grows `reef_*` tools
-  # in a later slice, gated on CRAB_REEF_BASE_URL being set; until then this
+  # Nothing else in the stack references it yet. The proxy grows `mangrove_*` tools
+  # in a later slice, gated on CRAB_MANGROVE_BASE_URL being set; until then this
   # service is reachable on zombie_net and exercised directly over HTTP.
-  crab-reef-network:
-    profiles: ["reef"]
+  crab-mangrove-network:
+    profiles: ["mangrove"]
     build:
-      context: ./crab/crab-reef-network
+      context: ./crab/crab-mangrove-network
       # NO `network: host` here, unlike picoclaw-image / mycelium-webapp /
       # harness-sphere. Those need it because their builds fetch dependencies and
       # a build container gets one usable resolver with no fallback. This module's
       # go.mod has no require block, so the build downloads nothing and the
       # workaround would be cargo-culted rather than needed.
     # Bounded rather than `unless-stopped`: the one way this service fails at
-    # boot is an unset REEF_TOKEN, which it refuses loudly and by name. That is a
+    # boot is an unset MANGROVE_TOKEN, which it refuses loudly and by name. That is a
     # configuration mistake, and an unbounded restart loop buries the message it
     # exists to show.
     restart: on-failure:3
@@ -561,20 +561,20 @@ services:
       - zombie_net
     environment:
       # REQUIRED. Unset, the service refuses to listen at all rather than open a
-      # port with no credential behind it. Note this is the reef's OWN caller
+      # port with no credential behind it. Note this is the mangrove's OWN caller
       # secret -- it is NOT an agent token and NOT CRAB_MCP_TOKEN_SECRET.
-      REEF_TOKEN: ${CRAB_REEF_TOKEN:-}
-      REEF_STORE_DIR: /data/reef
-      REEF_LISTEN: ":8090"
-      # Where the one membership question is asked. The reef keeps no membership
+      MANGROVE_TOKEN: ${CRAB_MANGROVE_TOKEN:-}
+      MANGROVE_STORE_DIR: /data/mangrove
+      MANGROVE_LISTEN: ":8090"
+      # Where the one membership question is asked. The mangrove keeps no membership
       # list of its own, deliberately: a stored list is a second source of truth
       # that can disagree with mycelium.
-      REEF_PROXY_BASE_URL: http://crab-shell-proxy:8080
+      MANGROVE_PROXY_BASE_URL: http://crab-shell-proxy:8080
     volumes:
       # Actors, their ed25519 private keys, and the append-only log. A named
-      # volume rather than a bind under data/: these keys are the reef's
+      # volume rather than a bind under data/: these keys are the mangrove's
       # identity, and nothing outside this container has a reason to read them.
-      - reef-data:/data/reef
+      - mangrove-data:/data/mangrove
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8090/healthz"]
       interval: 30s
@@ -589,4 +589,4 @@ services:
 volumes:
   mycelium-data:
   chat-webapp-postgres-data:
-  reef-data:
+  mangrove-data:

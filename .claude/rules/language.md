@@ -21,7 +21,7 @@ Applies without exception by artefact type:
 
 It applies at every depth of the chain: this repository, `crab/crab-shell-proxy`,
 `crab/crab-exoskeleton-webapp`, `crab/harness-sphere`, `crab/crab-ganglion-harness`
-and `crab/crab-reef-network`.
+and `crab/crab-mangrove-network`.
 
 ## The one place that is different, and it is not below this line
 

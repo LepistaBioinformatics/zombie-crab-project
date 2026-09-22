@@ -1,8 +1,8 @@
-# crab-reef-network — Design
+# crab-mangrove-network — Design
 
-**Spec:** `.specs/features/crab-reef-network/spec.md`
-**Context:** `.specs/features/crab-reef-network/context.md`
-**Status:** Approved; slice 1 implemented (crab-reef-network@30925b3)
+**Spec:** `.specs/features/crab-mangrove-network/spec.md`
+**Context:** `.specs/features/crab-mangrove-network/context.md`
+**Status:** Approved; slice 1 implemented (crab-mangrove-network@30925b3)
 
 This design closes four of the five open questions. Each closure is marked **DD-n** and says which
 `OQ` it answers, so a reader can tell a decision from an assumption.
@@ -25,13 +25,13 @@ approvingly ("with `go.mod` still at zero requires"). Everything needed is in th
 the façade. A public repository under `MIT OR Apache-2.0` with no supply chain is also the easier
 thing to ask anyone to trust.
 
-## DD-2 — The store is JSONL the reef owns; the canonical memory stays where it is (closes OQ-2)
+## DD-2 — The store is JSONL the mangrove owns; the canonical memory stays where it is (closes OQ-2)
 
-FR-J4 and FR-J5 already ruled out the reef holding the canonical copy of a shared object. What is
+FR-J4 and FR-J5 already ruled out the mangrove holding the canonical copy of a shared object. What is
 left is its **derived** state, and this design gives it a store of its own:
 
 ```
-$REEF_STORE_DIR/
+$MANGROVE_STORE_DIR/
 ├── actors/<actor-id>.json          one Person or Service document
 ├── keys/<actor-id>.ed25519         private key, 0600, never served
 └── log/<tenant>/<subscription>.jsonl   append-only, one activity per line
@@ -75,24 +75,24 @@ the shape this stack already refuses elsewhere (the scheduler lives above the wo
 same reason). No mycelium RPC method name has to be invented, which OQ-3 warned was where a spec
 rots silently.
 
-**What the reef still asks the proxy for:** the member list of one subscription, over one internal
+**What the mangrove still asks the proxy for:** the member list of one subscription, over one internal
 endpoint. Nothing else.
 
-## DD-4 — `reef_*` is seven tools, not ten (applies FR-D3a)
+## DD-4 — `mangrove_*` is seven tools, not ten (applies FR-D3a)
 
 FR-D3a made the surface a budget. Folding the near-identical verbs:
 
 | Tool | FR-C activities | Notes |
 |---|---|---|
-| `reef_publish` | `Create` | Gated (FR-E1). Takes `to[]`, defaults to self. |
-| `reef_share` | `Add`, `Remove` | Gated. `undo: true` gives `Remove`. |
-| `reef_timeline` | — (read) | Lists received/published, filtered by scope. |
-| `reef_fetch` | — (read) | One object by id, with its claims and evidence. |
-| `reef_follow` | `Follow`, `Undo(Follow)` | `undo: true` folds the unfollow. |
-| `reef_react` | `Read`, `Like`, `Flag`, `Undo` | One tool, `kind` discriminates. Folds `ack`/`endorse`/`flag`. |
-| `reef_admit` | — (see FR-B7) | Admits a held object into this agent's own memory. |
+| `mangrove_publish` | `Create` | Gated (FR-E1). Takes `to[]`, defaults to self. |
+| `mangrove_share` | `Add`, `Remove` | Gated. `undo: true` gives `Remove`. |
+| `mangrove_timeline` | — (read) | Lists received/published, filtered by scope. |
+| `mangrove_fetch` | — (read) | One object by id, with its claims and evidence. |
+| `mangrove_follow` | `Follow`, `Undo(Follow)` | `undo: true` folds the unfollow. |
+| `mangrove_react` | `Read`, `Like`, `Flag`, `Undo` | One tool, `kind` discriminates. Folds `ack`/`endorse`/`flag`. |
+| `mangrove_admit` | — (see FR-B7) | Admits a held object into this agent's own memory. |
 
-Seven, against the graph's eighteen plus three `schedule_*`. `reef_announce` is deliberately absent
+Seven, against the graph's eighteen plus three `schedule_*`. `mangrove_announce` is deliberately absent
 from v1: `Announce` is defined in the log format and has no tool, because re-sharing is the verb most
 likely to be invoked by a turn that was steered into it, and nothing yet needs it.
 
@@ -102,13 +102,13 @@ likely to be invoked by a turn that was steered into it, and nothing yet needs i
 
 ```mermaid
 graph TD
-    A[ganglion agent] -->|MCP: reef_* tools| P[crab-shell-proxy /v1/mcp]
+    A[ganglion agent] -->|MCP: mangrove_* tools| P[crab-shell-proxy /v1/mcp]
     H[human, webapp] -->|BFF + mycelium JWT| BFF[crab-exoskeleton-webapp]
     BFF -->|profile via gateway| P
 
-    P -->|internal HTTP + HMAC<br/>verified tuple in the body| R[crab-reef-network]
+    P -->|internal HTTP + HMAC<br/>verified tuple in the body| R[crab-mangrove-network]
 
-    subgraph R[crab-reef-network]
+    subgraph R[crab-mangrove-network]
       RE[reach: the single B6 gate] --> AC[actors + keys]
       RE --> LG[append-only signed log]
       LG --> RD[LWW-per-author reduction]
@@ -120,11 +120,11 @@ graph TD
 
 Two properties this picture is drawn to make visible:
 
-1. **Nothing reaches the reef except through the proxy.** The reef has no mycelium integration, no
+1. **Nothing reaches the mangrove except through the proxy.** The mangrove has no mycelium integration, no
    JWT verification and no public route in v1. It trusts one caller, authenticated by a shared
    secret, and that caller hands it an already-verified tuple. This is why DD-3 works.
-2. **The arrow to `memgraph` is dotted and one-way, and the reef has none.** FR-J4 in a diagram: the
-   graph never reads through the reef, so removing the reef cannot break the graph.
+2. **The arrow to `memgraph` is dotted and one-way, and the mangrove has none.** FR-J4 in a diagram: the
+   graph never reads through the mangrove, so removing the mangrove cannot break the graph.
 
 ---
 
@@ -133,11 +133,11 @@ Two properties this picture is drawn to make visible:
 | Component | Location | How it is used |
 |---|---|---|
 | `mcptoken.Verify` | `crab-shell-proxy/internal/mcptoken/token.go` | Already authenticates every `/v1/mcp` call and yields the tuple DD-3 depends on. No new auth. |
-| `mcpserver` tool registry | `crab-shell-proxy/internal/mcpserver/tools.go` | `reef_*` tools register beside the 18 graph tools, in the same server. FR-D1. |
+| `mcpserver` tool registry | `crab-shell-proxy/internal/mcpserver/tools.go` | `mangrove_*` tools register beside the 18 graph tools, in the same server. FR-D1. |
 | `ListSubscriptionUsers` | `crab-shell-proxy/internal/docker/shared.go:310-333` | The only membership source DD-3 needs; already globs `.../agents/<role>/users/<u>` and labels them from `.crab-owner.json`. |
-| Approver contract | `crab-ganglion-harness/approver/proxy/proxy.go:78-90` | `reef_publish`/`reef_share` become gated tool names. Wire unchanged (FR-E1). |
+| Approver contract | `crab-ganglion-harness/approver/proxy/proxy.go:78-90` | `mangrove_publish`/`mangrove_share` become gated tool names. Wire unchanged (FR-E1). |
 | `identity.SanitizeID` | `crab-shell-proxy/internal/identity/identity.go:137-154` | Path-safe segments for store directories, same rule as workspaces. |
-| JSONL store shape | `crab-shell-proxy/internal/memgraph/graph.go:249-256` | Pattern copied, not imported — the reef is a separate module. |
+| JSONL store shape | `crab-shell-proxy/internal/memgraph/graph.go:249-256` | Pattern copied, not imported — the mangrove is a separate module. |
 | `Destination` / `asDestination` | `crab-exoskeleton-webapp/app/chat/destination.ts:21-36` | Extended with one value, guard intact (FR-I3). |
 
 ---
@@ -148,9 +148,9 @@ Two properties this picture is drawn to make visible:
 
 ```json
 {
-  "id": "reef:actor:<accId>:person" | "reef:actor:<accId>:service",
+  "id": "mangrove:actor:<accId>:person" | "mangrove:actor:<accId>:service",
   "type": "Person" | "Service",
-  "attributedTo": "reef:actor:<accId>:person",
+  "attributedTo": "mangrove:actor:<accId>:person",
   "accId": "<uuid>", "tenantId": "<uuid>", "subsAccId": "<uuid>",
   "publicKey": "<base64 ed25519>",
   "published": "<rfc3339>"
@@ -163,7 +163,7 @@ Two properties this picture is drawn to make visible:
 
 ```json
 {
-  "id": "reef:act:<ulid-ish>",
+  "id": "mangrove:act:<ulid-ish>",
   "type": "Create|Update|Delete|Add|Remove|Follow|Accept|Reject|Announce|Read|Like|Flag|Block|Undo",
   "actor": "<actor id>",
   "to": ["<actor id | group id>"], "cc": [],
@@ -189,11 +189,11 @@ prevented by a check — it is unrepresentable, because the reduction is keyed b
 
 | Switch | Location | Unset behaviour |
 |---|---|---|
-| `CRAB_REEF_BASE_URL` | crab-shell-proxy | **No `reef_*` tool is registered.** Mirrors `CRAB_MCP_TOKEN_SECRET` (`docker-compose.yaml:235-238`). This single unset variable is the whole off switch. |
-| `CRAB_REEF_TOKEN` | crab-shell-proxy + reef | Shared secret. Unset on the proxy is the same as unset base URL — no registration. |
-| `NEXT_PUBLIC_REEF_ENABLED` | webapp | Destination absent from the rail, `asDestination` never returns it (FR-I2, FR-J2). |
+| `CRAB_MANGROVE_BASE_URL` | crab-shell-proxy | **No `mangrove_*` tool is registered.** Mirrors `CRAB_MCP_TOKEN_SECRET` (`docker-compose.yaml:235-238`). This single unset variable is the whole off switch. |
+| `CRAB_MANGROVE_TOKEN` | crab-shell-proxy + mangrove | Shared secret. Unset on the proxy is the same as unset base URL — no registration. |
+| `NEXT_PUBLIC_MANGROVE_ENABLED` | webapp | Destination absent from the rail, `asDestination` never returns it (FR-I2, FR-J2). |
 
-The reef service itself is simply not deployed. Nothing else in the compose file changes.
+The mangrove service itself is simply not deployed. Nothing else in the compose file changes.
 
 ---
 
@@ -209,7 +209,7 @@ Negative tests, per the source model's §7 — not happy-path coverage:
 | `TestSignatureCoversAddressing` | dropping `to`/`cc` from the signed bytes — re-address a signed activity and it must fail |
 | `TestTwoAuthorsSameCellBothSurvive` | keying the reduction by cell instead of by (cell, author) (FR-G2) |
 | `TestAdmitRequiredBeforeIngest` | FR-B7's hold |
-| `TestNoReefToolsWhenUnconfigured` | FR-J2 |
+| `TestNoMangroveToolsWhenUnconfigured` | FR-J2 |
 | `TestGanglionConfigStillOneServer` | FR-D1/J3 — sits beside the existing `TestGanglionConfigWritesNoPerProjectMemoryServers` |
 
 ---
@@ -218,11 +218,11 @@ Negative tests, per the source model's §7 — not happy-path coverage:
 
 Three repositories, and the chain merges bottom-up per `.claude/rules/submodule-pointers.md`.
 
-1. **`crab-reef-network`** (new, public) — the service, its store, the B6 gate, the log, the tests,
+1. **`crab-mangrove-network`** (new, public) — the service, its store, the B6 gate, the log, the tests,
    the README with the FR-H1 threat model and the experimental notice. Self-contained; nothing
    depends on it yet.
-2. **`crab-shell-proxy`** — the `reef_*` façade on the existing `/v1/mcp`, gated behind
-   `CRAB_REEF_BASE_URL`, plus the membership endpoint DD-3 needs.
+2. **`crab-shell-proxy`** — the `mangrove_*` façade on the existing `/v1/mcp`, gated behind
+   `CRAB_MANGROVE_BASE_URL`, plus the membership endpoint DD-3 needs.
 3. **`crab-exoskeleton-webapp`** — the destination and its three readings.
 
 Steps 2 and 3 are **siblings**, not a sequence: neither blocks the other, both gate the pointer bump

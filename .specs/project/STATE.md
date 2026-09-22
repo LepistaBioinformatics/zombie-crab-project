@@ -101,28 +101,28 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 
 ## Recent Decisions (Last 60 days)
 
-### AD-029: the reef federates memory through the MCP server that already exists, and governs it by role rather than by key (2026-09-21)
+### AD-029: the mangrove federates memory through the MCP server that already exists, and governs it by role rather than by key (2026-09-21)
 
-**What was decided.** A fifth submodule, `crab/crab-reef-network`, gives agents a
+**What was decided.** A fifth submodule, `crab/crab-mangrove-network`, gives agents a
 shared memory network over ActivityPub. Two of its four boundaries were the owner's
-(`.specs/features/crab-reef-network/context.md` D-1..D-4); the two recorded here are
+(`.specs/features/crab-mangrove-network/context.md` D-1..D-4); the two recorded here are
 the ones a later reader is most likely to try to reverse, and both look backwards at
 first glance.
 
-**One: no second MCP server, ever — the reef reaches agents as a `reef_` namespace on
-`POST /v1/mcp`.** The obvious shape is the opposite: the reef is its own service, so it
+**One: no second MCP server, ever — the mangrove reaches agents as a `mangrove_` namespace on
+`POST /v1/mcp`.** The obvious shape is the opposite: the mangrove is its own service, so it
 exposes its own MCP endpoint and gets its own entry in `.ganglion-config.json`. Three
 independent facts kill that shape.
 
 The ganglion registers a remote server's tools under their own names and refuses the
 boot on a collision (`cmd/crab-ganglion/main.go:605-611`) — AD-028 already, and an
 **unreachable** server fails the boot too (`main.go:190`). So a second server means every
-member's container stops booting whenever the reef is down: a failure that arrives later,
+member's container stops booting whenever the mangrove is down: a failure that arrives later,
 for one member, unrelated in time to its cause. That is the exact shape AD-028 named as
 the worst available, arrived at again by a different road.
 
 The MCP bearer token is already an HMAC over `tenantID/subsAccID/role/userAccID[/project]`
-(`internal/mcptoken/token.go:80-89`) — precisely the tuple the reef needs in order to
+(`internal/mcptoken/token.go:80-89`) — precisely the tuple the mangrove needs in order to
 authorize by mycelium role. A façade gets a verified identity for free; a separate server
 would have to mint and verify its own.
 
@@ -165,14 +165,14 @@ provisioned and nothing else acquires a dependency — following the pattern the
 states for `CRAB_MCP_TOKEN_SECRET` (`docker-compose.yaml:235-238`) and `CRAB_TELEMETRY_TOKEN` rather
 than inventing a third. It also separates *unconfigured* from *unreachable*, which are the same state
 to a lazy implementation and opposite messages to a member. And it requires an exit: no object stored
-in a form only the reef can read, so a deployment that turns the reef off keeps its memory.
+in a form only the mangrove can read, so a deployment that turns the mangrove off keeps its memory.
 
 **What shipped on 2026-09-21, and what did not.** The submodule exists, is
 public, and holds the whole service: actors with ed25519 keys, the signed
 append-only log, the LWW-per-author reduction, the single reachability gate and
 the internal API, in Go with zero external dependencies (CI fails a `require`
 block). `go build`, `go vet`, `gofmt -l` and `go test -race` all pass. Nothing is
-wired into the stack — no compose service, no `CRAB_REEF_BASE_URL` on the proxy
+wired into the stack — no compose service, no `CRAB_MANGROVE_BASE_URL` on the proxy
 — and that is correct rather than unfinished: FR-J1 makes unconfigured the
 default, so until the facade exists there is nothing to configure and the stack
 behaves exactly as before.
