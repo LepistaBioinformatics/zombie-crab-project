@@ -559,7 +559,7 @@ decides.
 ## Prerequisite
 
 **Met.** `crab/crab-reef-network` now exists as a public repository under
-`MIT OR Apache-2.0`, and the pointer committed here names `389a6cf` on its default branch — so
+`MIT OR Apache-2.0`, and the pointer committed here names `30925b3` on its default branch — so
 `.github/workflows/submodule-pointers.yml` is satisfied rather than merely not consulted.
 
 What is *not* yet met is the rest of the chain: slices 2 and 3 are siblings in their own

@@ -1,7 +1,7 @@
 # crab-reef-network — Tasks
 
 **Spec:** `spec.md` · **Design:** `design.md`
-**Status:** Slice 1 SHIPPED (crab-reef-network@389a6cf, on `main`). Slices 2 and 3 open.
+**Status:** Slice 1 SHIPPED (crab-reef-network@30925b3, on `main`). Slices 2 and 3 open.
 
 Three repositories. Slice 1 is self-contained and blocks nothing; slices 2 and 3 are **siblings**
 that both gate this repository's pointer bump.
@@ -159,7 +159,23 @@ activity minus the signature, so `target` and `inReplyTo` are covered too, and a
 field added later is covered without anybody remembering to add it. The test
 table includes `target` for that reason.
 
-**Not yet wired into the stack.** No compose service, and the proxy has no
-`CRAB_REEF_BASE_URL`. That is the correct state: FR-J1 makes unconfigured the
-default, so until slice 2 exists there is nothing to configure and the stack
-behaves exactly as before.
+**A compose service exists, behind the `reef` profile.** Added so the service can
+actually be run and poked at:
+`docker compose --profile reef up -d --build crab-reef-network`. A profile is the
+cheapest honest way to hold FR-J: not "starts but does nothing", not "starts and
+errors" — simply absent from `docker compose up` unless asked for. Verified:
+`config --services` omits it by default and includes it with the profile.
+
+**The proxy still has no `CRAB_REEF_BASE_URL`,** so nothing reaches the reef from
+an agent yet. That is the correct state rather than an unfinished one — until
+slice 2 exists there is nothing to configure.
+
+**What can and cannot be exercised today, found by running it.** Self-scope and
+own-subscription-scope publishing, the containment refusals, the per-author
+reduction and the pending state all work against the reef alone. **Addressing a
+named colleague does not**, because the reachability gate has to answer "does
+this person have a workspace under a subscription the caller shares" and the only
+source for that is T2.2's membership endpoint. With the proxy absent the gate
+fails CLOSED rather than assuming membership — correct, and it makes T2.2 a
+prerequisite for exercising the direct-share dimension at all. `scripts/smoke.sh`
+reports that section as a skip with the reason, rather than as a pass.
