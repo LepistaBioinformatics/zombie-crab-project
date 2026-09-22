@@ -584,11 +584,16 @@ services:
       # a named volume inherits the image's ownership on first use, a bind keeps
       # whatever the host gave it. Create it once with
       #
-      #   mkdir -p data/mangrove
-      #   docker run --rm -v "$PWD/data/mangrove:/x" alpine chown -R 10001:10001 /x
+      #   docker run --rm -v "$PWD/data:/data" alpine \
+      #     sh -c 'mkdir -p /data/mangrove && chown 10001:10001 /data/mangrove'
       #
-      # A root container rather than sudo, so it works the same wherever docker
-      # does. Without it the service boots and fails its first write, which is a
+      # THE mkdir RUNS INSIDE THE CONTAINER TOO, not as a plain `mkdir -p` first.
+      # Its parent data/ is root-owned -- the proxy runs as root and writes it --
+      # so the host user cannot create a child there, and the obvious two-step
+      # version of this fails on its very first line. A root container rather
+      # than sudo, so it works the same wherever docker does.
+      #
+      # Without the chown the service boots and fails its first write, which is a
       # worse failure than not booting -- the port answers and nothing persists.
       - ./data/mangrove:/data/mangrove
     healthcheck:
