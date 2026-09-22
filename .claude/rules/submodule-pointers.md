@@ -5,7 +5,7 @@ description: When a submodule pointer may be committed, and the check that enfor
 # Submodule pointers
 
 `crab/crab-shell-proxy`, `crab/crab-exoskeleton-webapp`, `crab/harness-sphere` and
-`crab/crab-reef-network` are separate repositories with their own PRs.
+`crab/crab-mangrove-network` are separate repositories with their own PRs.
 
 **A change can have TWO independent children gating one parent PR**, which this file
 originally did not anticipate. `harness-sphere-integration` was the first: it needed a PR

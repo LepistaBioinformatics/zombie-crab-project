@@ -408,7 +408,7 @@ crab/                      # the crab side (per-user isolation + its chat client
   crab-exoskeleton-webapp/ # git submodule — the Next.js chat client (BFF)
   crab-ganglion-harness/   # git submodule — this project's own agent harness (Go)
   harness-sphere/          # git submodule — the watcher; observability only
-  crab-reef-network/       # git submodule — EXPERIMENTAL federated agent memory (Go); optional
+  crab-mangrove-network/       # git submodule — EXPERIMENTAL federated agent memory (Go); optional
 fungi/                     # the mycelium side (gateway + its admin UI)
   mycelium/
     Dockerfile.standalone  # builds mycelium-api from upstream git (no local source)

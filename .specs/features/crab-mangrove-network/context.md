@@ -1,7 +1,7 @@
-# crab-reef-network — Context
+# crab-mangrove-network — Context
 
 **Gathered:** 2026-09-21
-**Spec:** `.specs/features/crab-reef-network/spec.md`
+**Spec:** `.specs/features/crab-mangrove-network/spec.md`
 **Status:** Ready for design
 
 ---
@@ -84,7 +84,7 @@ two different meanings of "who can see this" to the person publishing.
 **Asked for:** what a shared "memory" object is.
 
 **Chosen:** **entities, relations and observations from the existing `internal/memgraph`, and
-workspace files.** The reef is the sharing layer over memory the proxy already hosts, not a second
+workspace files.** The mangrove is the sharing layer over memory the proxy already hosts, not a second
 private store.
 
 **Why:** the graph already exists with 18 MCP tools over it (`internal/mcpserver/tools.go:169-372`)
@@ -92,7 +92,7 @@ and is the thing agents actually accumulate. Files are what members recognise as
 inspect. FR-C1's two object types, `MemoryNote` and `MemoryFile`, are the AS2 surface for exactly
 these two.
 
-**Consequence carried into OQ-2:** both live on the proxy's side today, so whether the reef owns its
+**Consequence carried into OQ-2:** both live on the proxy's side today, so whether the mangrove owns its
 own store or reads the proxy's is now a real design question rather than an obvious one.
 
 **Rejected — a new independent object type:** conceptually cleaner and the handoff model's Camada 3
@@ -100,13 +100,13 @@ suggests it, but it reuses nothing and leaves the graph unshared, which is the a
 
 **Rejected — graph-only or files-only:** each leaves half the ask unmet.
 
-### D-4 — The submodule is named `crab-reef-network`
+### D-4 — The submodule is named `crab-mangrove-network`
 
 **Asked for:** a name following the submodule convention.
 
-**Chosen:** `crab-reef-network`, at `crab/crab-reef-network`.
+**Chosen:** `crab-mangrove-network`, at `crab/crab-mangrove-network`.
 
-**Why:** the owner's choice. The reef is the shared habitat many crabs occupy — it reads as a place
+**Why:** the owner's choice. The mangrove is the shared habitat many crabs occupy — it reads as a place
 agents meet rather than as an organ of one animal, which is right for a network spanning tenants.
 It departs from the `crab-<anatomy>-<function>` pattern of `crab-shell-proxy`,
 `crab-ganglion-harness` and `crab-exoskeleton-webapp`, but `harness-sphere` already established that
@@ -136,12 +136,12 @@ object they had ever authored.
 **Rejected — one actor per human, with the agent posting as them:** it would make the two
 indistinguishable in the log, which is the opposite of what the owner asked for.
 
-### D-6 — Delivery is a `reef_` namespace on the proxy's existing MCP server
+### D-6 — Delivery is a `mangrove_` namespace on the proxy's existing MCP server
 
 **Not asked — decided from findings 2, 3 and 6 in the spec.**
 
-**Chosen:** the reef is a service on `zombie_net` with its own repository; agents reach it **only**
-through the MCP server the proxy already hosts at `POST /v1/mcp`, under `reef_`-prefixed tool names.
+**Chosen:** the mangrove is a service on `zombie_net` with its own repository; agents reach it **only**
+through the MCP server the proxy already hosts at `POST /v1/mcp`, under `mangrove_`-prefixed tool names.
 The count of MCP servers in the harness configs stays at one.
 
 **Why:** three independent reasons converge.
@@ -149,10 +149,10 @@ The count of MCP servers in the harness configs stays at one.
 1. The ganglion registers remote tools under their own names and refuses the boot on a collision
    (`cmd/crab-ganglion/main.go:605-611`, AD-028), and an unreachable MCP server fails the whole
    boot (`main.go:190`). A second server would make every member's container unbootable whenever
-   the reef was down — a failure that arrives later, for one member, unrelated in time to its cause,
+   the mangrove was down — a failure that arrives later, for one member, unrelated in time to its cause,
    which AD-028 already identifies as the worst available shape.
 2. The MCP bearer token is a stateless HMAC over `tenantID/subsAccID/role/userAccID[/project]`
-   (`internal/mcptoken/token.go:80-89`) — precisely the tuple the reef needs in order to authorize
+   (`internal/mcptoken/token.go:80-89`) — precisely the tuple the mangrove needs in order to authorize
    by mycelium role. The façade receives a verified identity for free; a separate server would need
    its own credential.
 3. That credential would have to sit in plaintext in a config file, because header token
@@ -164,7 +164,7 @@ This is compatible with the owner's requirement that the network be its own subm
 owns the ActivityPub service, its objects, its log and its moderation; the proxy owns only the
 agent-facing façade.
 
-**Rejected — the reef exposes its own MCP endpoint as a second configured server:** cleaner
+**Rejected — the mangrove exposes its own MCP endpoint as a second configured server:** cleaner
 separation on paper, and it is what "delivered to the harnesses as MCP" reads like on first pass. It
 loses on all three counts above.
 
@@ -189,7 +189,7 @@ mechanisms** and merging them would break a contract this spec cannot change.
 
 **Chosen:**
 
-- **Human-over-bot** (FR-E1): `reef_publish` and `reef_share` are *gated tools*, reusing the shipped
+- **Human-over-bot** (FR-E1): `mangrove_publish` and `mangrove_share` are *gated tools*, reusing the shipped
   approver contract unchanged — `{session_key, session_id, tool_call_id, tool, arguments}` in,
   `{allowed, reason, by}` out, fail-closed on timeout (`approver/proxy/proxy.go:78-90`,
   `runtime/loop.go:868-874`, `:885-887`). The human answers in the conversation the call happened
@@ -234,7 +234,7 @@ way:**
 **Rejected — deriving reach from the governing role:** it reads as the natural simplification and
 quietly grants managers a broadcast power.
 
-**Rejected — a per-object ACL stored in the reef:** a second source of truth beside mycelium, which
+**Rejected — a per-object ACL stored in the mangrove:** a second source of truth beside mycelium, which
 D-2's whole argument was against.
 
 ### D-10 — A direct share reaches the human first, never the agent directly
@@ -269,7 +269,7 @@ in the webapp and was itself the subject of a reversal the owner made on 2026-09
 sections (`memory`, `graph`, `tasks`, `files`, `secrets` — `app/chat/workspace-sections.ts:15-17`)
 open *beside* a conversation under the fragment's `rs` key precisely so chat can coexist with them,
 and they are scoped **by** a workspace; `projects` *replaces* the centre pane under `v`
-(`app/chat/destination.ts:8-20`). The reef is scoped by subscription and tenant, spans workspaces,
+(`app/chat/destination.ts:8-20`). The mangrove is scoped by subscription and tenant, spans workspaces,
 and is not something one reads alongside a single conversation — so it is a destination.
 
 **Carried as a constraint, not a preference:** `asDestination` deliberately refuses every string it
@@ -279,13 +279,13 @@ does not know, because `v` is hand-editable and a prior unchecked cast on `rs` c
 **The pending-decisions reading is absent, not empty, for a member with no governing role** (FR-I5):
 an affordance that renders and then refuses teaches the wrong model of who decides.
 
-### D-12 — The reef is optional, and optionality is specified rather than assumed
+### D-12 — The mangrove is optional, and optionality is specified rather than assumed
 
 **Asked for:** *"a rede é algo opcional que roda no projeto, então não deve existir lock in que
 quebre as outras ferramentas caso a rede não estiver configurada."*
 
 **Chosen:** FR-J. Unconfigured is a first-class supported state: nothing registers, nothing renders,
-nothing else acquires a dependency, and a deployment that enabled the reef can disable it again
+nothing else acquires a dependency, and a deployment that enabled the mangrove can disable it again
 without losing memory.
 
 **Why it follows the existing pattern instead of inventing one:** the stack has already answered
@@ -304,13 +304,13 @@ the second registers tools that return readable errors (FR-D5, FR-I8).
 **What "no lock-in" was read to mean, concretely** — three claims that are testable rather than
 aspirational:
 
-- **Nothing else depends on it** (J4). Private memory is not routed through the reef; the reef reads
-  *from* the graph, the graph does not read *through* the reef. That direction is what keeps the
+- **Nothing else depends on it** (J4). Private memory is not routed through the mangrove; the mangrove reads
+  *from* the graph, the graph does not read *through* the mangrove. That direction is what keeps the
   dependency one-way.
-- **It can be turned off again** (J5). No object is stored in a form only the reef can read, and
+- **It can be turned off again** (J5). No object is stored in a form only the mangrove can read, and
   admitted memory survives as ordinary local memory. An optional feature you cannot leave is not
   optional.
-- **A disabled tool is not a registered tool** (J2). A `reef_*` tool that exists only to refuse still
+- **A disabled tool is not a registered tool** (J2). A `mangrove_*` tool that exists only to refuse still
   occupies a name, still appears in the model's tool list, and still spends context every turn.
 
 **Rejected — registering the tools always and having them error when unconfigured:** simpler to
@@ -350,4 +350,4 @@ readings in the tab (FR-I4) — their existence is fixed, their presentation is 
   verifiable, scoped, time-bound credential, and a second one would be a second source of truth.
   Worth revisiting when D-1's boundary moves, because a foreign deployment has no mycelium profile
   to present.
-- **Offering `reef_*` to picoclaw agents** — OQ-4.
+- **Offering `mangrove_*` to picoclaw agents** — OQ-4.

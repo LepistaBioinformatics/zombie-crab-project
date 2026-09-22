@@ -45,17 +45,17 @@ NOT_EXPOSED = {
     # harness-sphere's inventory. Gated by CRAB_TELEMETRY_TOKEN and reached on
     # zombie_net; unset, the route is not registered at all. Never a member's.
     ("GET", "/v1/instances"),
-    # The membership roll crab-reef-network asks for. Gated by CRAB_REEF_TOKEN
-    # and reached on zombie_net; with either half of the reef configuration
+    # The membership roll crab-mangrove-network asks for. Gated by CRAB_MANGROVE_TOKEN
+    # and reached on zombie_net; with either half of the mangrove configuration
     # unset the route is not registered at all.
     #
     # It must NOT become reachable through the gateway, and that is a security
-    # property rather than a deployment fact. The reef is a service, not a
+    # property rather than a deployment fact. The mangrove is a service, not a
     # member: it has no profile header to present, and the route answers with a
     # subscription's whole roll of account ids and emails. Exposing it would
     # mean any member session could enumerate its subscription's membership,
     # which nothing in the product asks for.
-    ("GET", "/v1/reef/subscription-members"),
+    ("GET", "/v1/mangrove/subscription-members"),
     # The AGENT's half of an approval request, and the one route here whose
     # exclusion is a security property rather than a deployment fact.
     #
