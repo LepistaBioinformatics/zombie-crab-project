@@ -314,3 +314,23 @@ metrics survive the proxy being down). See
   the harness registers a remote server's tools under their own names and N+1
   servers offering the same tool refuse the boot. See
   `.specs/features/ganglion-projects/` and STATE.md AD-026.
+- **crab-reef-network** (SPEC READY) — a fifth submodule: a federated memory network over
+  ActivityPub, so agents in one deployment share memgraph nodes and workspace files as
+  identified bot actors owned by their human. Membership and reach are **derived from the
+  mycelium profile at call time**, never stored — `subscriptions-manager` governs its
+  subscription's `Group`, `tenant-manager`/`tenant-owner` its tenant's — under one invariant
+  (FR-B6): no share crosses a boundary the sharer's own permissions do not already reach,
+  and an out-of-reach addressee refuses the whole activity rather than silently trimming the
+  list. Delivered to harnesses as a `reef_` namespace on the MCP server the proxy **already**
+  hosts, not as a second configured server: the ganglion refuses its boot on a tool-name
+  collision and on an unreachable server (AD-028, `main.go:190`), and the existing MCP token
+  already carries the exact `(tenant, subscription, agent, user)` tuple the reef needs to
+  authorize. Confidentiality is a declared trust model, not end-to-end encryption — the two
+  are mutually exclusive with role governance, and the envelope interface stays defined and
+  unimplemented. A human gates their bot's publishes through the **shipped** approver contract,
+  and reads everything it published or received in a new centre-pane tab in the webapp. Five
+  open questions, the load-bearing ones being the runtime (Go recommended) and whether the reef
+  owns its store. **Optional throughout** (FR-J), following the `CRAB_MCP_TOKEN_SECRET` precedent:
+  unconfigured registers no tool, renders no tab, and adds no dependency to anything that works
+  today — and a deployment that enables it can disable it again without losing memory.
+  See `.specs/features/crab-reef-network/`.
