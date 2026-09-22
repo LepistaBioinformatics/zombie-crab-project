@@ -1,6 +1,6 @@
 # crab-reef-network — Specification
 
-**Status:** Draft
+**Status:** Slice 1 implemented; slices 2 (proxy facade) and 3 (webapp tab) open
 **Size:** Complex (a fifth submodule + a proxy MCP façade + a webapp surface + mycelium role reads)
 **Depends on:** nothing shipped blocks it. It reuses `internal/mcpserver`, `internal/mcptoken`,
 `internal/authz` and the approver contract that `ganglion-approval-endpoint` answers.
@@ -558,7 +558,10 @@ decides.
 
 ## Prerequisite
 
-`crab/crab-reef-network` does not exist. Per `.claude/rules/submodule-pointers.md`, the repository
-must exist with at least one commit on its default branch before any pointer to it may be committed
-here — the check in `.github/workflows/submodule-pointers.yml` enforces this and fails a PR whose
-pointer is off the child's default branch.
+**Met.** `crab/crab-reef-network` now exists as a public repository under
+`MIT OR Apache-2.0`, and the pointer committed here names `da560a1` on its default branch — so
+`.github/workflows/submodule-pointers.yml` is satisfied rather than merely not consulted.
+
+What is *not* yet met is the rest of the chain: slices 2 and 3 are siblings in their own
+repositories, and this repository's pointers to `crab-shell-proxy` and `crab-exoskeleton-webapp`
+stay where they are until those merge.

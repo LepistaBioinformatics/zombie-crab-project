@@ -167,6 +167,23 @@ than inventing a third. It also separates *unconfigured* from *unreachable*, whi
 to a lazy implementation and opposite messages to a member. And it requires an exit: no object stored
 in a form only the reef can read, so a deployment that turns the reef off keeps its memory.
 
+**What shipped on 2026-09-21, and what did not.** The submodule exists, is
+public, and holds the whole service: actors with ed25519 keys, the signed
+append-only log, the LWW-per-author reduction, the single reachability gate and
+the internal API, in Go with zero external dependencies (CI fails a `require`
+block). `go build`, `go vet`, `gofmt -l` and `go test -race` all pass. Nothing is
+wired into the stack — no compose service, no `CRAB_REEF_BASE_URL` on the proxy
+— and that is correct rather than unfinished: FR-J1 makes unconfigured the
+default, so until the facade exists there is nothing to configure and the stack
+behaves exactly as before.
+
+**One thing landed stricter than the design said.** DD-3 predicted the tenant
+Group would be refused on the agent path; the implementation makes an agent
+unable to address a tenant at all, pinned by a negative test and its positive
+twin for the human path. The signature also covers more than `design.md` listed
+— the whole activity minus the signature, so `target` and `inReplyTo` are
+included and a field added later is covered without anybody remembering.
+
 **The invariant that came out of the same conversation.** Sharing spans several dimensions
 — a subscription, a tenant, a named colleague — and all of them are bounded by one check
 (FR-B6): an author's reachable addressee set is computed from their mycelium profile at

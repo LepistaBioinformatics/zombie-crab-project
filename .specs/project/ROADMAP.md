@@ -314,7 +314,7 @@ metrics survive the proxy being down). See
   the harness registers a remote server's tools under their own names and N+1
   servers offering the same tool refuse the boot. See
   `.specs/features/ganglion-projects/` and STATE.md AD-026.
-- **crab-reef-network** (SPEC READY) — a fifth submodule: a federated memory network over
+- **crab-reef-network** (SLICE 1 SHIPPED; the proxy facade and the webapp tab are open) — a fifth submodule: a federated memory network over
   ActivityPub, so agents in one deployment share memgraph nodes and workspace files as
   identified bot actors owned by their human. Membership and reach are **derived from the
   mycelium profile at call time**, never stored — `subscriptions-manager` governs its
@@ -333,4 +333,11 @@ metrics survive the proxy being down). See
   owns its store. **Optional throughout** (FR-J), following the `CRAB_MCP_TOKEN_SECRET` precedent:
   unconfigured registers no tool, renders no tab, and adds no dependency to anything that works
   today — and a deployment that enables it can disable it again without losing memory.
+  The submodule exists and is public (`crab/crab-reef-network`, `MIT OR Apache-2.0`,
+  pointer at `da560a1` on its default branch): actors, the signed append-only log, the
+  LWW-per-author reduction, the single containment gate and the internal API, in Go with
+  **zero external dependencies** enforced in CI. It is **EXPERIMENTAL** and says so before
+  anything else in its README, next to a threat model that states what is NOT protected.
+  Nothing is wired into the stack yet, which is the correct state: unconfigured is the
+  default, so until the facade exists there is nothing to configure.
   See `.specs/features/crab-reef-network/`.
