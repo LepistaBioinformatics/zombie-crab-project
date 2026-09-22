@@ -448,10 +448,12 @@ methods = ["GET", "POST"]
 # membership. The agent's half is not here either, for the same reason the
 # approval routes above give: a container has no profile header to present.
 #
-# Reads need read; the four writes need write on the role, like every other
+# Reads need read; the five writes need write on the role, like every other
 # member write. `decide`, and `publish` when it addresses a Group, additionally
 # need a mycelium governing role, which the proxy resolves from the profile --
-# the gateway cannot express that, and must not be relied on to.
+# the gateway cannot express that, and must not be relied on to. `merge` does
+# NOT: it folds in a fragment that was already shared with the caller, so the
+# authority it needs is the ordinary member one.
 # What was shared with this member, what their agent published, and what awaits a decision.
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/mangrove/timeline"
@@ -490,6 +492,17 @@ acceptInsecureRouting = true
 methods = ["GET"]
 
 [[alpha.path]]
+# The bytes of a file shared in a post, fetched by somebody the post was addressed to.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/mangrove/blob"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
 # The member's own half of publishing: compose something and address it. It is held
 # for each recipient until they admit it, exactly as an agent's publication is.
 # Listed by name rather than under a wildcard, for the reason the
@@ -521,6 +534,17 @@ methods = ["POST"]
 # Tombstone something this member's own agent published. It does not un-deliver.
 group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
 path = "/v1/mangrove/revoke"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[alpha.path]]
+# Fold a memory-graph fragment shared with this member into their own graph. What was shared, and nothing else.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/mangrove/merge"
 secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["POST"]
@@ -786,10 +810,12 @@ methods = ["GET", "POST"]
 # membership. The agent's half is not here either, for the same reason the
 # approval routes above give: a container has no profile header to present.
 #
-# Reads need read; the four writes need write on the role, like every other
+# Reads need read; the five writes need write on the role, like every other
 # member write. `decide`, and `publish` when it addresses a Group, additionally
 # need a mycelium governing role, which the proxy resolves from the profile --
-# the gateway cannot express that, and must not be relied on to.
+# the gateway cannot express that, and must not be relied on to. `merge` does
+# NOT: it folds in a fragment that was already shared with the caller, so the
+# authority it needs is the ordinary member one.
 # What was shared with this member, what their agent published, and what awaits a decision.
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/mangrove/timeline"
@@ -828,6 +854,17 @@ acceptInsecureRouting = true
 methods = ["GET"]
 
 [[beta.path]]
+# The bytes of a file shared in a post, fetched by somebody the post was addressed to.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/mangrove/blob"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
 # The member's own half of publishing: compose something and address it. It is held
 # for each recipient until they admit it, exactly as an agent's publication is.
 # Listed by name rather than under a wildcard, for the reason the
@@ -859,6 +896,17 @@ methods = ["POST"]
 # Tombstone something this member's own agent published. It does not un-deliver.
 group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
 path = "/v1/mangrove/revoke"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[beta.path]]
+# Fold a memory-graph fragment shared with this member into their own graph. What was shared, and nothing else.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/mangrove/merge"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["POST"]

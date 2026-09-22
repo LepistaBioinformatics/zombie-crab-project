@@ -101,6 +101,42 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 
 ## Recent Decisions (Last 60 days)
 
+### AD-031: only a person merges a shared memory fragment; an agent's admit writes nothing (2026-09-22)
+
+**What was decided.** Admitting a shared graph fragment merges its entities and
+relations into the recipient's graph — but only when a PERSON does it, through
+`POST /v1/mangrove/merge` in the webapp. `mangrove_admit`, which an agent calls
+for itself, goes on marking the item admitted and writing nothing.
+
+**Why it is not a preference.** `mangrove_admit` admits as the SERVICE actor with
+no human in the loop. The owner had already decided that admitting should merge
+(so the network shares memory rather than notes about memory) and that agents
+should be able to publish fragments. Put together, those two give:
+
+> agent A, steered by untrusted text in its turn, publishes entities → addresses
+> agent B → B admits → the entities are in B's graph
+
+and the graph is what steers later turns. That is memory poisoning between
+agents with nobody watching. The chain was spotted by looking at the two
+decisions together, not by either one alone, and the question was put back to
+the owner before any of it was built.
+
+**It is not a new restriction.** The service's README already says an object
+"does not enter their agent's memory until **they** admit it", where *they* is
+the human. Admitting was inert, so nothing enforced it; making the merge real is
+what turned the sentence into a rule that has to hold.
+
+**The other half is why the merge route is allowed to exist at all.**
+`internal/httpapi/memory_graph.go` states there is no graph write route on the
+web side. The purpose is that a member's UI cannot AUTHOR memory. The merge route
+keeps that purpose because **its body cannot carry an entity** — it names an
+object, and the content comes out of the mangrove's log. A test puts entities in
+the body and asserts none of them arrive.
+
+**How to reverse it.** Making `mangrove_admit` merge is a few lines in the MCP
+tool. Do not, without replacing the protection with another one: the whole design
+rests on nothing entering a graph except by a human act.
+
 ### AD-030: membership of a subscription is not governance of it, so agents lose group broadcast (2026-09-22)
 
 **What was decided.** Addressing a mangrove Group — subscription or tenant —
