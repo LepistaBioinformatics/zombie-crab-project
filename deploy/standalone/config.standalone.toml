@@ -464,6 +464,62 @@ acceptInsecureRouting = true
 methods = ["GET", "POST"]
 
 [[alpha.path]]
+# The reef's MEMBER half. EXPERIMENTAL, and optional -- with the reef
+# unconfigured the proxy does not register these at all, so a gateway entry for
+# them is inert rather than wrong.
+#
+# LISTED ONE BY ONE, NOT AS /v1/reef/*, and that is the point of this block.
+# A wildcard would also expose GET /v1/reef/subscription-members, which answers
+# with a subscription's whole roll of account ids and emails and is meant for
+# crab-reef-network alone, on the container network, with its own credential.
+# Exposing it here would let any member session enumerate its subscription's
+# membership. The agent's half is not here either, for the same reason the
+# approval routes above give: a container has no profile header to present.
+#
+# Reads need read; the three writes need write on the role, like every other
+# member write. `decide` additionally needs a mycelium governing role, which the
+# proxy resolves from the profile -- the gateway cannot express that, and must
+# not be relied on to.
+# What was shared with this member, what their agent published, and what awaits a decision.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/reef/timeline"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
+# Whether this member governs the scope. The UI hides the pending reading rather than showing one it would refuse.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/reef/capabilities"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
+# Let something addressed at this member into their own agent's memory.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/reef/admit"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[alpha.path]]
+# Accept or reject a cross-scope publication. Governing role enforced by the proxy.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/reef/decide"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[alpha.path]]
+# Tombstone something this member's own agent published. It does not un-deliver.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/reef/revoke"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[alpha.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
 # proxy enforces the exact path+method per route. Collapsed to one
 # wildcard (mycelium matches via the wildmatch crate).
@@ -781,6 +837,62 @@ acceptInsecureRouting = true
 methods = ["GET", "POST"]
 
 [[gamma.path]]
+# The reef's MEMBER half. EXPERIMENTAL, and optional -- with the reef
+# unconfigured the proxy does not register these at all, so a gateway entry for
+# them is inert rather than wrong.
+#
+# LISTED ONE BY ONE, NOT AS /v1/reef/*, and that is the point of this block.
+# A wildcard would also expose GET /v1/reef/subscription-members, which answers
+# with a subscription's whole roll of account ids and emails and is meant for
+# crab-reef-network alone, on the container network, with its own credential.
+# Exposing it here would let any member session enumerate its subscription's
+# membership. The agent's half is not here either, for the same reason the
+# approval routes above give: a container has no profile header to present.
+#
+# Reads need read; the three writes need write on the role, like every other
+# member write. `decide` additionally needs a mycelium governing role, which the
+# proxy resolves from the profile -- the gateway cannot express that, and must
+# not be relied on to.
+# What was shared with this member, what their agent published, and what awaits a decision.
+group = { protectedByRoles = [{ name = "gamma" }] }
+path = "/v1/reef/timeline"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[gamma.path]]
+# Whether this member governs the scope. The UI hides the pending reading rather than showing one it would refuse.
+group = { protectedByRoles = [{ name = "gamma" }] }
+path = "/v1/reef/capabilities"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[gamma.path]]
+# Let something addressed at this member into their own agent's memory.
+group = { protectedByRoles = [{ name = "gamma", permission = "write" }] }
+path = "/v1/reef/admit"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[gamma.path]]
+# Accept or reject a cross-scope publication. Governing role enforced by the proxy.
+group = { protectedByRoles = [{ name = "gamma", permission = "write" }] }
+path = "/v1/reef/decide"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[gamma.path]]
+# Tombstone something this member's own agent published. It does not un-deliver.
+group = { protectedByRoles = [{ name = "gamma", permission = "write" }] }
+path = "/v1/reef/revoke"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[gamma.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
 # proxy enforces the exact path+method per route. Collapsed to one
 # wildcard (mycelium matches via the wildmatch crate).
@@ -1035,6 +1147,62 @@ path = "/v1/approvals/*"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "POST"]
+
+[[beta.path]]
+# The reef's MEMBER half. EXPERIMENTAL, and optional -- with the reef
+# unconfigured the proxy does not register these at all, so a gateway entry for
+# them is inert rather than wrong.
+#
+# LISTED ONE BY ONE, NOT AS /v1/reef/*, and that is the point of this block.
+# A wildcard would also expose GET /v1/reef/subscription-members, which answers
+# with a subscription's whole roll of account ids and emails and is meant for
+# crab-reef-network alone, on the container network, with its own credential.
+# Exposing it here would let any member session enumerate its subscription's
+# membership. The agent's half is not here either, for the same reason the
+# approval routes above give: a container has no profile header to present.
+#
+# Reads need read; the three writes need write on the role, like every other
+# member write. `decide` additionally needs a mycelium governing role, which the
+# proxy resolves from the profile -- the gateway cannot express that, and must
+# not be relied on to.
+# What was shared with this member, what their agent published, and what awaits a decision.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/reef/timeline"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+# Whether this member governs the scope. The UI hides the pending reading rather than showing one it would refuse.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/reef/capabilities"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+# Let something addressed at this member into their own agent's memory.
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/reef/admit"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[beta.path]]
+# Accept or reject a cross-scope publication. Governing role enforced by the proxy.
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/reef/decide"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[beta.path]]
+# Tombstone something this member's own agent published. It does not un-deliver.
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/reef/revoke"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
 
 [[beta.path]]
 # All /v1/admin/* endpoints share group=protected + this secret; the
