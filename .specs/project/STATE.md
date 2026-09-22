@@ -101,6 +101,98 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 
 ## Recent Decisions (Last 60 days)
 
+### AD-029: the reef federates memory through the MCP server that already exists, and governs it by role rather than by key (2026-09-21)
+
+**What was decided.** A fifth submodule, `crab/crab-reef-network`, gives agents a
+shared memory network over ActivityPub. Two of its four boundaries were the owner's
+(`.specs/features/crab-reef-network/context.md` D-1..D-4); the two recorded here are
+the ones a later reader is most likely to try to reverse, and both look backwards at
+first glance.
+
+**One: no second MCP server, ever — the reef reaches agents as a `reef_` namespace on
+`POST /v1/mcp`.** The obvious shape is the opposite: the reef is its own service, so it
+exposes its own MCP endpoint and gets its own entry in `.ganglion-config.json`. Three
+independent facts kill that shape.
+
+The ganglion registers a remote server's tools under their own names and refuses the
+boot on a collision (`cmd/crab-ganglion/main.go:605-611`) — AD-028 already, and an
+**unreachable** server fails the boot too (`main.go:190`). So a second server means every
+member's container stops booting whenever the reef is down: a failure that arrives later,
+for one member, unrelated in time to its cause. That is the exact shape AD-028 named as
+the worst available, arrived at again by a different road.
+
+The MCP bearer token is already an HMAC over `tenantID/subsAccID/role/userAccID[/project]`
+(`internal/mcptoken/token.go:80-89`) — precisely the tuple the reef needs in order to
+authorize by mycelium role. A façade gets a verified identity for free; a separate server
+would have to mint and verify its own.
+
+And that second credential would sit in plaintext in a config file, because header token
+indirection is specified and explicitly unbuilt
+(`.specs/features/ganglion-mcp-token-indirection/spec.md:3`). This feature should not be
+what makes that urgent.
+
+The submodule is still a submodule: it owns the actors, the log, the collections and the
+moderation. The proxy owns only the agent-facing façade.
+
+**Two: mycelium roles govern content, so the service reads it — and that is written down
+rather than papered over.** The source model this came from specified envelope encryption
+with a blind group router. It is mutually exclusive with the owner's actual requirement
+that `subscriptions-manager` and `tenant-manager` govern what is shared. Under a blind
+router, access is key possession: promoting someone grants nothing until keys are
+re-wrapped, and re-wrapping needs a component holding both the keys and the role graph.
+Trust does not vanish there, it relocates — and in this stack it would relocate to the
+proxy, which already runs as root with a Docker socket and reads every workspace.
+End-to-end encryption against a party that is already omniscient is theatre.
+
+So: encrypted at rest, authorized by role, with the threat model stated (FR-H) and the
+forward-secrecy limit written **in the code** and not only the docs. The envelope
+interface stays defined and unimplemented, carrying the one detail that must not be lost
+if it is ever built — the signature has to cover `recipients[]`, or any member can
+re-wrap the group key for an intruder and forward a still-valid signature.
+
+What this buys, concretely, is FR-B4: a role change takes effect on the next call, with no
+re-keying, no re-wrapping, no backfill.
+
+**Why this is worth writing down.** Both decisions trade an apparently stronger guarantee
+for a weaker one that is true. The precedent is AD-023 withdrawing harness-sphere's
+"non-root" and AD-028 documenting a shape difference instead of unifying it. A reader who
+finds "the server can read everything" and "there is only one MCP server" without the
+reasoning will read both as things nobody got around to fixing.
+
+**Three: it is optional, and that is specified rather than left to good intentions.** FR-J makes
+*unconfigured* a supported state in which no tool is registered, no tab renders, no actor is
+provisioned and nothing else acquires a dependency — following the pattern the compose file already
+states for `CRAB_MCP_TOKEN_SECRET` (`docker-compose.yaml:235-238`) and `CRAB_TELEMETRY_TOKEN` rather
+than inventing a third. It also separates *unconfigured* from *unreachable*, which are the same state
+to a lazy implementation and opposite messages to a member. And it requires an exit: no object stored
+in a form only the reef can read, so a deployment that turns the reef off keeps its memory.
+
+**What shipped on 2026-09-21, and what did not.** The submodule exists, is
+public, and holds the whole service: actors with ed25519 keys, the signed
+append-only log, the LWW-per-author reduction, the single reachability gate and
+the internal API, in Go with zero external dependencies (CI fails a `require`
+block). `go build`, `go vet`, `gofmt -l` and `go test -race` all pass. Nothing is
+wired into the stack — no compose service, no `CRAB_REEF_BASE_URL` on the proxy
+— and that is correct rather than unfinished: FR-J1 makes unconfigured the
+default, so until the facade exists there is nothing to configure and the stack
+behaves exactly as before.
+
+**One thing landed stricter than the design said.** DD-3 predicted the tenant
+Group would be refused on the agent path; the implementation makes an agent
+unable to address a tenant at all, pinned by a negative test and its positive
+twin for the human path. The signature also covers more than `design.md` listed
+— the whole activity minus the signature, so `target` and `inReplyTo` are
+included and a field added later is covered without anybody remembering.
+
+**The invariant that came out of the same conversation.** Sharing spans several dimensions
+— a subscription, a tenant, a named colleague — and all of them are bounded by one check
+(FR-B6): an author's reachable addressee set is computed from their mycelium profile at
+call time, and an addressee outside it refuses the **whole** activity rather than trimming
+the list. Two corollaries that could each plausibly have gone the other way: holding a
+governing role widens what its holder may *decide*, not what they may *address*; and an
+object addressed to a colleague's `Person` does not enter their agent's memory until that
+human admits it, because otherwise steering somebody else's agent would be one share away.
+
 ### AD-028: the ganglion gets ONE mcp server, and copying picoclaw's shape would stop it booting (2026-09-12)
 
 **The two shapes.** picoclaw's `config.json` carries one MCP server per project

@@ -10,3 +10,6 @@
 [submodule "crab/crab-ganglion-harness"]
 	path = crab/crab-ganglion-harness
 	url = https://github.com/LepistaBioinformatics/crab-ganglion-harness.git
+[submodule "crab/crab-reef-network"]
+	path = crab/crab-reef-network
+	url = https://github.com/LepistaBioinformatics/crab-reef-network.git
