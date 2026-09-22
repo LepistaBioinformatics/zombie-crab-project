@@ -102,11 +102,24 @@ downgrade** after publication (FR-C3); **`Group` is convention, not specificatio
 membership derived, not asserted); and **moderation is where projects of this shape die** (FR-F
 makes it a first-class requirement, not an appendix).
 
-**8. AS2 already has the verbs the owner wanted to improvise.** `Read`, `Like`, `Flag`, `Accept` and
-`Reject` are all standard Activity Streams 2.0 activity types. The owner offered `Like`-as-read-
-receipt as an example rather than a requirement; `Read` is the exact standard verb for it, which
-leaves `Like` free to carry endorsement — the handoff model's *"confiança é peso de evidência, nunca
-predicado de verdade"*. No custom verb is needed in v1. See FR-C.
+**8. AS2 already has the verbs the owner wanted to improvise — checked against the vocabulary, not
+recalled.** [Activity Streams 2.0 Vocabulary][as2v] §3.1 defines 29 activity types, and every verb
+this spec uses is among them. The two that matter:
+
+> **`Read`** — *"Indicates that the `actor` has read the `object`."*
+> **`Like`** — *"Indicates that the `actor` likes, recommends or endorses the `object`."*
+
+The owner offered `Like`-as-read-receipt as an example rather than a requirement. `Read` is the
+exact standard verb for a receipt, which leaves `Like`'s own definition — *recommends or endorses* —
+free to carry the handoff model's *"confiança é peso de evidência, nunca predicado de verdade"*.
+`Flag`, `Accept`, `Reject`, `Announce`, `Add`, `Remove`, `Follow` and `Undo` are likewise all §3.1
+types. **No custom verb is needed in v1.** See FR-C.
+
+`attributedTo` is defined with a domain of `Link | Object` (§4), and every actor type — `Person`,
+`Service`, `Group`, `Application` — *extends* `Object` (§3.2). FR-A2's use of `attributedTo` on a
+`Service` actor is therefore valid vocabulary rather than an extension.
+
+[as2v]: https://www.w3.org/TR/activitystreams-vocabulary/
 
 ---
 
@@ -283,6 +296,15 @@ collision-free, because the failure mode is a container that stops booting.
 `reef_timeline`, `reef_fetch`, `reef_follow`, `reef_unfollow`, `reef_ack`, `reef_endorse`,
 `reef_flag`. Exact schemas are a design concern; the constraint here is that each maps to exactly
 one FR-C activity and none of them takes an actor id.
+
+**D3a — the surface is a budget, not a wish list.** Every registered tool costs context on **every
+turn**, enabled or not used. The graph already contributes 18 tools
+(`internal/mcpserver/tools.go:169-372`) plus three `schedule_*` (`tools.go:401-446`). The v1 reef
+surface SHALL therefore be as small as the FR-C mapping allows: **a tool that only wraps another
+SHALL NOT exist**, and near-identical verbs SHOULD be folded into one tool with a discriminating
+argument rather than shipped separately. `reef_ack`, `reef_endorse` and `reef_flag` are the obvious
+candidates to fold, and `reef_follow`/`reef_unfollow` differ only by `Undo`. Design owns the final
+count; this clause owns the pressure on it.
 
 **D4.** Authorization for every tool call SHALL derive from the MCP token's workspace tuple
 (finding 1). A tool SHALL NOT accept a caller-supplied actor, tenant, subscription or role, and
@@ -491,7 +513,7 @@ an optional feature's disabled path is the one nobody exercises by hand.
 | **AC-18** | `Create`, `Add` and `Announce` each refuse an out-of-reach addressee, and each reaches that refusal through the same single enforcement function (B6b). |
 | **AC-19** | An object addressed directly to a colleague's `Person` appears in that colleague's tab and is **not** present in their agent's memory until they admit it. |
 | **AC-20** | An object shared with a subscription is not readable from that subscription's tenant scope by someone licensed only on the tenant's *other* subscription (B1a, non-transitivity). |
-| **AC-21** | With the reef unconfigured, the full test suite of `crab-shell-proxy`, `crab-ganglion-harness` and `crab-exoskeleton-webapp` passes unchanged, and no `reef_*` tool appears in the MCP tool list. |
+| **AC-21** | With the reef unconfigured: no `reef_*` tool is in the registered MCP tool set, `.ganglion-config.json` declares one server, `SECTION_ORDER` holds five, and no reef destination resolves. |
 | **AC-22** | With the reef unconfigured, the webapp shows no reef destination at all — not a disabled or empty one. |
 | **AC-23** | Enabling the reef and then disabling it leaves every memory graph and workspace file intact and usable by the existing tools; nothing is left as a reef-only reference. |
 | **AC-24** | An unconfigured reef and an unreachable reef are distinguishable from the outside: the first registers no tool, the second returns a readable error from one. |
@@ -509,6 +531,13 @@ earn its keep. Not decided here because it belongs to Design.
 **OQ-2 — Does the reef own its store, or reuse the proxy's?** The objects are memgraph nodes and
 workspace files (D-3), both of which live on the proxy's side today. A separate store is cleaner
 and adds a synchronisation problem; a shared one is simpler and couples two repositories' schemas.
+
+**This question is narrower than it looks, and Design should not re-open the part FR-J already
+closed.** J4 requires the dependency to run one way — the reef reads *from* the graph, the graph
+never reads *through* the reef — and J5 forbids storing any object in a form only the reef can read.
+Together they rule out the reef holding the **canonical** copy of a shared memory object. What
+remains genuinely open is whether it keeps its own **derived** store (the activity log, actor
+records, collection membership, delivery state), and where that lives.
 
 **OQ-3 — Which mycelium RPC methods resolve the role facts the profile does not carry.** The
 profile carries `LicensedResources`, which may be sufficient. Where it is not, the method names must
