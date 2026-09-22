@@ -101,6 +101,41 @@ still operator-gated (needs the backend stack). M4 (crab-shell-proxy) live-conta
 
 ## Recent Decisions (Last 60 days)
 
+### AD-030: membership of a subscription is not governance of it, so agents lose group broadcast (2026-09-22)
+
+**What was decided.** Addressing a mangrove Group — subscription or tenant —
+requires a mycelium governing role. Since an MCP token signs a workspace tuple
+and no mycelium role, an agent can never satisfy that, so agents can no longer
+address a Group at all. Named actors in the same subscription are untouched.
+
+**This reverses live behaviour**, which is why it is recorded here rather than
+only in the feature's `context.md`. `reach.Check` used to allow any caller to
+address its own subscription Group, on the grounds that the tuple names it.
+
+**Why it was worth reversing.** The gate already refused *tenant* scope to agents
+with the reason "a turn steered by untrusted text reaching every member of a
+tenant is the shape this stack refuses elsewhere." The reasoning does not weaken
+one level down — a subscription is smaller, not safer. And a workspace tuple says
+the caller *belongs to* a subscription; it does not say they govern it, and only
+the second licenses a broadcast.
+
+**The alternative was worse in a specific way.** The feature that prompted this
+(`mangrove-human-publish`) restricts Group scope to governing roles in the
+webapp. Leaving the agent path alone would have made that restriction decorative:
+a member without a role could route around it by asking their own agent to
+publish. A control that the controlled party can delegate around is not a
+control.
+
+**What it cost, checked rather than assumed.** The only Group-addressed activity
+in the live store was the smoke-test fixture. No real member data depended on the
+old behaviour. Three reach tests failed the moment the flag went in, which is
+what confirmed they had been covering it.
+
+**How to reverse it.** `reach.Options.GroupsLicensed` is one field and one arm of
+one switch. Setting it true at the MCP call sites restores the old behaviour
+exactly. It is false-is-safe on purpose: a call site that forgets it addresses
+nobody extra.
+
 ### AD-029: the mangrove federates memory through the MCP server that already exists, and governs it by role rather than by key (2026-09-21)
 
 **What was decided.** A fifth submodule, `crab/crab-mangrove-network`, gives agents a

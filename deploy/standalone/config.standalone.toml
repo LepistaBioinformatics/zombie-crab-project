@@ -476,10 +476,10 @@ methods = ["GET", "POST"]
 # membership. The agent's half is not here either, for the same reason the
 # approval routes above give: a container has no profile header to present.
 #
-# Reads need read; the three writes need write on the role, like every other
-# member write. `decide` additionally needs a mycelium governing role, which the
-# proxy resolves from the profile -- the gateway cannot express that, and must
-# not be relied on to.
+# Reads need read; the four writes need write on the role, like every other
+# member write. `decide`, and `publish` when it addresses a Group, additionally
+# need a mycelium governing role, which the proxy resolves from the profile --
+# the gateway cannot express that, and must not be relied on to.
 # What was shared with this member, what their agent published, and what awaits a decision.
 group = { protectedByRoles = [{ name = "alpha" }] }
 path = "/v1/mangrove/timeline"
@@ -516,6 +516,18 @@ path = "/v1/mangrove/identity"
 secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
+
+[[alpha.path]]
+# The member's own half of publishing: compose something and address it. It is held
+# for each recipient until they admit it, exactly as an agent's publication is.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/mangrove/publish"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
 
 [[alpha.path]]
 # Let something addressed at this member into their own agent's memory.
@@ -871,10 +883,10 @@ methods = ["GET", "POST"]
 # membership. The agent's half is not here either, for the same reason the
 # approval routes above give: a container has no profile header to present.
 #
-# Reads need read; the three writes need write on the role, like every other
-# member write. `decide` additionally needs a mycelium governing role, which the
-# proxy resolves from the profile -- the gateway cannot express that, and must
-# not be relied on to.
+# Reads need read; the four writes need write on the role, like every other
+# member write. `decide`, and `publish` when it addresses a Group, additionally
+# need a mycelium governing role, which the proxy resolves from the profile --
+# the gateway cannot express that, and must not be relied on to.
 # What was shared with this member, what their agent published, and what awaits a decision.
 group = { protectedByRoles = [{ name = "gamma" }] }
 path = "/v1/mangrove/timeline"
@@ -911,6 +923,18 @@ path = "/v1/mangrove/identity"
 secretName = "gamma-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
+
+[[gamma.path]]
+# The member's own half of publishing: compose something and address it. It is held
+# for each recipient until they admit it, exactly as an agent's publication is.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "gamma", permission = "write" }] }
+path = "/v1/mangrove/publish"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
 
 [[gamma.path]]
 # Let something addressed at this member into their own agent's memory.
@@ -1205,10 +1229,10 @@ methods = ["GET", "POST"]
 # membership. The agent's half is not here either, for the same reason the
 # approval routes above give: a container has no profile header to present.
 #
-# Reads need read; the three writes need write on the role, like every other
-# member write. `decide` additionally needs a mycelium governing role, which the
-# proxy resolves from the profile -- the gateway cannot express that, and must
-# not be relied on to.
+# Reads need read; the four writes need write on the role, like every other
+# member write. `decide`, and `publish` when it addresses a Group, additionally
+# need a mycelium governing role, which the proxy resolves from the profile --
+# the gateway cannot express that, and must not be relied on to.
 # What was shared with this member, what their agent published, and what awaits a decision.
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/mangrove/timeline"
@@ -1245,6 +1269,18 @@ path = "/v1/mangrove/identity"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
+
+[[beta.path]]
+# The member's own half of publishing: compose something and address it. It is held
+# for each recipient until they admit it, exactly as an agent's publication is.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/mangrove/publish"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
 
 [[beta.path]]
 # Let something addressed at this member into their own agent's memory.
