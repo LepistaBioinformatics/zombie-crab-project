@@ -5,11 +5,8 @@ This page describes it as a component: what it holds, the one rule it exists to
 enforce, the things it deliberately does not do, and where its guarantees stop
 short of what its own specification asked for.
 
-> **It is experimental, and it is optional.** Interfaces, the wire format, the
-> on-disk layout and the activity vocabulary will change without a migration
-> path, and no version carries a compatibility promise. Nothing here has been
-> reviewed for production use. A deployment that does not configure it behaves
-> exactly as it did before the service existed — see
+> **It is optional.** A deployment that does not configure it behaves exactly as
+> it did before the service existed — see
 > [Optional by construction](#optional-by-construction).
 
 ## What it is

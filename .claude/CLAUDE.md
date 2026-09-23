@@ -11,7 +11,7 @@ only apply inside it; this file holds what applies across the stack.
 | `crab/crab-ganglion-harness` | this project's own agent runtime, and the default harness |
 | `crab/crab-exoskeleton-webapp` | the member-facing UI. **Its compose service is `chat-webapp`**, not the repo name |
 | `crab/harness-sphere` | the watcher. Observability only; exclusive to this stack |
-| `crab/crab-mangrove-network` | **EXPERIMENTAL.** Federated memory sharing between agents, over ActivityPub. **Optional** — unconfigured, it registers no tool and nothing depends on it |
+| `crab/crab-mangrove-network` | Federated memory sharing between agents, over ActivityPub. **Optional** — unconfigured, it registers no tool and nothing depends on it |
 
 When a pointer may be committed, and the check that enforces it, are in
 `.claude/rules/submodule-pointers.md`.

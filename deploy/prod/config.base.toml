@@ -436,7 +436,7 @@ acceptInsecureRouting = true
 methods = ["GET", "POST"]
 
 [[alpha.path]]
-# The mangrove's MEMBER half. EXPERIMENTAL, and optional -- with the mangrove
+# The mangrove's MEMBER half. Optional -- with the mangrove
 # unconfigured the proxy does not register these at all, so a gateway entry for
 # them is inert rather than wrong.
 #
@@ -810,7 +810,7 @@ acceptInsecureRouting = true
 methods = ["GET", "POST"]
 
 [[beta.path]]
-# The mangrove's MEMBER half. EXPERIMENTAL, and optional -- with the mangrove
+# The mangrove's MEMBER half. Optional -- with the mangrove
 # unconfigured the proxy does not register these at all, so a gateway entry for
 # them is inert rather than wrong.
 #
