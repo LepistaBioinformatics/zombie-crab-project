@@ -476,7 +476,7 @@ methods = ["GET", "POST"]
 # membership. The agent's half is not here either, for the same reason the
 # approval routes above give: a container has no profile header to present.
 #
-# Reads need read; the five writes need write on the role, like every other
+# Reads need read; the six writes need write on the role, like every other
 # member write. `decide`, and `publish` when it addresses a Group, additionally
 # need a mycelium governing role, which the proxy resolves from the profile --
 # the gateway cannot express that, and must not be relied on to. `merge` does
@@ -573,6 +573,18 @@ methods = ["POST"]
 # subscription-members, which is the service's alone.
 group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
 path = "/v1/mangrove/merge"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[alpha.path]]
+# Widen something already published to somebody else. It NAMES an object rather
+# than making one, so the memory keeps its id, its cell and its author.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/mangrove/share"
 secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["POST"]
@@ -907,7 +919,7 @@ methods = ["GET", "POST"]
 # membership. The agent's half is not here either, for the same reason the
 # approval routes above give: a container has no profile header to present.
 #
-# Reads need read; the five writes need write on the role, like every other
+# Reads need read; the six writes need write on the role, like every other
 # member write. `decide`, and `publish` when it addresses a Group, additionally
 # need a mycelium governing role, which the proxy resolves from the profile --
 # the gateway cannot express that, and must not be relied on to. `merge` does
@@ -1004,6 +1016,18 @@ methods = ["POST"]
 # subscription-members, which is the service's alone.
 group = { protectedByRoles = [{ name = "gamma", permission = "write" }] }
 path = "/v1/mangrove/merge"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[gamma.path]]
+# Widen something already published to somebody else. It NAMES an object rather
+# than making one, so the memory keeps its id, its cell and its author.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "gamma", permission = "write" }] }
+path = "/v1/mangrove/share"
 secretName = "gamma-authorization-header"
 acceptInsecureRouting = true
 methods = ["POST"]
@@ -1277,7 +1301,7 @@ methods = ["GET", "POST"]
 # membership. The agent's half is not here either, for the same reason the
 # approval routes above give: a container has no profile header to present.
 #
-# Reads need read; the five writes need write on the role, like every other
+# Reads need read; the six writes need write on the role, like every other
 # member write. `decide`, and `publish` when it addresses a Group, additionally
 # need a mycelium governing role, which the proxy resolves from the profile --
 # the gateway cannot express that, and must not be relied on to. `merge` does
@@ -1374,6 +1398,18 @@ methods = ["POST"]
 # subscription-members, which is the service's alone.
 group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
 path = "/v1/mangrove/merge"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["POST"]
+
+[[beta.path]]
+# Widen something already published to somebody else. It NAMES an object rather
+# than making one, so the memory keeps its id, its cell and its author.
+# Listed by name rather than under a wildcard, for the reason the
+# mangrove block above gives: /v1/mangrove/* would also expose
+# subscription-members, which is the service's alone.
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/mangrove/share"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["POST"]
