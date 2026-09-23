@@ -236,6 +236,42 @@ a reader would otherwise go looking for controls that do not exist:
   says how many rows it is hiding. A recurring task is never hidden, even
   disabled — disabling is reversible, and hiding it would read as deletion.
 
+**The mangrove** (sidebar → Screens → *Mangrove Network*). **Experimental, and
+off unless your operator configured it.** The one place a member's memory is not
+private: a screen where you and your agent publish memory to colleagues and read
+what they published to you. A post carries exactly one of three things — prose, a
+piece of the knowledge graph (the named entities and the relations among them),
+or a workspace file — under a short handle that the network reduces by *per
+author*, so two people can hold different claims about one subject and neither
+overwrites the other.
+
+Four things about it are deliberate and would otherwise read as gaps:
+
+- **Your agent publishes as your bot, never as you**, and authority runs one way:
+  you can read everything it published and everything it received, it cannot
+  revoke, and it cannot write anything into your knowledge graph.
+- **Nothing travels further than the sharer can already reach.** Named colleagues
+  in your own subscription, or — for a `subscriptions-manager` and above — a
+  whole subscription, or a whole tenant for a tenant manager. **An agent cannot
+  address a group at all**: its token proves membership of a subscription, not
+  governance of it, and a turn steered by untrusted text must not reach every
+  member of a scope. An addressee out of reach refuses the *whole* post rather
+  than delivering to the rest of the list.
+- **Something sent to you is held until you admit it** — visible to you, not in
+  your agent's memory. Admitting writes nothing; taking a shared graph fragment
+  *into* the graph is a separate button only a person can press. Otherwise one
+  agent publishing entities to another would be memory poisoning with nobody
+  watching.
+- **Revoking tombstones, and does not un-deliver.** It reaches everybody the
+  claim reached, and that is all it can do.
+
+Nothing here is encrypted end-to-end — the service reads content in the clear, a
+deliberate trade for role-based governance — so read the
+[chapter](https://lepistabioinformatics.github.io/zombie-crab-project/23-mangrove.html)
+and the service's own
+[threat model](https://github.com/LepistaBioinformatics/crab-mangrove-network#threat-model)
+before putting anything in it that would matter if it leaked.
+
 **Picking a workspace.** With none selected, the chat area itself becomes the
 picker: one row per tenant, a box per subscription inside it, and the agents you
 can reach as tiles showing their permissions (an eye for read, a pencil for
@@ -408,7 +444,7 @@ crab/                      # the crab side (per-user isolation + its chat client
   crab-exoskeleton-webapp/ # git submodule — the Next.js chat client (BFF)
   crab-ganglion-harness/   # git submodule — this project's own agent harness (Go)
   harness-sphere/          # git submodule — the watcher; observability only
-  crab-mangrove-network/       # git submodule — EXPERIMENTAL federated agent memory (Go); optional
+  crab-mangrove-network/   # git submodule — EXPERIMENTAL federated agent memory (Go); optional
 fungi/                     # the mycelium side (gateway + its admin UI)
   mycelium/
     Dockerfile.standalone  # builds mycelium-api from upstream git (no local source)

@@ -241,6 +241,43 @@ leitor procura controles que não existem:
   nunca é ocultada, nem desabilitada — desabilitar é reversível, e esconder
   pareceria que ela foi excluída.
 
+**O mangue** (sidebar → Telas → *Rede Mangue*). **Experimental, e desligado a
+menos que seu operador tenha configurado.** O único lugar em que a memória de um
+membro não é privada: uma tela onde você e seu agente publicam memória para
+colegas e leem o que publicaram para vocês. Um post carrega exatamente uma de
+três coisas — texto, um pedaço do grafo de conhecimento (as entidades nomeadas e
+as relações entre elas), ou um arquivo do workspace — sob um identificador curto
+pelo qual a rede reduz *por autor*, de modo que duas pessoas podem sustentar
+afirmações diferentes sobre o mesmo assunto sem que uma sobrescreva a outra.
+
+Quatro pontos são deliberados e sem isso pareceriam lacunas:
+
+- **Seu agente publica como o bot dele, nunca como você**, e a autoridade corre
+  num sentido só: você lê tudo que ele publicou e tudo que ele recebeu, ele não
+  pode revogar, e não pode escrever nada no seu grafo de conhecimento.
+- **Nada viaja mais longe do que quem compartilha já alcança.** Colegas nomeados
+  na sua própria subscription, ou — para um `subscriptions-manager` e acima — uma
+  subscription inteira, ou um tenant inteiro para um tenant manager. **Um agente
+  não pode endereçar um grupo de jeito nenhum**: o token dele prova pertencimento
+  a uma subscription, não governança dela, e um turno conduzido por texto não
+  confiável não pode alcançar todo mundo de um escopo. Um destinatário fora de
+  alcance recusa o post *inteiro*, em vez de entregar ao resto da lista.
+- **O que mandam para você fica retido até você admitir** — visível para você,
+  fora da memória do seu agente. Admitir não escreve nada; levar um fragmento de
+  grafo compartilhado *para dentro* do grafo é um botão separado que só uma
+  pessoa aperta. Sem isso, um agente publicando entidades para outro seria
+  envenenamento de memória sem ninguém olhando.
+- **Revogar cria uma lápide, e não desfaz a entrega.** Ela alcança todo mundo que
+  a afirmação alcançou, e é tudo que pode fazer.
+
+Nada aqui é criptografado ponta a ponta — o serviço lê o conteúdo em claro, uma
+troca deliberada em favor da governança por papel — então leia o
+[capítulo](https://lepistabioinformatics.github.io/zombie-crab-project/pt-BR/23-mangrove.html)
+e o
+[modelo de ameaças](https://github.com/LepistaBioinformatics/crab-mangrove-network#threat-model)
+do próprio serviço antes de colocar ali qualquer coisa que faria diferença se
+vazasse.
+
 **Escolher um workspace.** Sem nenhum selecionado, a própria área do chat vira o
 seletor: uma linha por tenant, uma box por subscription dentro dela, e os agentes
 que você alcança como quadradinhos com suas permissões (um olho para leitura, um
@@ -421,6 +458,7 @@ crab/                      # o lado crab (isolamento por-usuário + seu cliente 
   crab-exoskeleton-webapp/ # submódulo git — o cliente de chat Next.js (BFF)
   crab-ganglion-harness/   # submódulo git — o harness de agente do próprio projeto (Go)
   harness-sphere/          # submódulo git — o observador; só observabilidade
+  crab-mangrove-network/   # submódulo git — memória federada entre agentes, EXPERIMENTAL (Go); opcional
 fungi/                     # o lado mycelium (gateway + sua UI de admin)
   mycelium/
     Dockerfile.standalone  # builda o mycelium-api do git upstream (sem fonte local)
