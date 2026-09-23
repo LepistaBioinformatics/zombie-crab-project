@@ -21,6 +21,7 @@
 - [The chat client](./20-chat-client.md)
 - [Working with projects](./21-projects.md)
 - [Scheduled tasks](./22-scheduled-tasks.md)
+- [The mangrove](./23-mangrove.md)
 
 # Administration
 
@@ -41,6 +42,7 @@
 - [crab-ganglion-harness](./51-crab-ganglion-harness.md)
 - [crab-exoskeleton-webapp](./52-crab-exoskeleton-webapp.md)
 - [harness-sphere](./53-harness-sphere.md)
+- [crab-mangrove-network](./54-crab-mangrove-network.md)
 
 # Development
 
