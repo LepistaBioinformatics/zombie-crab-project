@@ -529,8 +529,8 @@ services:
     # to produce.
     # No ports: it is observed through its exporter, not over HTTP.
 
-  # EXPERIMENTAL, and OPTIONAL BY CONSTRUCTION -- see crab/crab-mangrove-network's
-  # README and `.specs/features/crab-mangrove-network/`.
+  # OPTIONAL BY CONSTRUCTION -- see crab/crab-mangrove-network's README and
+  # `.specs/features/crab-mangrove-network/`.
   #
   # IT DOES NOT START WITH `docker compose up`. It sits behind the `mangrove`
   # profile, so the stack anybody runs today is the stack they ran before this

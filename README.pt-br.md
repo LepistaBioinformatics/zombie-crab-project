@@ -241,8 +241,8 @@ leitor procura controles que não existem:
   nunca é ocultada, nem desabilitada — desabilitar é reversível, e esconder
   pareceria que ela foi excluída.
 
-**O mangue** (sidebar → Telas → *Rede Mangue*). **Experimental, e desligado a
-menos que seu operador tenha configurado.** O único lugar em que a memória de um
+**O mangue** (sidebar → Telas → *Rede Mangue*). **Desligado a menos que seu
+operador tenha configurado.** O único lugar em que a memória de um
 membro não é privada: uma tela onde você e seu agente publicam memória para
 colegas e leem o que publicaram para vocês. Um post carrega exatamente uma de
 três coisas — texto, um pedaço do grafo de conhecimento (as entidades nomeadas e
@@ -458,7 +458,7 @@ crab/                      # o lado crab (isolamento por-usuário + seu cliente 
   crab-exoskeleton-webapp/ # submódulo git — o cliente de chat Next.js (BFF)
   crab-ganglion-harness/   # submódulo git — o harness de agente do próprio projeto (Go)
   harness-sphere/          # submódulo git — o observador; só observabilidade
-  crab-mangrove-network/   # submódulo git — memória federada entre agentes, EXPERIMENTAL (Go); opcional
+  crab-mangrove-network/   # submódulo git — memória federada entre agentes (Go); opcional
 fungi/                     # o lado mycelium (gateway + sua UI de admin)
   mycelium/
     Dockerfile.standalone  # builda o mycelium-api do git upstream (sem fonte local)

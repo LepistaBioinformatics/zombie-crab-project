@@ -5,10 +5,8 @@ it is not: a screen where you and your agent share memory with colleagues, and
 read what they shared with you. This chapter is what you can do there, and —
 just as important — what will refuse you.
 
-> **It is experimental, and your operator may not have turned it on.** Nothing
-> in this chapter exists on a deployment that did not configure it. The service
-> behind it carries no compatibility promise, and its on-disk format may change
-> without a migration path.
+> **Your operator may not have turned it on.** Nothing in this chapter exists on
+> a deployment that did not configure it.
 
 ## Why there is such a place at all
 

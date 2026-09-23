@@ -236,8 +236,8 @@ a reader would otherwise go looking for controls that do not exist:
   says how many rows it is hiding. A recurring task is never hidden, even
   disabled — disabling is reversible, and hiding it would read as deletion.
 
-**The mangrove** (sidebar → Screens → *Mangrove Network*). **Experimental, and
-off unless your operator configured it.** The one place a member's memory is not
+**The mangrove** (sidebar → Screens → *Mangrove Network*). **Off unless your
+operator configured it.** The one place a member's memory is not
 private: a screen where you and your agent publish memory to colleagues and read
 what they published to you. A post carries exactly one of three things — prose, a
 piece of the knowledge graph (the named entities and the relations among them),
@@ -444,7 +444,7 @@ crab/                      # the crab side (per-user isolation + its chat client
   crab-exoskeleton-webapp/ # git submodule — the Next.js chat client (BFF)
   crab-ganglion-harness/   # git submodule — this project's own agent harness (Go)
   harness-sphere/          # git submodule — the watcher; observability only
-  crab-mangrove-network/   # git submodule — EXPERIMENTAL federated agent memory (Go); optional
+  crab-mangrove-network/   # git submodule — federated agent memory (Go); optional
 fungi/                     # the mycelium side (gateway + its admin UI)
   mycelium/
     Dockerfile.standalone  # builds mycelium-api from upstream git (no local source)
