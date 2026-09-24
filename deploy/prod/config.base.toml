@@ -515,9 +515,10 @@ acceptInsecureRouting = true
 methods = ["POST"]
 
 [[alpha.path]]
-# Let something addressed at this member into their own agent's memory.
+# Say this member has opened something. It was `admit`, which claimed to keep
+# a shared memory out of their agent until they took it and never did.
 group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
-path = "/v1/mangrove/admit"
+path = "/v1/mangrove/read"
 secretName = "alpha-authorization-header"
 acceptInsecureRouting = true
 methods = ["POST"]
@@ -889,9 +890,10 @@ acceptInsecureRouting = true
 methods = ["POST"]
 
 [[beta.path]]
-# Let something addressed at this member into their own agent's memory.
+# Say this member has opened something. It was `admit`, which claimed to keep
+# a shared memory out of their agent until they took it and never did.
 group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
-path = "/v1/mangrove/admit"
+path = "/v1/mangrove/read"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["POST"]
