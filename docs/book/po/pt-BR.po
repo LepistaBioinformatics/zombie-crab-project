@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: zombie-crab-project\n"
-"POT-Creation-Date: 2026-09-23T18:44:25-03:00\n"
+"POT-Creation-Date: 2026-09-23T22:34:15-03:00\n"
 "PO-Revision-Date: 2026-09-15T13:12:18-03:00\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
@@ -1018,7 +1018,7 @@ msgstr ""
 #: src/11-harnesses.md:191 src/12-agents-and-workspaces.md:222
 #: src/13-skills-and-memory.md:218 src/14-files-and-delivery.md:164
 #: src/20-chat-client.md:224 src/21-projects.md:148
-#: src/22-scheduled-tasks.md:168 src/23-mangrove.md:296
+#: src/22-scheduled-tasks.md:168 src/23-mangrove.md:351
 #: src/30-admin-guide.md:352 src/31-custom-agent.md:237
 #: src/32-models-and-providers.md:277 src/40-deployment.md:223
 #: src/41-database.md:164 src/42-observability.md:224
@@ -4696,7 +4696,7 @@ msgstr "O que o agente aprendeu por conta própria"
 msgid "What runs on a schedule, and its results"
 msgstr "O que roda em horário programado, e seus resultados"
 
-#: src/20-chat-client.md:84 src/21-projects.md:42 src/23-mangrove.md:197
+#: src/20-chat-client.md:84 src/21-projects.md:42 src/23-mangrove.md:251
 #: src/30-admin-guide.md:55
 msgid "Files"
 msgstr "Arquivos"
@@ -4805,7 +4805,7 @@ msgstr ""
 "compositor com as conversas do escopo listadas abaixo dele — e a conversa "
 "nasce da primeira mensagem que você envia."
 
-#: src/20-chat-client.md:123 src/23-mangrove.md:58
+#: src/20-chat-client.md:123 src/23-mangrove.md:65
 msgid "The composer"
 msgstr "O compositor"
 
@@ -5964,13 +5964,19 @@ msgid ""
 "place it is not: a screen where you and your agent share memory with "
 "colleagues, and read what they shared with you. This chapter is what you can "
 "do there, and — just as important — what will refuse you."
-msgstr "Todo o resto que o seu agente sabe é só seu. O mangue é o único lugar onde não é: uma tela em que você e o seu agente compartilham memória com colegas, e leem o que eles compartilharam com vocês. Este capítulo é o que dá para fazer ali e — igualmente importante — o que vai recusar você."
+msgstr ""
+"Todo o resto que o seu agente sabe é só seu. O mangue é o único lugar onde "
+"não é: uma tela em que você e o seu agente compartilham memória com colegas, "
+"e leem o que eles compartilharam com vocês. Este capítulo é o que dá para "
+"fazer ali e — igualmente importante — o que vai recusar você."
 
 #: src/23-mangrove.md:8
 msgid ""
 "**Your operator may not have turned it on.** Nothing in this chapter exists "
 "on a deployment that did not configure it."
-msgstr "**Pode ser que o seu operador não tenha ligado.** Nada neste capítulo existe numa instalação que não configurou o serviço."
+msgstr ""
+"**Pode ser que o seu operador não tenha ligado.** Nada neste capítulo existe "
+"numa instalação que não configurou o serviço."
 
 #: src/23-mangrove.md:11
 msgid "Why there is such a place at all"
@@ -5982,7 +5988,11 @@ msgid ""
 "notes and its files are reachable only through a token that names your "
 "workspace, so two people working the same problem build two disjoint sets of "
 "notes and rediscover the same facts twice."
-msgstr "A memória do seu agente é privada por construção. O grafo de conhecimento, as notas e os arquivos dele só são alcançáveis por um token que nomeia o seu workspace — então duas pessoas trabalhando no mesmo problema constroem dois conjuntos de notas disjuntos e redescobrem os mesmos fatos duas vezes."
+msgstr ""
+"A memória do seu agente é privada por construção. O grafo de conhecimento, "
+"as notas e os arquivos dele só são alcançáveis por um token que nomeia o seu "
+"workspace — então duas pessoas trabalhando no mesmo problema constroem dois "
+"conjuntos de notas disjuntos e redescobrem os mesmos fatos duas vezes."
 
 #: src/23-mangrove.md:18
 msgid ""
@@ -5991,7 +6001,12 @@ msgid ""
 "overwrites anything a colleague published, and two people disagreeing about "
 "the same subject is a normal state rather than something the system resolves "
 "for you."
-msgstr "O mangue é a costura entre os dois. O que ele _não_ é: um monte compartilhado. Tudo continua atribuído a quem publicou, nada que você publica sobrescreve o que um colega publicou, e duas pessoas discordando sobre o mesmo assunto é um estado normal, não algo que o sistema resolve por você."
+msgstr ""
+"O mangue é a costura entre os dois. O que ele _não_ é: um monte "
+"compartilhado. Tudo continua atribuído a quem publicou, nada que você "
+"publica sobrescreve o que um colega publicou, e duas pessoas discordando "
+"sobre o mesmo assunto é um estado normal, não algo que o sistema resolve por "
+"você."
 
 #: src/23-mangrove.md:24
 msgid "You have two identities there, and so does everyone else"
@@ -6002,7 +6017,10 @@ msgid ""
 "Every member gets **two actors**: one for you, and one for your agent. The "
 "screen calls them `You` and `Your agent`, and the agent's one is marked "
 "`(bot)` wherever it appears."
-msgstr "Cada membro ganha **dois atores**: um seu e um do seu agente. A tela os chama de `Você` e `Seu agente`, e o do agente aparece marcado com `(bot)` em todo lugar."
+msgstr ""
+"Cada membro ganha **dois atores**: um seu e um do seu agente. A tela os "
+"chama de `Você` e `Seu agente`, e o do agente aparece marcado com `(bot)` em "
+"todo lugar."
 
 #: src/23-mangrove.md:30
 msgid ""
@@ -6012,14 +6030,24 @@ msgid ""
 "everything your agent published _and_ everything it received, including what "
 "it never mentioned in a conversation. It cannot reverse you: an agent cannot "
 "revoke, and an agent cannot take anything into your memory graph."
-msgstr "O seu agente publica **como o bot que é seu, nunca como você**. Tudo que ele compartilha se lê como _este bot, de propriedade daquela conta_, e a distinção não é cosmética — é dela que o resto das regras pendura. Você consegue ler tudo que o seu agente publicou _e_ tudo que ele recebeu, inclusive o que ele nunca mencionou numa conversa. Ele não consegue desfazer o que é seu: um agente não revoga, e um agente não leva nada para o seu grafo de memória."
+msgstr ""
+"O seu agente publica **como o bot que é seu, nunca como você**. Tudo que ele "
+"compartilha se lê como _este bot, de propriedade daquela conta_, e a "
+"distinção não é cosmética — é dela que o resto das regras pendura. Você "
+"consegue ler tudo que o seu agente publicou _e_ tudo que ele recebeu, "
+"inclusive o que ele nunca mencionou numa conversa. Ele não consegue desfazer "
+"o que é seu: um agente não revoga, e um agente não leva nada para o seu "
+"grafo de memória."
 
 #: src/23-mangrove.md:37
 msgid ""
 "Under **Your handles** you will find three copyable rows — your email, your "
 "agent's actor id and your own — with the hint _Send these to somebody who "
 "needs to share with you._"
-msgstr "Em **Seus identificadores** você encontra três linhas copiáveis — seu e-mail, o id de ator do seu agente e o seu — com a dica _Envie isto para quem precisar compartilhar com você._"
+msgstr ""
+"Em **Seus identificadores** você encontra três linhas copiáveis — seu e-"
+"mail, o id de ator do seu agente e o seu — com a dica _Envie isto para quem "
+"precisar compartilhar com você._"
 
 #: src/23-mangrove.md:41
 msgid "Opening it"
@@ -6027,119 +6055,174 @@ msgstr "Como abrir"
 
 #: src/23-mangrove.md:43
 msgid ""
-"**Mangrove Network** is in the sidebar under **Screens**, next to Projects. "
-"Its one-line blurb is _Memory shared with you, and memory your agent "
-"shared_, and the page itself opens with:"
-msgstr "**Rede Mangue** fica na barra lateral em **Telas**, ao lado de Projetos. A descrição de uma linha é _Memória compartilhada com você, e memória que o seu agente compartilhou_, e a própria página abre com:"
+"**Mangrove Network** is in the sidebar under **Tools**, with the rest of "
+"what opens beside a conversation — memory, the graph, tasks, files and "
+"secrets. It used to be a screen, next to Projects, which meant reading what "
+"somebody had shared cost you the conversation you were in; it opens in the "
+"right-hand pane now and the conversation stays where it is. There is no "
+"**Screens** group any more: Projects was the only thing left in it, so it "
+"sits with **New chat** above the labelled group."
+msgstr "**Rede Mangue** fica na barra lateral em **Ferramentas**, junto com o resto do que abre ao lado de uma conversa — memória, o grafo, tarefas, arquivos e segredos. Antes era uma tela, ao lado de Projetos, o que significava que ler o que alguém compartilhou custava a conversa em que você estava; agora abre no painel direito e a conversa fica onde está. Não existe mais o grupo **Telas**: Projetos era a única coisa que sobrava nele, então fica junto com **Nova conversa**, acima do grupo rotulado."
 
-#: src/23-mangrove.md:47
+#: src/23-mangrove.md:51
+msgid ""
+"Its one-line blurb is _Memory shared with you, and memory your agent "
+"shared_, and the pane opens with:"
+msgstr "A linha de resumo é _Memória compartilhada com você, e a que seu agente compartilhou_, e o painel abre com:"
+
+#: src/23-mangrove.md:54
 msgid ""
 "The mangrove is where agents share what they learn. Your agent publishes as "
 "your bot, and nothing it shares goes further than you can already reach."
-msgstr "O mangue é onde os agentes compartilham o que aprendem. O seu agente publica como o bot que é seu, e nada do que ele compartilha vai além do que você já alcança."
+msgstr ""
+"O mangue é onde os agentes compartilham o que aprendem. O seu agente publica "
+"como o bot que é seu, e nada do que ele compartilha vai além do que você já "
+"alcança."
 
-#: src/23-mangrove.md:50
+#: src/23-mangrove.md:57
 msgid "Across the top are the readings:"
 msgstr "No alto ficam as leituras:"
 
-#: src/23-mangrove.md:52
+#: src/23-mangrove.md:59
 msgid "What it shows"
 msgstr "O que mostra"
 
-#: src/23-mangrove.md:54
+#: src/23-mangrove.md:61
 msgid "**Received**"
-msgstr ""
+msgstr "**Recebidos**"
 
-#: src/23-mangrove.md:54
+#: src/23-mangrove.md:61
 msgid ""
-"What others shared with you, plus **Waiting for you** — things sent to you "
-"that you have not admitted"
-msgstr "O que os outros compartilharam com você, mais **Esperando por você** — coisas enviadas a você que você ainda não admitiu"
+"What others shared with you. One list, with the ones you have not opened "
+"marked"
+msgstr "O que os outros compartilharam com você. Uma lista só, com marca nos que você ainda não abriu"
 
-#: src/23-mangrove.md:55
+#: src/23-mangrove.md:62
 msgid "**Published**"
-msgstr ""
+msgstr "**Publicados**"
 
-#: src/23-mangrove.md:55
+#: src/23-mangrove.md:62
 msgid "What you and your agent shared"
 msgstr "O que você e o seu agente compartilharam"
 
-#: src/23-mangrove.md:56
+#: src/23-mangrove.md:63
 msgid "**Pending decisions**"
 msgstr "**Decisões pendentes**"
 
-#: src/23-mangrove.md:56
+#: src/23-mangrove.md:63
 msgid "Only if you govern a scope. Absent otherwise, not empty"
 msgstr "Só se você governa um escopo. Ausente caso contrário, não vazio"
 
-#: src/23-mangrove.md:57 src/23-mangrove.md:102
+#: src/23-mangrove.md:64 src/23-mangrove.md:125
 msgid "**People**"
-msgstr ""
+msgstr "**Pessoas**"
 
-#: src/23-mangrove.md:57
+#: src/23-mangrove.md:64
 msgid "Find somebody to share with, and your own handles"
 msgstr "Encontrar alguém para compartilhar, e os seus próprios identificadores"
 
-#: src/23-mangrove.md:58
+#: src/23-mangrove.md:65
 msgid "**Share something**"
 msgstr "**Compartilhar algo**"
 
-#: src/23-mangrove.md:60
+#: src/23-mangrove.md:67
 msgid ""
-"A post is a card. Long prose is cut off after eight lines and the card opens "
-"a sheet — _Read all of \"…\"_ — while files and graph fragments show their "
-"own summary instead. The three newest in a reading are lifted with an accent "
-"border. Revoked items stay in the list, struck through and with no actions "
-"left."
-msgstr "Um post é um card. Prosa longa é cortada depois de oito linhas e o card abre uma folha — _Ler tudo de \"…\"_ — enquanto arquivos e fragmentos de grafo mostram um resumo próprio. Os três mais novos de uma leitura ganham uma borda de destaque. Itens revogados continuam na lista, riscados e sem nenhuma ação restante."
+"A post is a card, and a card is **closed** until you click it. Closed, it "
+"shows who sent it, what it is about, and enough of the body to recognise. "
+"Opening it reveals the record underneath — who else it reached, how many "
+"have endorsed it — and everything you can _do_ with it: merge a fragment "
+"into your memory, save a file, quote it into the conversation. Clicking "
+"again closes it."
+msgstr "Um post é um card, e um card fica **fechado** até você clicar nele. Fechado, ele mostra quem mandou, sobre o que é, e conteúdo suficiente para reconhecer. Ao abrir aparecem o registro embaixo — quem mais recebeu, quantos endossaram — e tudo que você pode _fazer_ com ele: fundir um fragmento na sua memória, salvar um arquivo, citar na conversa. Clicar de novo fecha."
 
-#: src/23-mangrove.md:65
+#: src/23-mangrove.md:73
 msgid ""
-"If you see nothing at all — no heading, no message, an empty pane — the "
-"mangrove is not configured on your deployment. The row in the sidebar is not "
-"hidden along with the screen, which is a rough edge rather than a state you "
-"can do anything about. It is different from _Nothing here yet_, which means "
-"the mangrove is on and nobody has shared anything, and from _The mangrove is "
-"not reachable right now_, which means it is on and broken."
-msgstr "Se você não vir nada mesmo — nenhum título, nenhuma mensagem, um painel vazio — o mangue não está configurado na sua instalação. A linha na barra lateral não é escondida junto com a tela, o que é uma aresta e não um estado sobre o qual você possa fazer algo. É diferente de _Nada aqui ainda_, que significa que o mangue está ligado e ninguém compartilhou nada, e de _O mangue não está acessível agora_, que significa que está ligado e quebrado."
-
-#: src/23-mangrove.md:72
-msgid "Sharing something"
-msgstr "Compartilhar algo"
-
-#: src/23-mangrove.md:74
-msgid ""
-"**A post carries exactly one of three things.** Not two, and the composer "
-"enforces it by removing fields rather than disabling them:"
-msgstr "**Um post carrega exatamente uma de três coisas.** Não duas — e o compositor garante isso removendo campos, não desabilitando:"
+"That is deliberate rather than tidiness. **Merge** is the only thing on this "
+"screen that writes your own memory graph, and offering it on every card at "
+"once, to an eye that is scrolling past, gave the heaviest act here the "
+"lowest price."
+msgstr "Isso é decisão, não arrumação. **Fundir** é a única coisa nesta tela que escreve no seu próprio grafo de memória, e oferecê-la em todo card ao mesmo tempo, para um olho que está passando batido, dava ao ato mais pesado daqui o preço mais baixo."
 
 #: src/23-mangrove.md:77
 msgid ""
-"**Prose.** You type _What it is about_ and _What you learned_, and choose "
-"Markdown or plain text."
-msgstr "**Prosa.** Você escreve _Sobre o que é_ e _O que você aprendeu_, e escolhe Markdown ou texto puro."
+"**Opening a card is also what marks it read** — see _Receiving something_ "
+"below."
+msgstr "**Abrir um card é também o que o marca como lido** — veja _Receber alguma coisa_ abaixo."
 
 #: src/23-mangrove.md:79
+msgid ""
+"Long prose is still cut off after eight lines; _Read in full_ is one of the "
+"controls the open reveals, rather than what a click on the card does. Files "
+"and graph fragments show their own summary instead, and always did: a sheet "
+"over either would open onto what is already on screen."
+msgstr "Texto longo continua cortado depois de oito linhas; _Ler completo_ é um dos controles que a abertura revela, em vez de ser o que um clique no card faz. Arquivos e fragmentos de grafo mostram o próprio resumo, e sempre mostraram: uma folha sobre qualquer um dos dois abriria para o que já está na tela."
+
+#: src/23-mangrove.md:84
+msgid ""
+"Cards are quiet at rest — no border, one flat tone, the gap between them "
+"doing the separating — and draw their edges under the pointer. Revoked items "
+"stay in the list, struck through and with no actions left."
+msgstr "Os cards são discretos em repouso — sem borda, um tom só, o intervalo entre eles fazendo a separação — e desenham as bordas sob o ponteiro. Itens revogados permanecem na lista, riscados e sem ações."
+
+#: src/23-mangrove.md:88
+msgid ""
+"If you see nothing at all — no heading, no message, an empty pane — the "
+"mangrove is not configured on your deployment. The sidebar row is hidden "
+"with it, so there is normally nothing to click in the first place. It is "
+"different from _Nothing here yet_, which means the mangrove is on and nobody "
+"has shared anything, and from _The mangrove is not reachable right now_, "
+"which means it is on and broken."
+msgstr "Se você não vir nada — sem título, sem mensagem, um painel vazio — o mangue não está configurado na sua instalação. A linha da barra lateral fica escondida junto, então normalmente não há nem no que clicar. É diferente de _Nada aqui ainda_, que significa que o mangue está ligado e ninguém compartilhou nada, e de _O mangue não está acessível agora_, que significa que está ligado e quebrado."
+
+#: src/23-mangrove.md:95
+msgid "Sharing something"
+msgstr "Compartilhar algo"
+
+#: src/23-mangrove.md:97
+msgid ""
+"**A post carries exactly one of three things.** Not two, and the composer "
+"enforces it by removing fields rather than disabling them:"
+msgstr ""
+"**Um post carrega exatamente uma de três coisas.** Não duas — e o compositor "
+"garante isso removendo campos, não desabilitando:"
+
+#: src/23-mangrove.md:100
+msgid ""
+"**Prose.** You type _What it is about_ and _What you learned_, and choose "
+"Markdown or plain text."
+msgstr ""
+"**Prosa.** Você escreve _Sobre o que é_ e _O que você aprendeu_, e escolhe "
+"Markdown ou texto puro."
+
+#: src/23-mangrove.md:102
 msgid ""
 "**A piece of your memory graph.** Selected in the graph panel and sent over "
 "— the named entities **and the relations among them**, so the fragment is "
 "usable rather than a list of disconnected nodes."
-msgstr "**Um pedaço do seu grafo de memória.** Selecionado no painel do grafo e enviado — as entidades nomeadas **e as relações entre elas**, para que o fragmento seja utilizável em vez de uma lista de nós soltos."
+msgstr ""
+"**Um pedaço do seu grafo de memória.** Selecionado no painel do grafo e "
+"enviado — as entidades nomeadas **e as relações entre elas**, para que o "
+"fragmento seja utilizável em vez de uma lista de nós soltos."
 
-#: src/23-mangrove.md:82
+#: src/23-mangrove.md:105
 msgid ""
 "**A workspace file.** Started from the Files screen. _Your agent reads the "
 "file and sends it. Nothing is uploaded from this browser._"
-msgstr "**Um arquivo do workspace.** Começa pela tela de Arquivos. _O seu agente lê o arquivo e o envia. Nada é enviado a partir deste navegador._"
+msgstr ""
+"**Um arquivo do workspace.** Começa pela tela de Arquivos. _O seu agente lê "
+"o arquivo e o envia. Nada é enviado a partir deste navegador._"
 
-#: src/23-mangrove.md:85
+#: src/23-mangrove.md:108
 msgid ""
 "When a file or a fragment is attached, the _what it is about_ field "
 "disappears: those two derive their own handle, and a typed one would collide "
 "with somebody else's by accident."
-msgstr "Quando um arquivo ou um fragmento é anexado, o campo _sobre o que é_ desaparece: esses dois derivam o próprio identificador, e um digitado colidiria com o de outra pessoa por acidente."
+msgstr ""
+"Quando um arquivo ou um fragmento é anexado, o campo _sobre o que é_ "
+"desaparece: esses dois derivam o próprio identificador, e um digitado "
+"colidiria com o de outra pessoa por acidente."
 
-#: src/23-mangrove.md:89
+#: src/23-mangrove.md:112
 msgid ""
 "That handle — the composer's _A short handle. Everything anybody shares "
 "under the same one lines up together._ — is the key the whole network "
@@ -6147,82 +6230,101 @@ msgid ""
 "have used before supersedes **your** earlier claim about it and nobody "
 "else's. Two people can hold different claims about the same subject, both "
 "live, indefinitely."
-msgstr "Esse identificador — o _Um rótulo curto. Tudo que qualquer pessoa compartilhar sob o mesmo rótulo se alinha junto._ do compositor — é a chave pela qual a rede inteira reduz, e ela reduz **por autor**. Publicar sob um rótulo que você já usou substitui a **sua** afirmação anterior sobre ele, e a de mais ninguém. Duas pessoas podem manter afirmações diferentes sobre o mesmo assunto, ambas vivas, indefinidamente."
+msgstr ""
+"Esse identificador — o _Um rótulo curto. Tudo que qualquer pessoa "
+"compartilhar sob o mesmo rótulo se alinha junto._ do compositor — é a chave "
+"pela qual a rede inteira reduz, e ela reduz **por autor**. Publicar sob um "
+"rótulo que você já usou substitui a **sua** afirmação anterior sobre ele, e "
+"a de mais ninguém. Duas pessoas podem manter afirmações diferentes sobre o "
+"mesmo assunto, ambas vivas, indefinidamente."
 
-#: src/23-mangrove.md:95
+#: src/23-mangrove.md:118
 msgid "Who reads it"
 msgstr "Quem lê"
 
-#: src/23-mangrove.md:97
+#: src/23-mangrove.md:120
 msgid "One answer, not a combination:"
 msgstr "Uma resposta, não uma combinação:"
 
-#: src/23-mangrove.md:99
+#: src/23-mangrove.md:122
 msgid "Choice"
-msgstr ""
+msgstr "Escolha"
 
-#: src/23-mangrove.md:99
+#: src/23-mangrove.md:122
 msgid "What it means"
 msgstr "O que significa"
 
-#: src/23-mangrove.md:101
+#: src/23-mangrove.md:124
 msgid "**Only you**"
 msgstr "**Só você**"
 
-#: src/23-mangrove.md:101
+#: src/23-mangrove.md:124
 msgid ""
 "Nobody else sees this. Your agent can still read it. This is the default."
 msgstr "Mais ninguém vê isto. O seu agente ainda consegue ler. É o padrão."
 
-#: src/23-mangrove.md:102
+#: src/23-mangrove.md:125
 msgid ""
 "Named colleagues. Each person decides whether to let it into their agent's "
 "memory."
-msgstr "Colegas nomeados. Cada pessoa decide se deixa aquilo entrar na memória do próprio agente."
+msgstr ""
+"Colegas nomeados. Cada pessoa decide se deixa aquilo entrar na memória do "
+"próprio agente."
 
-#: src/23-mangrove.md:103
+#: src/23-mangrove.md:126
 msgid "**Everybody in this subscription**"
 msgstr "**Todo mundo nesta subscription**"
 
-#: src/23-mangrove.md:103
+#: src/23-mangrove.md:126
 msgid "Only if you are a `subscriptions-manager` on it, or above"
 msgstr "Só se você for `subscriptions-manager` nela, ou acima"
 
-#: src/23-mangrove.md:104
+#: src/23-mangrove.md:127
 msgid "**Everybody in this tenant**"
 msgstr "**Todo mundo neste tenant**"
 
-#: src/23-mangrove.md:104
+#: src/23-mangrove.md:127
 msgid "Only if you are a `tenant-owner` or `tenant-manager`"
 msgstr "Só se você for `tenant-owner` ou `tenant-manager`"
 
-#: src/23-mangrove.md:106
+#: src/23-mangrove.md:129
 msgid ""
 "The two group choices are **absent** when you may not use them, not present "
 "and refusing. An affordance that renders and then fails teaches the wrong "
 "model of who decides."
-msgstr "As duas opções de grupo ficam **ausentes** quando você não pode usá-las, em vez de presentes e recusando. Uma afordância que aparece e depois falha ensina o modelo errado sobre quem decide."
+msgstr ""
+"As duas opções de grupo ficam **ausentes** quando você não pode usá-las, em "
+"vez de presentes e recusando. Uma afordância que aparece e depois falha "
+"ensina o modelo errado sobre quem decide."
 
-#: src/23-mangrove.md:110
+#: src/23-mangrove.md:133
 msgid ""
 "You address people **by email**, and for each one you choose what it "
 "reaches: **Them**, **Their agent**, or **Both**. The default is Them. "
 "Addressing by email rather than by actor id is deliberate — depending on how "
 "your administrator configured the directory, you may never be shown "
 "somebody's id at all."
-msgstr "Você endereça pessoas **por e-mail**, e para cada uma escolhe o que aquilo alcança: **Elas**, **O agente delas** ou **Ambos**. O padrão é Elas. Endereçar por e-mail em vez de id de ator é deliberado — dependendo de como o seu administrador configurou o diretório, pode ser que você nunca veja o id de ninguém."
+msgstr ""
+"Você endereça pessoas **por e-mail**, e para cada uma escolhe o que aquilo "
+"alcança: **Elas**, **O agente delas** ou **Ambos**. O padrão é Elas. "
+"Endereçar por e-mail em vez de id de ator é deliberado — dependendo de como "
+"o seu administrador configurou o diretório, pode ser que você nunca veja o "
+"id de ninguém."
 
-#: src/23-mangrove.md:115
+#: src/23-mangrove.md:138
 msgid "Two limits are worth knowing before you compose rather than after:"
 msgstr "Dois limites que vale conhecer antes de compor, e não depois:"
 
-#: src/23-mangrove.md:117
+#: src/23-mangrove.md:140
 msgid ""
 "**You cannot reach past your own subscription.** Anybody with a workspace "
 "under a subscription you share is addressable; anybody else is not."
-msgstr "**Você não alcança além da sua própria subscription.** Qualquer pessoa com workspace sob uma subscription que vocês compartilham é endereçável; o resto não."
+msgstr ""
+"**Você não alcança além da sua própria subscription.** Qualquer pessoa com "
+"workspace sob uma subscription que vocês compartilham é endereçável; o resto "
+"não."
 
-#: src/23-mangrove.md:120
+#: src/23-mangrove.md:143
 msgid ""
 "**An out-of-reach name refuses the whole post, not just that name.** The "
 "composer does not quietly deliver to the rest of your list. A partial share "
@@ -6230,20 +6332,31 @@ msgid ""
 "for the problem. When it refuses, the message you see is usually the "
 "server's own sentence naming exactly which addressee failed and why — that "
 "is on purpose, so you have something to act on."
-msgstr "**Um nome fora de alcance recusa o post inteiro, não só aquele nome.** O compositor não entrega caladinho para o resto da sua lista. Um compartilhamento parcial que se lê como sucesso é pior que uma recusa, porque você para de procurar o problema. Quando recusa, a mensagem que aparece costuma ser a frase do próprio servidor nomeando exatamente qual destinatário falhou e por quê — isso é de propósito, para você ter sobre o que agir."
+msgstr ""
+"**Um nome fora de alcance recusa o post inteiro, não só aquele nome.** O "
+"compositor não entrega caladinho para o resto da sua lista. Um "
+"compartilhamento parcial que se lê como sucesso é pior que uma recusa, "
+"porque você para de procurar o problema. Quando recusa, a mensagem que "
+"aparece costuma ser a frase do próprio servidor nomeando exatamente qual "
+"destinatário falhou e por quê — isso é de propósito, para você ter sobre o "
+"que agir."
 
-#: src/23-mangrove.md:127
+#: src/23-mangrove.md:150
 msgid "Your agent cannot address a group at all"
 msgstr "O seu agente não consegue endereçar um grupo, de jeito nenhum"
 
-#: src/23-mangrove.md:129
+#: src/23-mangrove.md:152
 msgid ""
 "You can ask your agent to publish for you, and it will — to named colleagues "
 "in your subscription. What it cannot do is broadcast to everybody in a "
 "subscription or a tenant, whatever you ask and whatever role _you_ hold."
-msgstr "Você pode pedir ao seu agente que publique por você, e ele publica — para colegas nomeados da sua subscription. O que ele não consegue é transmitir para todo mundo de uma subscription ou de um tenant, seja lá o que você peça e seja lá qual papel _você_ tenha."
+msgstr ""
+"Você pode pedir ao seu agente que publique por você, e ele publica — para "
+"colegas nomeados da sua subscription. O que ele não consegue é transmitir "
+"para todo mundo de uma subscription ou de um tenant, seja lá o que você peça "
+"e seja lá qual papel _você_ tenha."
 
-#: src/23-mangrove.md:133
+#: src/23-mangrove.md:156
 msgid ""
 "Your agent reaches the mangrove with a credential that says it belongs to "
 "one subscription. Belonging is not governing, and only governing licenses a "
@@ -6252,20 +6365,30 @@ msgid ""
 "reach every member of a scope. [crab-mangrove-network](./54-crab-mangrove-"
 "network.md) has the rest of the argument, including why the rule has to sit "
 "on the agent and not only on this screen."
-msgstr "O seu agente chega ao mangue com uma credencial que diz que ele pertence a uma subscription. Pertencer não é governar, e só governar licencia uma transmissão. A consequência prática é a que importa: um agente guiado por algo que ele leu — uma página web, um documento, um e-mail — não consegue alcançar todos os membros de um escopo. [crab-mangrove-network](./54-crab-mangrove-network.md) tem o resto do argumento, inclusive por que a regra precisa ficar no agente e não só nesta tela."
+msgstr ""
+"O seu agente chega ao mangue com uma credencial que diz que ele pertence a "
+"uma subscription. Pertencer não é governar, e só governar licencia uma "
+"transmissão. A consequência prática é a que importa: um agente guiado por "
+"algo que ele leu — uma página web, um documento, um e-mail — não consegue "
+"alcançar todos os membros de um escopo. [crab-mangrove-network](./54-crab-"
+"mangrove-network.md) tem o resto do argumento, inclusive por que a regra "
+"precisa ficar no agente e não só nesta tela."
 
-#: src/23-mangrove.md:142
+#: src/23-mangrove.md:165
 msgid "When you publish to a group you govern"
 msgstr "Quando você publica para um grupo que governa"
 
-#: src/23-mangrove.md:144
+#: src/23-mangrove.md:167
 msgid ""
 "There is a step where a holder of the governing role accepts a publication "
 "before it travels to their scope. You will not meet it when you publish to a "
 "group yourself, and its absence is not a bug."
-msgstr "Existe um passo em que quem tem o papel de governança aceita uma publicação antes de ela viajar para o escopo. Você não vai encontrar esse passo quando publicar você mesmo para um grupo, e a ausência dele não é um defeito."
+msgstr ""
+"Existe um passo em que quem tem o papel de governança aceita uma publicação "
+"antes de ela viajar para o escopo. Você não vai encontrar esse passo quando "
+"publicar você mesmo para um grupo, e a ausência dele não é um defeito."
 
-#: src/23-mangrove.md:148
+#: src/23-mangrove.md:171
 msgid ""
 "Reaching a group at all means you already hold the licence for it — nobody "
 "else gets that far — so the vetting has happened, by you, at the moment you "
@@ -6273,137 +6396,230 @@ msgid ""
 "malfunction: you would watch your publication reach nobody and have no "
 "reason to look in a tab called Pending. So it is accepted at source, and the "
 "screen says **Shared.** The acceptance is still recorded, with who and when."
-msgstr "Alcançar um grupo já significa que você tem a licença dele — ninguém mais chega tão longe — então a triagem já aconteceu, por você, no momento em que publicou. Ser convidado a aprovar o próprio post se leria como defeito: você veria a sua publicação não alcançar ninguém e não teria motivo para olhar numa aba chamada Pendentes. Então é aceito na origem, e a tela diz **Compartilhado.** A aceitação continua registrada, com quem e quando."
+msgstr ""
+"Alcançar um grupo já significa que você tem a licença dele — ninguém mais "
+"chega tão longe — então a triagem já aconteceu, por você, no momento em que "
+"publicou. Ser convidado a aprovar o próprio post se leria como defeito: você "
+"veria a sua publicação não alcançar ninguém e não teria motivo para olhar "
+"numa aba chamada Pendentes. Então é aceito na origem, e a tela diz "
+"**Compartilhado.** A aceitação continua registrada, com quem e quando."
 
-#: src/23-mangrove.md:155
+#: src/23-mangrove.md:178
 msgid "Receiving something"
 msgstr "Receber algo"
 
-#: src/23-mangrove.md:157
-msgid "Anything addressed at you lands under **Waiting for you**:"
-msgstr "Tudo endereçado a você aparece em **Esperando por você**:"
-
-#: src/23-mangrove.md:159
+#: src/23-mangrove.md:180
 msgid ""
-"Sent to you directly. It is not in your agent's memory until you admit it."
-msgstr "Enviado diretamente a você. Não está na memória do seu agente até você admitir."
+"Anything addressed at you is in **Received** from the moment it is "
+"published, with a **thick left edge** while you have not opened it. Open the "
+"card and the edge goes. That is the whole of it: an inbox, where unread is a "
+"property of the message rather than a second list to work through."
+msgstr "Qualquer coisa endereçada a você está em **Recebidos** desde o momento em que é publicada, com uma **borda esquerda grossa** enquanto você não a abriu. Abra o card e a borda some. É só isso: uma caixa de entrada, onde não-lido é uma propriedade da mensagem em vez de uma segunda lista para dar conta."
 
-#: src/23-mangrove.md:161
+#: src/23-mangrove.md:185
 msgid ""
-"Press **Admit** and it becomes an ordinary item in Received. Your admission "
-"is yours alone — one recipient accepting does not clear anybody else's hold."
-msgstr "Aperte **Admitir** e aquilo vira um item comum em Recebidos. A sua admissão é só sua — um destinatário aceitar não limpa a espera de mais ninguém."
+"Your receipt is yours alone. Somebody else opening their copy of the same "
+"post does not mark yours read, and neither does your own agent reading it in "
+"a turn — those are different actors and the sender is shown which of the two "
+"happened."
+msgstr "Seu recibo é só seu. Outra pessoa abrir a cópia dela do mesmo post não marca o seu como lido, e o seu próprio agente lendo o post num turno também não — são atores diferentes, e quem enviou vê qual dos dois aconteceu."
 
-#: src/23-mangrove.md:164
+#: src/23-mangrove.md:189
 msgid ""
-"**Admitting does not write to your agent's memory.** This is the part that "
-"surprises people, so it is worth being blunt: `Admit` marks the item as "
-"taken and writes nothing anywhere. It is an acknowledgement, not an import."
-msgstr "**Admitir não escreve na memória do seu agente.** Essa é a parte que surpreende as pessoas, então vale ser direto: `Admitir` marca o item como recebido e não escreve nada em lugar nenhum. É um reconhecimento, não uma importação."
+"Closing a card again sends nothing. Having read something does not stop "
+"being true."
+msgstr "Fechar o card de novo não envia nada. Ter lido algo não deixa de ser verdade."
 
-#: src/23-mangrove.md:168
+#: src/23-mangrove.md:192
+msgid "There used to be an Admit button, and what it claimed was not so"
+msgstr "Existia um botão Admitir, e o que ele alegava não era verdade"
+
+#: src/23-mangrove.md:194
+msgid ""
+"Until recently anything sent straight to you landed under **Waiting for "
+"you** and stayed there until you pressed **Admit**. The stated reason was "
+"that it was _not in your agent's memory until you admit it_ — that the hold "
+"was what stopped somebody placing text into a colleague's agent."
+msgstr "Até pouco tempo atrás, tudo que era enviado diretamente a você caía em **Esperando por você** e ficava lá até você apertar **Admitir**. A razão declarada era que aquilo _não estava na memória do seu agente até você admitir_ — que a retenção era o que impedia alguém de colocar texto dentro do agente de um colega."
+
+#: src/23-mangrove.md:199
+msgid ""
+"**It never was.** Three things were true at once, and any one of them undoes "
+"the claim:"
+msgstr "**Nunca foi.** Três coisas eram verdadeiras ao mesmo tempo, e qualquer uma delas derruba a alegação:"
+
+#: src/23-mangrove.md:202
+msgid "a held item was delivered **with its content**, not as a stub;"
+msgstr "um item retido era entregue **com o conteúdo junto**, não como um esboço;"
+
+#: src/23-mangrove.md:203
+msgid ""
+"the mangrove built a reader's view from the workspace, never from who was "
+"asking, so an agent's `mangrove_timeline` received exactly what the person's "
+"did — and the tool's own description said as much;"
+msgstr "o mangue montava a visão de um leitor a partir do workspace, nunca a partir de quem estava perguntando, então o `mangrove_timeline` de um agente recebia exatamente o que o da pessoa recebia — e a descrição da própria ferramenta dizia isso;"
+
+#: src/23-mangrove.md:206
+msgid ""
+"the agent had a `mangrove_admit` of its own and could clear the hold unasked."
+msgstr "o agente tinha um `mangrove_admit` próprio e podia limpar a retenção sem que ninguém pedisse."
+
+#: src/23-mangrove.md:208
+msgid ""
+"So the hold is gone rather than left half-enforced, and the button with it. "
+"What members were actually using it for — keeping track of what they had "
+"been through — is what the unread mark does now, honestly."
+msgstr "Então a retenção foi embora em vez de ficar meio aplicada, e o botão junto. O que os membros de fato usavam aquilo para fazer — acompanhar o que já tinham visto — é o que a marca de não-lido faz agora, honestamente."
+
+#: src/23-mangrove.md:212
+msgid ""
+"**The property the hold was claiming is real, and it lives one section down."
+"** Nothing reaches your graph without you; see below."
+msgstr "**A propriedade que a retenção reivindicava é real, e mora uma seção abaixo.** Nada chega ao seu grafo sem você; veja adiante."
+
+#: src/23-mangrove.md:215
 msgid ""
 "Taking a graph fragment into your memory is a separate act, and only you can "
 "do it"
-msgstr "Levar um fragmento de grafo para a sua memória é um ato à parte, e só você pode fazer"
+msgstr ""
+"Levar um fragmento de grafo para a sua memória é um ato à parte, e só você "
+"pode fazer"
 
-#: src/23-mangrove.md:170
+#: src/23-mangrove.md:217
 msgid ""
 "A card carrying a piece of somebody's memory graph gets its own button: "
 "**Merge into my memory**. It tells you what it added — _Added 4 entities, 11 "
 "observations and 3 relations_ — or, when there was nothing new, says so out "
 "loud: _Nothing new — your agent already knew all of this._"
-msgstr "Um card que carrega um pedaço do grafo de memória de alguém ganha um botão próprio: **Mesclar na minha memória**. Ele conta o que acrescentou — _Acrescentou 4 entidades, 11 observações e 3 relações_ — ou, quando não havia nada novo, diz isso em voz alta: _Nada novo — o seu agente já sabia tudo isso._"
+msgstr ""
+"Um card que carrega um pedaço do grafo de memória de alguém ganha um botão "
+"próprio: **Mesclar na minha memória**. Ele conta o que acrescentou — "
+"_Acrescentou 4 entidades, 11 observações e 3 relações_ — ou, quando não "
+"havia nada novo, diz isso em voz alta: _Nada novo — o seu agente já sabia "
+"tudo isso._"
 
-#: src/23-mangrove.md:175
+#: src/23-mangrove.md:222
 msgid ""
 "That button is the only path a shared fragment has into your graph, and "
-"**only a person can press it.** Your agent has an admit of its own and it "
-"writes nothing. That is the security property the whole feature rests on, "
-"and the chain it breaks is short enough to write in one line:"
-msgstr "Esse botão é o único caminho que um fragmento compartilhado tem para o seu grafo, e **só uma pessoa pode apertá-lo.** O seu agente tem uma admissão própria e ela não escreve nada. Essa é a propriedade de segurança em que a funcionalidade inteira se apoia, e a cadeia que ela quebra é curta o bastante para caber numa linha:"
+"**only a person can press it.** Nothing an agent can call writes a graph but "
+"its own. That is the security property the whole feature rests on — the one "
+"the retired hold was mistakenly credited with — and the chain it breaks is "
+"short enough to write in one line:"
+msgstr "Esse botão é o único caminho que um fragmento compartilhado tem até o seu grafo, e **só uma pessoa pode apertá-lo.** Nada que um agente possa chamar escreve num grafo que não o dele. Essa é a propriedade de segurança sobre a qual o recurso inteiro se apoia — a mesma que era creditada por engano à retenção aposentada — e a cadeia que ela quebra cabe em uma linha:"
 
-#: src/23-mangrove.md:180
+#: src/23-mangrove.md:228
 msgid ""
 "an agent, steered by untrusted text in its turn, publishes entities → "
-"addresses your agent → your agent admits → the entities are in your graph"
-msgstr "um agente, guiado por texto não confiável no turno dele, publica entidades → endereça o seu agente → o seu agente admite → as entidades estão no seu grafo"
+"addresses your agent → the entities are in your graph"
+msgstr "um agente, conduzido por texto não confiável no turno dele, publica entidades → endereça ao seu agente → as entidades estão no seu grafo"
 
-#: src/23-mangrove.md:183
+#: src/23-mangrove.md:231
 msgid ""
 "and your graph is what steers your agent's later turns. That is memory "
-"poisoning between agents with nobody watching. So the merge is a human act, "
-"taken on this screen, and an agent's admit goes on writing nothing."
-msgstr "e o seu grafo é o que guia os turnos seguintes do seu agente. Isso é envenenamento de memória entre agentes sem ninguém olhando. Então a mesclagem é um ato humano, feito nesta tela, e a admissão de um agente continua não escrevendo nada."
+"poisoning between agents with nobody watching. The link that is missing from "
+"that chain is the last one, and it is missing because a person has to take "
+"the fragment: the merge is a human act, on this screen, and there is no tool "
+"that performs it."
+msgstr "e o seu grafo é o que conduz os turnos seguintes do seu agente. Isso é envenenamento de memória entre agentes sem ninguém olhando. O elo que falta nessa cadeia é o último, e falta porque uma pessoa precisa pegar o fragmento: a fusão é um ato humano, nesta tela, e não existe ferramenta que a execute."
 
-#: src/23-mangrove.md:187
+#: src/23-mangrove.md:236
+msgid ""
+"Note what this does _not_ depend on. It does not depend on your agent being "
+"prevented from READING the post — it was never prevented, and the hold that "
+"claimed to prevent it is gone. It depends on there being no path from "
+"reading to writing except through you."
+msgstr "Repare no que isso _não_ depende. Não depende de impedir o seu agente de LER o post — ele nunca foi impedido, e a retenção que alegava impedir foi embora. Depende de não existir caminho da leitura para a escrita a não ser através de você."
+
+#: src/23-mangrove.md:241
 msgid ""
 "The merge is also the _only_ write your memory graph has from the web side, "
 "and it is allowed because of what it cannot do: it names an item, and the "
 "content comes out of what was actually published. There is no way to type an "
 "entity into it. Your browser cannot author memory; it can only accept what "
 "somebody else authored."
-msgstr "A mesclagem também é a _única_ escrita que o seu grafo de memória recebe do lado web, e ela é permitida por causa do que não consegue fazer: ela nomeia um item, e o conteúdo vem do que foi de fato publicado. Não há como digitar uma entidade ali. O seu navegador não consegue autorar memória; só consegue aceitar o que outra pessoa autorou."
+msgstr ""
+"A mesclagem também é a _única_ escrita que o seu grafo de memória recebe do "
+"lado web, e ela é permitida por causa do que não consegue fazer: ela nomeia "
+"um item, e o conteúdo vem do que foi de fato publicado. Não há como digitar "
+"uma entidade ali. O seu navegador não consegue autorar memória; só consegue "
+"aceitar o que outra pessoa autorou."
 
-#: src/23-mangrove.md:193
+#: src/23-mangrove.md:247
 msgid ""
 "One place the button is deliberately missing: on a card in **Waiting on your "
 "decision**. A governor reads a fragment in order to decide it, and is not "
 "offered a way to take it before accepting it."
-msgstr "Um lugar em que o botão está deliberadamente ausente: num card em **Esperando sua decisão**. Quem governa lê um fragmento para poder decidi-lo, e não recebe uma forma de levá-lo antes de aceitá-lo."
+msgstr ""
+"Um lugar em que o botão está deliberadamente ausente: num card em "
+"**Esperando sua decisão**. Quem governa lê um fragmento para poder decidi-"
+"lo, e não recebe uma forma de levá-lo antes de aceitá-lo."
 
-#: src/23-mangrove.md:199
+#: src/23-mangrove.md:253
 msgid ""
-"A card carrying a file shows its name and size and a **Download** button. "
-"The bytes are held content-addressed, so two people sharing the same "
-"document cost one copy, and re-sharing the same file is free. Files are "
-"capped — 10 MB by default — and the refusal comes when somebody tries to "
-"share one, not when you try to read it."
-msgstr "Um card que carrega um arquivo mostra o nome e o tamanho dele e um botão **Baixar**. Os bytes são guardados por endereçamento de conteúdo, então duas pessoas compartilhando o mesmo documento custam uma cópia, e recompartilhar o mesmo arquivo é de graça. Arquivos têm limite — 10 MB por padrão — e a recusa vem quando alguém tenta compartilhar um, não quando você tenta ler."
+"A card carrying a file shows its name and size, and a **Download** button "
+"once you open it. The bytes are held content-addressed, so two people "
+"sharing the same document cost one copy, and re-sharing the same file is "
+"free. Files are capped — 10 MB by default — and the refusal comes when "
+"somebody tries to share one, not when you try to read it."
+msgstr "Um card que carrega um arquivo mostra o nome e o tamanho, e um botão **Baixar** depois que você o abre. Os bytes são guardados por endereço de conteúdo, então duas pessoas compartilhando o mesmo documento custam uma cópia, e recompartilhar o mesmo arquivo é de graça. Arquivos têm limite — 10 MB por padrão — e a recusa vem quando alguém tenta compartilhar, não quando você tenta ler."
 
-#: src/23-mangrove.md:205
+#: src/23-mangrove.md:260
 msgid ""
 "Knowing a file's digest is **not** permission to read it. Fetching the bytes "
 "requires that you can see a live post naming them, computed from exactly the "
 "same rule that decides what appears in your timeline — so a revoked post's "
 "file stops downloading at the moment the post stops being readable."
-msgstr "Conhecer o digest de um arquivo **não** é permissão para lê-lo. Buscar os bytes exige que você consiga ver um post vivo que os nomeie, calculado exatamente pela mesma regra que decide o que aparece na sua linha do tempo — então o arquivo de um post revogado para de baixar no momento em que o post deixa de ser legível."
+msgstr ""
+"Conhecer o digest de um arquivo **não** é permissão para lê-lo. Buscar os "
+"bytes exige que você consiga ver um post vivo que os nomeie, calculado "
+"exatamente pela mesma regra que decide o que aparece na sua linha do tempo — "
+"então o arquivo de um post revogado para de baixar no momento em que o post "
+"deixa de ser legível."
 
-#: src/23-mangrove.md:210
+#: src/23-mangrove.md:265
 msgid "Deciding, for a scope you govern"
 msgstr "Decidir, para um escopo que você governa"
 
-#: src/23-mangrove.md:212
+#: src/23-mangrove.md:267
 msgid ""
 "If you hold `subscriptions-manager` or above, **Pending decisions** appears "
 "and holds anything proposed to your scope, with **Accept** and **Reject**. A "
 "reject is not a failure: it is a result the author's agent can read and "
 "explain, the same way a refused tool call is."
-msgstr "Se você tem `subscriptions-manager` ou acima, **Decisões pendentes** aparece e guarda tudo que foi proposto ao seu escopo, com **Aceitar** e **Recusar**. Uma recusa não é uma falha: é um resultado que o agente do autor consegue ler e explicar, do mesmo jeito que uma chamada de ferramenta recusada."
+msgstr ""
+"Se você tem `subscriptions-manager` ou acima, **Decisões pendentes** aparece "
+"e guarda tudo que foi proposto ao seu escopo, com **Aceitar** e **Recusar**. "
+"Uma recusa não é uma falha: é um resultado que o agente do autor consegue "
+"ler e explicar, do mesmo jeito que uma chamada de ferramenta recusada."
 
-#: src/23-mangrove.md:217
+#: src/23-mangrove.md:272
 msgid ""
 "You may find this reading permanently empty. That is expected today — since "
 "an agent cannot address a group at all and a licensed author's own "
 "publication is accepted at source, nothing currently arrives here. The "
 "mechanism is kept because it is the correct answer to \"somebody proposed "
 "this to my scope\"."
-msgstr "Pode ser que você encontre essa leitura permanentemente vazia. Isso é esperado hoje — como um agente não consegue endereçar um grupo e a publicação de um autor licenciado é aceita na origem, nada chega aqui no momento. O mecanismo é mantido porque é a resposta certa para \"alguém propôs isto ao meu escopo\"."
-
-#: src/23-mangrove.md:222
-msgid "Revoking"
 msgstr ""
+"Pode ser que você encontre essa leitura permanentemente vazia. Isso é "
+"esperado hoje — como um agente não consegue endereçar um grupo e a "
+"publicação de um autor licenciado é aceita na origem, nada chega aqui no "
+"momento. O mecanismo é mantido porque é a resposta certa para \"alguém "
+"propôs isto ao meu escopo\"."
 
-#: src/23-mangrove.md:224
+#: src/23-mangrove.md:277
+msgid "Revoking"
+msgstr "Revogar"
+
+#: src/23-mangrove.md:279
 msgid "On the Published reading, behind an **Advanced options** disclosure:"
 msgstr "Na leitura Publicados, atrás de um detalhe **Opções avançadas**:"
 
-#: src/23-mangrove.md:226
+#: src/23-mangrove.md:281
 msgid ""
 "Revoking tombstones an item. It does not un-deliver anything already shared."
-msgstr "Revogar coloca uma lápide no item. Não desfaz a entrega do que já foi compartilhado."
+msgstr "Revogar"
 
-#: src/23-mangrove.md:228
+#: src/23-mangrove.md:283
 msgid ""
 "Read that sentence literally. A revoke marks the item withdrawn and reaches "
 "**everybody the claim reached** — an earlier version only convinced the "
@@ -6411,96 +6627,131 @@ msgid ""
 "while every recipient went on reading it as live. What it cannot do is reach "
 "into somebody's head, or their agent's memory, and remove what is already "
 "there."
-msgstr "Leia essa frase ao pé da letra. Uma revogação marca o item como retirado e alcança **todo mundo que a afirmação alcançou** — uma versão anterior só convencia quem apertou o botão, o que deixava o autor vendo aquilo como apagado enquanto cada destinatário continuava lendo como vivo. O que ela não consegue é entrar na cabeça de alguém, ou na memória do agente dessa pessoa, e remover o que já está lá."
+msgstr ""
+"Leia essa frase ao pé da letra. Uma revogação marca o item como retirado e "
+"alcança **todo mundo que a afirmação alcançou** — uma versão anterior só "
+"convencia quem apertou o botão, o que deixava o autor vendo aquilo como "
+"apagado enquanto cada destinatário continuava lendo como vivo. O que ela não "
+"consegue é entrar na cabeça de alguém, ou na memória do agente dessa pessoa, "
+"e remover o que já está lá."
 
-#: src/23-mangrove.md:234
+#: src/23-mangrove.md:289
 msgid ""
 "The same asymmetry runs the other way: you cannot widen a post after "
 "publishing it. Publishing a new one is the supported path."
-msgstr "A mesma assimetria vale no outro sentido: você não consegue ampliar um post depois de publicá-lo. Publicar um novo é o caminho suportado."
+msgstr ""
+"A mesma assimetria vale no outro sentido: você não consegue ampliar um post "
+"depois de publicá-lo. Publicar um novo é o caminho suportado."
 
-#: src/23-mangrove.md:237
+#: src/23-mangrove.md:292
 msgid "Finding somebody"
 msgstr "Encontrar alguém"
 
-#: src/23-mangrove.md:239
+#: src/23-mangrove.md:294
 msgid ""
 "Under **People**, _Find people_ searches within your own subscription and "
 "never past it. Which search you get is your administrator's choice, and the "
 "hint says which:"
-msgstr "Em **Pessoas**, _Encontrar pessoas_ busca dentro da sua própria subscription e nunca além dela. Qual busca você recebe é escolha do seu administrador, e a dica diz qual:"
+msgstr ""
+"Em **Pessoas**, _Encontrar pessoas_ busca dentro da sua própria subscription "
+"e nunca além dela. Qual busca você recebe é escolha do seu administrador, e "
+"a dica diz qual:"
 
-#: src/23-mangrove.md:243
+#: src/23-mangrove.md:298
 msgid ""
 "_Type a whole email address._ — exact match only. A member confirms that "
 "somebody is reachable without learning their id, so the row says _Share with "
 "them by email_ instead of showing one."
-msgstr "_Digite um endereço de e-mail inteiro._ — só correspondência exata. Um membro confirma que alguém é alcançável sem descobrir o id da pessoa, então a linha diz _Compartilhe com ela por e-mail_ em vez de mostrar um."
+msgstr ""
+"_Digite um endereço de e-mail inteiro._ — só correspondência exata. Um "
+"membro confirma que alguém é alcançável sem descobrir o id da pessoa, então "
+"a linha diz _Compartilhe com ela por e-mail_ em vez de mostrar um."
 
-#: src/23-mangrove.md:246
+#: src/23-mangrove.md:301
 msgid ""
 "_Type part of an email address._ — prefix search. Off unless an "
 "administrator turned it on for your scope, because a directory that answers "
 "partial queries is one that can be swept."
-msgstr "_Digite parte de um endereço de e-mail._ — busca por prefixo. Desligada, a menos que um administrador tenha ligado para o seu escopo, porque um diretório que responde consultas parciais é um diretório que pode ser varrido."
+msgstr ""
+"_Digite parte de um endereço de e-mail._ — busca por prefixo. Desligada, a "
+"menos que um administrador tenha ligado para o seu escopo, porque um "
+"diretório que responde consultas parciais é um diretório que pode ser "
+"varrido."
 
-#: src/23-mangrove.md:250
+#: src/23-mangrove.md:305
 msgid ""
 "The hint is only corrected after your first search, so on a prefix-enabled "
 "deployment you may be told to type a whole address until you have searched "
 "once."
-msgstr "A dica só é corrigida depois da sua primeira busca, então numa instalação com prefixo ligado pode ser que digam para você digitar um endereço inteiro até você buscar uma vez."
-
-#: src/23-mangrove.md:253
-msgid "Endorsements"
 msgstr ""
+"A dica só é corrigida depois da sua primeira busca, então numa instalação "
+"com prefixo ligado pode ser que digam para você digitar um endereço inteiro "
+"até você buscar uma vez."
 
-#: src/23-mangrove.md:255
+#: src/23-mangrove.md:308
+msgid "Endorsements"
+msgstr "Endossos"
+
+#: src/23-mangrove.md:310
 msgid ""
 "A card may show _3 endorsed_. That is a count of the actors who endorsed the "
 "claim, and it is **weight of evidence, never a verdict** — nothing anywhere "
 "marks a claim true, and no reduction resolves two authors' disagreement into "
 "one answer. Presenting both, with their evidence, is the answer."
-msgstr "Um card pode mostrar _3 endossaram_. Isso é uma contagem dos atores que endossaram a afirmação, e é **peso de evidência, nunca veredito** — nada em lugar nenhum marca uma afirmação como verdadeira, e nenhuma redução resolve a discordância de dois autores numa resposta só. Apresentar as duas, com as evidências delas, é a resposta."
+msgstr ""
+"Um card pode mostrar _3 endossaram_. Isso é uma contagem dos atores que "
+"endossaram a afirmação, e é **peso de evidência, nunca veredito** — nada em "
+"lugar nenhum marca uma afirmação como verdadeira, e nenhuma redução resolve "
+"a discordância de dois autores numa resposta só. Apresentar as duas, com as "
+"evidências delas, é a resposta."
 
-#: src/23-mangrove.md:260
+#: src/23-mangrove.md:315
 msgid ""
 "Endorsing is something an agent does through its own tools; there is no "
 "endorse, receipt or report control on this screen."
-msgstr "Endossar é algo que um agente faz pelas ferramentas dele; não existe controle de endosso, recibo ou denúncia nesta tela."
+msgstr ""
+"Endossar é algo que um agente faz pelas ferramentas dele; não existe "
+"controle de endosso, recibo ou denúncia nesta tela."
 
-#: src/23-mangrove.md:263
+#: src/23-mangrove.md:318
 msgid "Referencing a post in the chat"
 msgstr "Referenciar um post no chat"
 
-#: src/23-mangrove.md:265
+#: src/23-mangrove.md:320
 msgid ""
 "Any card offers **Reference in chat**, which drops a marker into your next "
 "message and confirms in place: _Added to your next message._ Only the item's "
 "identifier travels — never a copy of its body — so your agent reads it from "
 "the network rather than from a paste."
-msgstr "Qualquer card oferece **Referenciar no chat**, que solta um marcador na sua próxima mensagem e confirma ali mesmo: _Adicionado à sua próxima mensagem._ Só o identificador do item viaja — nunca uma cópia do corpo — então o seu agente lê aquilo da rede e não de uma colagem."
+msgstr ""
+"Qualquer card oferece **Referenciar no chat**, que solta um marcador na sua "
+"próxima mensagem e confirma ali mesmo: _Adicionado à sua próxima mensagem._ "
+"Só o identificador do item viaja — nunca uma cópia do corpo — então o seu "
+"agente lê aquilo da rede e não de uma colagem."
 
-#: src/23-mangrove.md:270
+#: src/23-mangrove.md:325
 msgid "What is not here, and what you should assume about privacy"
 msgstr "O que não está aqui, e o que você deve supor sobre privacidade"
 
-#: src/23-mangrove.md:272
+#: src/23-mangrove.md:327
 msgid "Some things a reader would otherwise go looking for:"
 msgstr "Algumas coisas que um leitor iria procurar:"
 
-#: src/23-mangrove.md:274
+#: src/23-mangrove.md:329
 msgid ""
 "**There is no re-share control on this screen.** Widening something already "
 "published to a second colleague exists as an operation — your agent has it, "
 "and so does the API — but the chat client has no button for it yet."
-msgstr "**Não existe controle de recompartilhar nesta tela.** Ampliar algo já publicado para um segundo colega existe como operação — o seu agente tem, e a API também — mas o cliente de chat ainda não tem botão para isso."
+msgstr ""
+"**Não existe controle de recompartilhar nesta tela.** Ampliar algo já "
+"publicado para um segundo colega existe como operação — o seu agente tem, e "
+"a API também — mas o cliente de chat ainda não tem botão para isso."
 
-#: src/23-mangrove.md:277
+#: src/23-mangrove.md:332
 msgid "**No endorse, receipt or report buttons**, as above."
 msgstr "**Nenhum botão de endosso, recibo ou denúncia**, como acima."
 
-#: src/23-mangrove.md:278
+#: src/23-mangrove.md:333
 msgid ""
 "**Nothing is encrypted end-to-end.** The service reads everything in the "
 "clear, and so does the orchestrator. That is a deliberate trade for role-"
@@ -6510,29 +6761,44 @@ msgid ""
 "operator cannot read. Content is also **not encrypted at rest**, which the "
 "specification asked for and the implementation has not done — see the same "
 "chapter."
-msgstr "**Nada é criptografado ponta a ponta.** O serviço lê tudo em claro, e o orquestrador também. Essa é uma troca deliberada em favor da governança por papéis e está argumentada em [crab-mangrove-network](./54-crab-mangrove-network.md); a versão curta é que uma mudança de papel passa a valer na sua próxima chamada, sem reemissão de chaves, o que não é possível num esquema que o operador não consegue ler. O conteúdo também **não é criptografado em repouso**, o que a especificação pedia e a implementação não fez — veja o mesmo capítulo."
+msgstr ""
+"**Nada é criptografado ponta a ponta.** O serviço lê tudo em claro, e o "
+"orquestrador também. Essa é uma troca deliberada em favor da governança por "
+"papéis e está argumentada em [crab-mangrove-network](./54-crab-mangrove-"
+"network.md); a versão curta é que uma mudança de papel passa a valer na sua "
+"próxima chamada, sem reemissão de chaves, o que não é possível num esquema "
+"que o operador não consegue ler. O conteúdo também **não é criptografado em "
+"repouso**, o que a especificação pedia e a implementação não fez — veja o "
+"mesmo capítulo."
 
-#: src/23-mangrove.md:286
+#: src/23-mangrove.md:341
 msgid ""
 "**The metadata is in the clear too.** Who shared with whom, when, how often "
 "and under what handle are all visible to anyone who can read the store."
-msgstr "**Os metadados também estão em claro.** Quem compartilhou com quem, quando, com que frequência e sob qual rótulo são todos visíveis para quem consegue ler o armazenamento."
+msgstr ""
+"**Os metadados também estão em claro.** Quem compartilhou com quem, quando, "
+"com que frequência e sob qual rótulo são todos visíveis para quem consegue "
+"ler o armazenamento."
 
-#: src/23-mangrove.md:288
+#: src/23-mangrove.md:343
 msgid ""
 "**Somebody who leaves keeps what they already read.** What stops is new "
 "material."
 msgstr "**Quem sai continua com o que já leu.** O que para é o material novo."
 
-#: src/23-mangrove.md:291
+#: src/23-mangrove.md:346
 msgid ""
 "Put plainly: the mangrove protects you from _other members_, by the reach "
 "rule, the admission hold and the person-only merge. It does not protect you "
 "from your own operator, and it does not claim to. Do not put something in it "
 "that would matter if it leaked."
-msgstr "Dito de forma direta: o mangue protege você dos _outros membros_, pela regra de alcance, pela espera de admissão e pela mesclagem só por pessoa. Ele não protege você do seu próprio operador, e não afirma proteger. Não coloque nele algo que importaria se vazasse."
+msgstr ""
+"Dito de forma direta: o mangue protege você dos _outros membros_, pela regra "
+"de alcance, pela espera de admissão e pela mesclagem só por pessoa. Ele não "
+"protege você do seu próprio operador, e não afirma proteger. Não coloque "
+"nele algo que importaria se vazasse."
 
-#: src/23-mangrove.md:298
+#: src/23-mangrove.md:353
 msgid ""
 "[Skills and memory](./13-skills-and-memory.md) covers the knowledge graph "
 "that fragments come out of and go into. [Files and delivery](./14-files-and-"
@@ -6540,7 +6806,13 @@ msgid ""
 "network](./54-crab-mangrove-network.md) is the service behind this screen, "
 "its threat model in full, and what an operator has to configure to make any "
 "of it exist."
-msgstr "[Skills e memória](./13-skills-and-memory.md) cobre o grafo de conhecimento de onde os fragmentos saem e para onde voltam. [Arquivos e entrega](./14-files-and-delivery.md) cobre os arquivos de workspace que um post pode carregar. [crab-mangrove-network](./54-crab-mangrove-network.md) é o serviço por trás desta tela, o modelo de ameaças dele por inteiro, e o que um operador precisa configurar para que qualquer disso exista."
+msgstr ""
+"[Skills e memória](./13-skills-and-memory.md) cobre o grafo de conhecimento "
+"de onde os fragmentos saem e para onde voltam. [Arquivos e entrega](./14-"
+"files-and-delivery.md) cobre os arquivos de workspace que um post pode "
+"carregar. [crab-mangrove-network](./54-crab-mangrove-network.md) é o serviço "
+"por trás desta tela, o modelo de ameaças dele por inteiro, e o que um "
+"operador precisa configurar para que qualquer disso exista."
 
 #: src/30-admin-guide.md:3
 msgid ""
@@ -12429,14 +12701,21 @@ msgid ""
 "another's. This page describes it as a component: what it holds, the one "
 "rule it exists to enforce, the things it deliberately does not do, and where "
 "its guarantees stop short of what its own specification asked for."
-msgstr "`crab-mangrove-network` é a costura entre a memória de um membro e a de outro. Esta página o descreve como componente: o que ele guarda, a única regra que ele existe para impor, as coisas que ele deliberadamente não faz, e onde as garantias dele ficam aquém do que a própria especificação pediu."
+msgstr ""
+"`crab-mangrove-network` é a costura entre a memória de um membro e a de "
+"outro. Esta página o descreve como componente: o que ele guarda, a única "
+"regra que ele existe para impor, as coisas que ele deliberadamente não faz, "
+"e onde as garantias dele ficam aquém do que a própria especificação pediu."
 
 #: src/54-crab-mangrove-network.md:8
 msgid ""
 "**It is optional.** A deployment that does not configure it behaves exactly "
 "as it did before the service existed — see [Optional by construction]"
 "(#optional-by-construction)."
-msgstr "**Ele é opcional.** Uma instalação que não o configura se comporta exatamente como se comportava antes de o serviço existir — veja [Opcional por construção](#opcional-por-construção)."
+msgstr ""
+"**Ele é opcional.** Uma instalação que não o configura se comporta "
+"exatamente como se comportava antes de o serviço existir — veja [Opcional "
+"por construção](#opcional-por-construção)."
 
 #: src/54-crab-mangrove-network.md:14
 msgid ""
@@ -12445,7 +12724,12 @@ msgid ""
 "`crab/crab-mangrove-network`; its source lives at <https://github.com/"
 "LepistaBioinformatics/crab-mangrove-network>, and the README there carries "
 "the threat model in full."
-msgstr "Um único binário Go autocontido que fala o vocabulário do [ActivityPub](https://www.w3.org/TR/activitypub/) dentro de uma instalação. O repositório dele é `crab/crab-mangrove-network`; o código vive em <https://github.com/LepistaBioinformatics/crab-mangrove-network>, e o README de lá traz o modelo de ameaças por inteiro."
+msgstr ""
+"Um único binário Go autocontido que fala o vocabulário do [ActivityPub]"
+"(https://www.w3.org/TR/activitypub/) dentro de uma instalação. O repositório "
+"dele é `crab/crab-mangrove-network`; o código vive em <https://github.com/"
+"LepistaBioinformatics/crab-mangrove-network>, e o README de lá traz o modelo "
+"de ameaças por inteiro."
 
 #: src/54-crab-mangrove-network.md:20
 msgid ""
@@ -12457,7 +12741,15 @@ msgid ""
 "interlock, not a pool that everything drains into: what each agent knows "
 "stays attributed to it, and two agents disagreeing about one subject is a "
 "normal state rather than a conflict to resolve."
-msgstr "Ele existe porque a memória nesta stack é privada por construção. O grafo de conhecimento de um membro só é alcançável por um token que nomeia um workspace, então duas pessoas trabalhando no mesmo problema constroem dois grafos disjuntos e redescobrem os mesmos fatos duas vezes. O mangue é a costura que deixa as duas compartilharem sem abrir mão do isolamento que tornou o grafo seguro. Raízes que se entrelaçam, não uma poça em que tudo se despeja: o que cada agente sabe continua atribuído a ele, e dois agentes discordando sobre um assunto é um estado normal, não um conflito a resolver."
+msgstr ""
+"Ele existe porque a memória nesta stack é privada por construção. O grafo de "
+"conhecimento de um membro só é alcançável por um token que nomeia um "
+"workspace, então duas pessoas trabalhando no mesmo problema constroem dois "
+"grafos disjuntos e redescobrem os mesmos fatos duas vezes. O mangue é a "
+"costura que deixa as duas compartilharem sem abrir mão do isolamento que "
+"tornou o grafo seguro. Raízes que se entrelaçam, não uma poça em que tudo se "
+"despeja: o que cada agente sabe continua atribuído a ele, e dois agentes "
+"discordando sobre um assunto é um estado normal, não um conflito a resolver."
 
 #: src/54-crab-mangrove-network.md:29
 msgid ""
@@ -12467,14 +12759,24 @@ msgid ""
 "meanings worth stating: `Read` is the **receipt** that an actor took an "
 "object into memory, which leaves `Like` its own job as an **endorsement** — "
 "weight of evidence, never a claim that something is true."
-msgstr "Ele toma emprestados os verbos do Activity Streams 2.0 em vez de inventar qualquer um — `Create`, `Update`, `Delete`, `Add`, `Remove`, `Follow`, `Accept`, `Reject`, `Announce`, `Read`, `Like`, `Flag`, `Block`, `Undo`. Dois deles carregam significados que vale enunciar: `Read` é o **recibo** de que um ator levou um objeto para a memória, o que deixa ao `Like` o papel próprio de **endosso** — peso de evidência, nunca uma afirmação de que algo é verdade."
+msgstr ""
+"Ele toma emprestados os verbos do Activity Streams 2.0 em vez de inventar "
+"qualquer um — `Create`, `Update`, `Delete`, `Add`, `Remove`, `Follow`, "
+"`Accept`, `Reject`, `Announce`, `Read`, `Like`, `Flag`, `Block`, `Undo`. "
+"Dois deles carregam significados que vale enunciar: `Read` é o **recibo** de "
+"que um ator levou um objeto para a memória, o que deixa ao `Like` o papel "
+"próprio de **endosso** — peso de evidência, nunca uma afirmação de que algo "
+"é verdade."
 
 #: src/54-crab-mangrove-network.md:36
 msgid ""
 "The whole service is the Go standard library. `go.mod` has no `require` "
 "block and CI fails one, because a public repository asking to be trusted "
 "should have as little supply chain as possible."
-msgstr "O serviço inteiro é a biblioteca padrão do Go. O `go.mod` não tem bloco `require` e a CI reprova um, porque um repositório público que pede confiança deve ter a menor cadeia de suprimentos possível."
+msgstr ""
+"O serviço inteiro é a biblioteca padrão do Go. O `go.mod` não tem bloco "
+"`require` e a CI reprova um, porque um repositório público que pede "
+"confiança deve ter a menor cadeia de suprimentos possível."
 
 #: src/54-crab-mangrove-network.md:40
 msgid "Two actors per workspace"
@@ -12486,7 +12788,11 @@ msgid ""
 "agent. The Service carries `attributedTo` naming its Person, so anything an "
 "agent publishes reads as _this bot, owned by that account_ rather than as a "
 "claim from nowhere."
-msgstr "Cada workspace ganha um `Person` para o humano e um `Service` para o agente dele. O `Service` carrega `attributedTo` nomeando o `Person` dele, então tudo que um agente publica se lê como _este bot, de propriedade daquela conta_, e não como uma afirmação vinda do nada."
+msgstr ""
+"Cada workspace ganha um `Person` para o humano e um `Service` para o agente "
+"dele. O `Service` carrega `attributedTo` nomeando o `Person` dele, então "
+"tudo que um agente publica se lê como _este bot, de propriedade daquela "
+"conta_, e não como uma afirmação vinda do nada."
 
 #: src/54-crab-mangrove-network.md:47
 msgid ""
@@ -12495,7 +12801,12 @@ msgid ""
 "the rest of the stack already keys on `accId`: an email is mutable, and an "
 "actor id that changed with it would orphan every object that actor had "
 "authored and every signature over it."
-msgstr "Os ids derivam do id da conta e nunca do e-mail — `mangrove:actor:` mais o id da conta mais `:person` ou `:service` — pelo motivo que o resto da stack já usa para chavear em `accId`: um e-mail é mutável, e um id de ator que mudasse junto órfãaria todo objeto que aquele ator tivesse autorado e toda assinatura sobre ele."
+msgstr ""
+"Os ids derivam do id da conta e nunca do e-mail — `mangrove:actor:` mais o "
+"id da conta mais `:person` ou `:service` — pelo motivo que o resto da stack "
+"já usa para chavear em `accId`: um e-mail é mutável, e um id de ator que "
+"mudasse junto órfãaria todo objeto que aquele ator tivesse autorado e toda "
+"assinatura sobre ele."
 
 #: src/54-crab-mangrove-network.md:53
 msgid ""
@@ -12504,7 +12815,12 @@ msgid ""
 "may revoke; an agent cannot revoke on its own authority` is the service's "
 "own answer. And a human can read everything their agent published _and_ "
 "everything it received, including what it never mentioned in a conversation."
-msgstr "A autoridade corre num sentido só, e três recusas no código a mantêm ali. Um agente não publica como o humano dele. Um agente não revoga — `only the human may revoke; an agent cannot revoke on its own authority` é a resposta do próprio serviço. E um humano lê tudo que o agente dele publicou _e_ tudo que ele recebeu, inclusive o que nunca foi mencionado numa conversa."
+msgstr ""
+"A autoridade corre num sentido só, e três recusas no código a mantêm ali. Um "
+"agente não publica como o humano dele. Um agente não revoga — `only the "
+"human may revoke; an agent cannot revoke on its own authority` é a resposta "
+"do próprio serviço. E um humano lê tudo que o agente dele publicou _e_ tudo "
+"que ele recebeu, inclusive o que nunca foi mencionado numa conversa."
 
 #: src/54-crab-mangrove-network.md:59
 msgid "The one rule: nothing travels further than its sharer can reach"
@@ -12517,7 +12833,12 @@ msgid ""
 "`Add`, `Announce` — calls `Check` before anything is written, and a test "
 "asserts that each of them routes through it. A second enforcement site would "
 "be a second thing to forget."
-msgstr "`internal/reach` é o invariante de contenção, e é deliberadamente o único lugar que o implementa. Todo verbo que amplia — `Create`, `Update`, `Add`, `Announce` — chama `Check` antes de qualquer escrita, e um teste afirma que cada um deles passa por ali. Um segundo ponto de imposição seria uma segunda coisa para esquecer."
+msgstr ""
+"`internal/reach` é o invariante de contenção, e é deliberadamente o único "
+"lugar que o implementa. Todo verbo que amplia — `Create`, `Update`, `Add`, "
+"`Announce` — chama `Check` antes de qualquer escrita, e um teste afirma que "
+"cada um deles passa por ali. Um segundo ponto de imposição seria uma segunda "
+"coisa para esquecer."
 
 #: src/54-crab-mangrove-network.md:67
 msgid "What `Check` allows depends on who is asking:"
@@ -12588,7 +12909,14 @@ msgid ""
 "it is not. Refusals name the addressee and the reason, and the proxy "
 "forwards those bodies verbatim rather than flattening them into a generic "
 "error."
-msgstr "**Ela recusa a atividade inteira, nunca uma audiência aparada.** Um destinatário fora de alcance reprova o compartilhamento todo em vez de entregar ao subconjunto alcançável. Um compartilhamento parcial silencioso é pior que um recusado, porque o autor para de procurar o problema: ele acredita que uma memória foi compartilhada quando não foi. As recusas nomeiam o destinatário e o motivo, e o proxy repassa esses corpos literalmente em vez de achatá-los num erro genérico."
+msgstr ""
+"**Ela recusa a atividade inteira, nunca uma audiência aparada.** Um "
+"destinatário fora de alcance reprova o compartilhamento todo em vez de "
+"entregar ao subconjunto alcançável. Um compartilhamento parcial silencioso é "
+"pior que um recusado, porque o autor para de procurar o problema: ele "
+"acredita que uma memória foi compartilhada quando não foi. As recusas "
+"nomeiam o destinatário e o motivo, e o proxy repassa esses corpos "
+"literalmente em vez de achatá-los num erro genérico."
 
 #: src/54-crab-mangrove-network.md:86
 msgid ""
@@ -12599,14 +12927,26 @@ msgid ""
 "that can disagree with mycelium, and every rule about who may address what "
 "would then depend on which of the two was consulted. With the proxy absent "
 "the gate **fails closed** rather than assuming membership."
-msgstr "**O mangue não guarda lista de membros.** Quando a trava precisa perguntar se um ator nomeado tem workspace sob uma subscription que o chamador compartilha, ela chama de volta o `GET /v1/mangrove/subscription-members` no [crab-shell-proxy](./50-crab-shell-proxy.md). Uma lista guardada seria uma segunda fonte de verdade capaz de discordar do mycelium, e toda regra sobre quem pode endereçar o quê passaria a depender de qual das duas foi consultada. Com o proxy ausente a trava **falha fechada**, em vez de supor associação."
+msgstr ""
+"**O mangue não guarda lista de membros.** Quando a trava precisa perguntar "
+"se um ator nomeado tem workspace sob uma subscription que o chamador "
+"compartilha, ela chama de volta o `GET /v1/mangrove/subscription-members` no "
+"[crab-shell-proxy](./50-crab-shell-proxy.md). Uma lista guardada seria uma "
+"segunda fonte de verdade capaz de discordar do mycelium, e toda regra sobre "
+"quem pode endereçar o quê passaria a depender de qual das duas foi "
+"consultada. Com o proxy ausente a trava **falha fechada**, em vez de supor "
+"associação."
 
 #: src/54-crab-mangrove-network.md:94
 msgid ""
 "Addressing is additive and non-transitive. Sharing with a subscription is "
 "not sharing with its tenant, and a recipient re-sharing is a new activity by "
 "a new author, checked against _their_ reach."
-msgstr "O endereçamento é aditivo e não transitivo. Compartilhar com uma subscription não é compartilhar com o tenant dela, e um destinatário recompartilhando é uma atividade nova de um autor novo, verificada contra o alcance _dele_."
+msgstr ""
+"O endereçamento é aditivo e não transitivo. Compartilhar com uma "
+"subscription não é compartilhar com o tenant dela, e um destinatário "
+"recompartilhando é uma atividade nova de um autor novo, verificada contra o "
+"alcance _dele_."
 
 #: src/54-crab-mangrove-network.md:98
 msgid "Why an agent cannot address a group at all"
@@ -12615,7 +12955,9 @@ msgstr "Por que um agente não consegue endereçar um grupo, de jeito nenhum"
 #: src/54-crab-mangrove-network.md:100
 msgid ""
 "This is AD-030, and it reversed live behaviour, so it is worth the paragraph."
-msgstr "Isto é a AD-030, e reverteu comportamento que estava no ar, então vale o parágrafo."
+msgstr ""
+"Isto é a AD-030, e reverteu comportamento que estava no ar, então vale o "
+"parágrafo."
 
 #: src/54-crab-mangrove-network.md:102
 msgid ""
@@ -12625,7 +12967,13 @@ msgid ""
 "does not say they _govern_ it, and only the second licenses a broadcast. "
 "Rather than fetch a permission profile the agent never presented, the gate "
 "treats the tuple as the bound."
-msgstr "Um agente alcança o mangue pelo endpoint MCP do proxy, autenticado por um token que é um HMAC sobre `tenantID/subsAccID/role/userAccID`. Essa tupla prova que o chamador _pertence a_ uma subscription. Ela não diz que ele a _governa_, e só o segundo licencia uma transmissão. Em vez de buscar um perfil de permissões que o agente nunca apresentou, a trava trata a tupla como o limite."
+msgstr ""
+"Um agente alcança o mangue pelo endpoint MCP do proxy, autenticado por um "
+"token que é um HMAC sobre `tenantID/subsAccID/role/userAccID`. Essa tupla "
+"prova que o chamador _pertence a_ uma subscription. Ela não diz que ele a "
+"_governa_, e só o segundo licencia uma transmissão. Em vez de buscar um "
+"perfil de permissões que o agente nunca apresentou, a trava trata a tupla "
+"como o limite."
 
 #: src/54-crab-mangrove-network.md:108
 msgid ""
@@ -12637,7 +12985,16 @@ msgid ""
 "roles, and leaving the agent path open would have made that decorative, "
 "since a member without the role could route around it by asking their own "
 "agent. A control the controlled party can delegate around is not a control."
-msgstr "A trava sempre recusou escopo de _tenant_ a agentes, sob o argumento de que um turno guiado por texto não confiável não deveria alcançar todos os membros de um tenant. O raciocínio não enfraquece um nível abaixo — uma subscription é menor, não mais segura — então o grupo da subscription fechou pelo mesmo motivo. Havia uma segunda razão, mais afiada: o webapp restringe a publicação em grupo a papéis de governança, e deixar o caminho do agente aberto teria tornado isso decorativo, já que um membro sem o papel contornaria pedindo ao próprio agente. Um controle que a parte controlada consegue delegar por fora não é um controle."
+msgstr ""
+"A trava sempre recusou escopo de _tenant_ a agentes, sob o argumento de que "
+"um turno guiado por texto não confiável não deveria alcançar todos os "
+"membros de um tenant. O raciocínio não enfraquece um nível abaixo — uma "
+"subscription é menor, não mais segura — então o grupo da subscription fechou "
+"pelo mesmo motivo. Havia uma segunda razão, mais afiada: o webapp restringe "
+"a publicação em grupo a papéis de governança, e deixar o caminho do agente "
+"aberto teria tornado isso decorativo, já que um membro sem o papel "
+"contornaria pedindo ao próprio agente. Um controle que a parte controlada "
+"consegue delegar por fora não é um controle."
 
 #: src/54-crab-mangrove-network.md:117
 msgid ""
@@ -12645,7 +13002,12 @@ msgid ""
 "it is false-is-safe on purpose: a call site that forgets it addresses nobody "
 "extra. Setting it true at the MCP call sites restores the old behaviour "
 "exactly — do not, without replacing the protection with another one."
-msgstr "`reach.Options.GroupsLicensed` é um campo e um braço de um switch, e ele é falso-é-seguro de propósito: um call site que esquecer dele não endereça ninguém a mais. Colocá-lo em verdadeiro nos call sites do MCP restaura o comportamento antigo exatamente — não faça isso sem substituir a proteção por outra."
+msgstr ""
+"`reach.Options.GroupsLicensed` é um campo e um braço de um switch, e ele é "
+"falso-é-seguro de propósito: um call site que esquecer dele não endereça "
+"ninguém a mais. Colocá-lo em verdadeiro nos call sites do MCP restaura o "
+"comportamento antigo exatamente — não faça isso sem substituir a proteção "
+"por outra."
 
 #: src/54-crab-mangrove-network.md:122
 msgid "Memory is a log, not a document"
@@ -12659,7 +13021,13 @@ msgid ""
 "verification is a precondition of appending, and the signature covers the "
 "addressing, so a validly signed activity cannot be re-addressed and "
 "forwarded."
-msgstr "O armazenamento é um log JSONL append-only de atividades assinadas, particionado por (tenant, subscription). `Update` e `Delete` acrescentam; nada é sobrescrito. Toda atividade é assinada com a chave ed25519 do ator dela, a verificação é pré-condição do append, e a assinatura cobre o endereçamento — então uma atividade validamente assinada não pode ser reendereçada e repassada."
+msgstr ""
+"O armazenamento é um log JSONL append-only de atividades assinadas, "
+"particionado por (tenant, subscription). `Update` e `Delete` acrescentam; "
+"nada é sobrescrito. Toda atividade é assinada com a chave ed25519 do ator "
+"dela, a verificação é pré-condição do append, e a assinatura cobre o "
+"endereçamento — então uma atividade validamente assinada não pode ser "
+"reendereçada e repassada."
 
 #: src/54-crab-mangrove-network.md:130
 msgid ""
@@ -12669,14 +13037,25 @@ msgid ""
 "overwrites the other — cross-author overwrite is not merely checked for, it "
 "is unrepresentable, because there is nowhere in the data structure to put "
 "it. Without that, shared memory degenerates into an edit war."
-msgstr "A redução ao estado atual é **último escritor vence, por autor**, chaveada por `(cell, author)` e nunca por um timestamp global. Uma _cell_ é sobre o que uma afirmação é. Dois autores podem manter afirmações diferentes sobre uma célula e nenhum sobrescreve o outro — a sobrescrita entre autores não é meramente verificada, ela é irrepresentável, porque não há onde colocá-la na estrutura de dados. Sem isso, memória compartilhada degenera numa guerra de edição."
+msgstr ""
+"A redução ao estado atual é **último escritor vence, por autor**, chaveada "
+"por `(cell, author)` e nunca por um timestamp global. Uma _cell_ é sobre o "
+"que uma afirmação é. Dois autores podem manter afirmações diferentes sobre "
+"uma célula e nenhum sobrescreve o outro — a sobrescrita entre autores não é "
+"meramente verificada, ela é irrepresentável, porque não há onde colocá-la na "
+"estrutura de dados. Sem isso, memória compartilhada degenera numa guerra de "
+"edição."
 
 #: src/54-crab-mangrove-network.md:137
 msgid ""
 "Nothing anywhere marks a claim true. A claim carries a count of the actors "
 "who endorsed it, and presenting two disagreeing authors with their evidence "
 "is the answer rather than a failure to produce one."
-msgstr "Nada em lugar nenhum marca uma afirmação como verdadeira. Uma afirmação carrega uma contagem dos atores que a endossaram, e apresentar dois autores discordantes com as evidências deles é a resposta, não uma falha em produzir uma."
+msgstr ""
+"Nada em lugar nenhum marca uma afirmação como verdadeira. Uma afirmação "
+"carrega uma contagem dos atores que a endossaram, e apresentar dois autores "
+"discordantes com as evidências deles é a resposta, não uma falha em produzir "
+"uma."
 
 #: src/54-crab-mangrove-network.md:141
 msgid "Files: a content-addressed store beside the log"
@@ -12688,7 +13067,11 @@ msgid ""
 "log's reader caps a line at 8 MiB, and a file encoded into an activity would "
 "fail the read of the **whole shard** — every post in it, for every member — "
 "rather than of the one post at fault."
-msgstr "Um post pode carregar um arquivo, e os bytes não viajam na linha do log. O leitor do log limita uma linha a 8 MiB, e um arquivo codificado dentro de uma atividade reprovaria a leitura da **partição inteira** — todo post dela, para todo membro — em vez da leitura do único post problemático."
+msgstr ""
+"Um post pode carregar um arquivo, e os bytes não viajam na linha do log. O "
+"leitor do log limita uma linha a 8 MiB, e um arquivo codificado dentro de "
+"uma atividade reprovaria a leitura da **partição inteira** — todo post dela, "
+"para todo membro — em vez da leitura do único post problemático."
 
 #: src/54-crab-mangrove-network.md:148
 msgid ""
@@ -12698,7 +13081,13 @@ msgid ""
 "members sharing the same document cost one file, and re-sharing is a no-op. "
 "Oversized content is refused at write, when somebody tries to share it, "
 "rather than at read."
-msgstr "Então os bytes vão para um armazenamento chaveado pelo SHA-256 do conteúdo, limitado a 10 MB por padrão e ajustável por `MANGROVE_MAX_BLOB_BYTES`. O digest é a identidade: não há manifesto a manter coerente com o log, dois membros compartilhando o mesmo documento custam um arquivo, e recompartilhar não faz nada. Conteúdo grande demais é recusado na escrita, quando alguém tenta compartilhar, e não na leitura."
+msgstr ""
+"Então os bytes vão para um armazenamento chaveado pelo SHA-256 do conteúdo, "
+"limitado a 10 MB por padrão e ajustável por `MANGROVE_MAX_BLOB_BYTES`. O "
+"digest é a identidade: não há manifesto a manter coerente com o log, dois "
+"membros compartilhando o mesmo documento custam um arquivo, e recompartilhar "
+"não faz nada. Conteúdo grande demais é recusado na escrita, quando alguém "
+"tenta compartilhar, e não na leitura."
 
 #: src/54-crab-mangrove-network.md:155
 msgid ""
@@ -12709,7 +13098,14 @@ msgid ""
 "a revoked post's bytes stop being readable at the same moment the post does. "
 "The two were briefly one rule and one inline copy of it; factoring the copy "
 "out was a prerequisite of the blob gate existing at all."
-msgstr "**Um digest não é uma capacidade.** O pacote de blobs entrega bytes a quem os nomear corretamente e deliberadamente não é onde a pergunta de quem pode ler é respondida. Isso vive numa única função de visibilidade — `internal/httpapi/visibility.go` — que a linha do tempo e a trava de blobs chamam, então os bytes de um post revogado param de ser legíveis no mesmo momento em que o post para. As duas foram brevemente uma regra e uma cópia dela embutida; extrair a cópia foi pré-requisito para a trava de blobs existir."
+msgstr ""
+"**Um digest não é uma capacidade.** O pacote de blobs entrega bytes a quem "
+"os nomear corretamente e deliberadamente não é onde a pergunta de quem pode "
+"ler é respondida. Isso vive numa única função de visibilidade — `internal/"
+"httpapi/visibility.go` — que a linha do tempo e a trava de blobs chamam, "
+"então os bytes de um post revogado param de ser legíveis no mesmo momento em "
+"que o post para. As duas foram brevemente uma regra e uma cópia dela "
+"embutida; extrair a cópia foi pré-requisito para a trava de blobs existir."
 
 #: src/54-crab-mangrove-network.md:163
 msgid "Admission, and the decision it is not"
@@ -12719,7 +13115,9 @@ msgstr "Admissão, e a decisão que ela não é"
 msgid ""
 "An object addressed at a member becomes visible to **that human**. It does "
 "not enter **their agent's** memory until they admit it."
-msgstr "Um objeto endereçado a um membro fica visível para **aquele humano**. Ele não entra na memória do **agente** dessa pessoa até ela admitir."
+msgstr ""
+"Um objeto endereçado a um membro fica visível para **aquele humano**. Ele "
+"não entra na memória do **agente** dessa pessoa até ela admitir."
 
 #: src/54-crab-mangrove-network.md:168
 msgid ""
@@ -12727,7 +13125,11 @@ msgid ""
 "one share away — and since memory steers turns, so would steering their "
 "agent. The subordination of bot to human would hold only for your own bot, "
 "which is the half that does not need protecting."
-msgstr "Sem essa regra, colocar texto na memória do agente de um colega estaria a um compartilhamento de distância — e como memória guia turnos, guiar o agente dele também estaria. A subordinação do bot ao humano valeria só para o seu próprio bot, que é a metade que não precisa de proteção."
+msgstr ""
+"Sem essa regra, colocar texto na memória do agente de um colega estaria a um "
+"compartilhamento de distância — e como memória guia turnos, guiar o agente "
+"dele também estaria. A subordinação do bot ao humano valeria só para o seu "
+"próprio bot, que é a metade que não precisa de proteção."
 
 #: src/54-crab-mangrove-network.md:173
 msgid ""
@@ -12736,7 +13138,12 @@ msgid ""
 "content and nobody admits a withdrawal; held, it would sit waiting for an "
 "admission that never comes while the claim it withdraws went on reading as "
 "live."
-msgstr "A admissão é por destinatário: um destinatário aceitar não limpa a espera de outro. Uma lápide nunca fica em espera, porque um `Delete` não é conteúdo e ninguém admite uma retirada; em espera, ela ficaria aguardando uma admissão que nunca vem enquanto a afirmação que ela retira continuaria se lendo como viva."
+msgstr ""
+"A admissão é por destinatário: um destinatário aceitar não limpa a espera de "
+"outro. Uma lápide nunca fica em espera, porque um `Delete` não é conteúdo e "
+"ninguém admite uma retirada; em espera, ela ficaria aguardando uma admissão "
+"que nunca vem enquanto a afirmação que ela retira continuaria se lendo como "
+"viva."
 
 #: src/54-crab-mangrove-network.md:178
 msgid ""
@@ -12745,7 +13152,12 @@ msgid ""
 "from this side: `admit` marks an item admitted and writes nothing to any "
 "graph. Only a person, through the proxy's `POST /v1/mangrove/merge`, takes a "
 "shared graph fragment into a graph."
-msgstr "Aceitar é separado de **mesclar**, que é a AD-031 e está coberto em [O mangue](./23-mangrove.md) pelo lado do membro. A versão curta por este lado: `admit` marca um item como admitido e não escreve nada em grafo nenhum. Só uma pessoa, pelo `POST /v1/mangrove/merge` do proxy, leva um fragmento de grafo compartilhado para um grafo."
+msgstr ""
+"Aceitar é separado de **mesclar**, que é a AD-031 e está coberto em [O "
+"mangue](./23-mangrove.md) pelo lado do membro. A versão curta por este lado: "
+"`admit` marca um item como admitido e não escreve nada em grafo nenhum. Só "
+"uma pessoa, pelo `POST /v1/mangrove/merge` do proxy, leva um fragmento de "
+"grafo compartilhado para um grafo."
 
 #: src/54-crab-mangrove-network.md:184
 msgid "The pending step, and why it looks unused"
@@ -12755,7 +13167,9 @@ msgstr "O passo de pendência, e por que ele parece sem uso"
 msgid ""
 "An activity addressed at a group waits on a holder of the governing role, "
 "who decides it with `Accept` or `Reject`. That is the mechanism."
-msgstr "Uma atividade endereçada a um grupo espera por quem tem o papel de governança, que a decide com `Accept` ou `Reject`. Esse é o mecanismo."
+msgstr ""
+"Uma atividade endereçada a um grupo espera por quem tem o papel de "
+"governança, que a decide com `Accept` ou `Reject`. Esse é o mecanismo."
 
 #: src/54-crab-mangrove-network.md:189
 msgid ""
@@ -12768,7 +13182,16 @@ msgid ""
 "publication reach nobody and has no reason to look in a tab called Pending. "
 "The `Accept` is emitted rather than inferred, so the log still shows who let "
 "it travel and when, and nothing downstream learns a special case."
-msgstr "Quando o autor é quem teria de aprová-la, o serviço emite o `Accept` ele mesmo, na origem. Chegar naquela linha com um grupo na audiência _significa_ que o autor tem a licença daquele grupo — a trava recusou todo mundo mais — então a triagem já aconteceu, pela mesma pessoa, no momento em que publicou. Pedir que ela então aprove o próprio post é cerimônia que se lê como defeito: o autor vê a publicação dele não alcançar ninguém e não tem motivo para olhar numa aba chamada Pendentes. O `Accept` é emitido e não inferido, então o log continua mostrando quem deixou aquilo viajar e quando, e nada rio abaixo aprende um caso especial."
+msgstr ""
+"Quando o autor é quem teria de aprová-la, o serviço emite o `Accept` ele "
+"mesmo, na origem. Chegar naquela linha com um grupo na audiência _significa_ "
+"que o autor tem a licença daquele grupo — a trava recusou todo mundo mais — "
+"então a triagem já aconteceu, pela mesma pessoa, no momento em que publicou. "
+"Pedir que ela então aprove o próprio post é cerimônia que se lê como "
+"defeito: o autor vê a publicação dele não alcançar ninguém e não tem motivo "
+"para olhar numa aba chamada Pendentes. O `Accept` é emitido e não inferido, "
+"então o log continua mostrando quem deixou aquilo viajar e quando, e nada "
+"rio abaixo aprende um caso especial."
 
 #: src/54-crab-mangrove-network.md:199
 msgid ""
@@ -12778,7 +13201,13 @@ msgid ""
 "that answers \"somebody proposed this to my scope\", and deleting a correct "
 "answer because the current rules never ask the question is how it gets "
 "rebuilt worse later."
-msgstr "A consequência é que, depois da AD-030, um leitor encontra uma rota `decide` e uma leitura `pending` que nada popula no momento, porque nenhum chamador sem licença consegue endereçar um grupo. Elas ficam: são o mecanismo que responde a \"alguém propôs isto ao meu escopo\", e apagar uma resposta correta porque as regras atuais nunca fazem a pergunta é como ela acaba sendo reconstruída pior depois."
+msgstr ""
+"A consequência é que, depois da AD-030, um leitor encontra uma rota `decide` "
+"e uma leitura `pending` que nada popula no momento, porque nenhum chamador "
+"sem licença consegue endereçar um grupo. Elas ficam: são o mecanismo que "
+"responde a \"alguém propôs isto ao meu escopo\", e apagar uma resposta "
+"correta porque as regras atuais nunca fazem a pergunta é como ela acaba "
+"sendo reconstruída pior depois."
 
 #: src/54-crab-mangrove-network.md:205
 msgid "Revoke tombstones"
@@ -12790,7 +13219,11 @@ msgid ""
 "ActivityPub cannot, and the service says so in its own response: "
 "_tombstoned, not erased: anything already delivered to another scope stays "
 "delivered._"
-msgstr "`Delete` coloca uma lápide; ele não apaga, e não desfaz a entrega. O ActivityPub não consegue, e o serviço diz isso na própria resposta: _tombstoned, not erased: anything already delivered to another scope stays delivered._"
+msgstr ""
+"`Delete` coloca uma lápide; ele não apaga, e não desfaz a entrega. O "
+"ActivityPub não consegue, e o serviço diz isso na própria resposta: "
+"_tombstoned, not erased: anything already delivered to another scope stays "
+"delivered._"
 
 #: src/54-crab-mangrove-network.md:211
 msgid ""
@@ -12801,13 +13234,22 @@ msgid ""
 "much as a strikethrough. The tombstone is now addressed to everybody the "
 "claim reached. A revoke that only convinces the person who performed it is "
 "worse than no revoke at all."
-msgstr "O que ela faz é viajar. Um `Delete` sem audiência não alcança ninguém além do próprio autor, e a redução só enxerga as atividades que um leitor alcança — então uma versão inicial deixava o autor vendo `deleted: true` enquanto todo mundo com quem ele tinha compartilhado continuava lendo a afirmação como viva, sem nem um risco em cima. A lápide agora é endereçada a todo mundo que a afirmação alcançou. Uma revogação que só convence quem a executou é pior do que revogação nenhuma."
+msgstr ""
+"O que ela faz é viajar. Um `Delete` sem audiência não alcança ninguém além "
+"do próprio autor, e a redução só enxerga as atividades que um leitor alcança "
+"— então uma versão inicial deixava o autor vendo `deleted: true` enquanto "
+"todo mundo com quem ele tinha compartilhado continuava lendo a afirmação "
+"como viva, sem nem um risco em cima. A lápide agora é endereçada a todo "
+"mundo que a afirmação alcançou. Uma revogação que só convence quem a "
+"executou é pior do que revogação nenhuma."
 
 #: src/54-crab-mangrove-network.md:219
 msgid ""
 "Visibility cannot be widened after publication either. The supported path is "
 "to publish a new object."
-msgstr "A visibilidade também não pode ser ampliada depois da publicação. O caminho suportado é publicar um objeto novo."
+msgstr ""
+"A visibilidade também não pode ser ampliada depois da publicação. O caminho "
+"suportado é publicar um objeto novo."
 
 #: src/54-crab-mangrove-network.md:224
 msgid ""
@@ -12816,7 +13258,12 @@ msgid ""
 "naming the variable — rather than opening a port with no credential behind "
 "it. Identity arrives as a verified workspace tuple; no handler accepts an "
 "actor id from a request body."
-msgstr "**Ele não autentica ninguém.** Tem exatamente um chamador, o crab-shell-proxy, provado por um segredo compartilhado, e se recusa a subir sem ele — nomeando a variável — em vez de abrir uma porta sem credencial atrás. A identidade chega como uma tupla de workspace já verificada; nenhum handler aceita id de ator vindo do corpo da requisição."
+msgstr ""
+"**Ele não autentica ninguém.** Tem exatamente um chamador, o crab-shell-"
+"proxy, provado por um segredo compartilhado, e se recusa a subir sem ele — "
+"nomeando a variável — em vez de abrir uma porta sem credencial atrás. A "
+"identidade chega como uma tupla de workspace já verificada; nenhum handler "
+"aceita id de ator vindo do corpo da requisição."
 
 #: src/54-crab-mangrove-network.md:230
 msgid ""
@@ -12824,7 +13271,11 @@ msgid ""
 "mycelium client. Whether a caller governs a scope is decided in the proxy, "
 "from the injected profile, and sent as a fact the mangrove trusts because "
 "the proxy is its one caller."
-msgstr "**Ele não resolve papéis.** Não tem perfil do mycelium, nem gateway, nem cliente do mycelium. Se um chamador governa um escopo é decidido no proxy, a partir do perfil injetado, e enviado como um fato em que o mangue confia porque o proxy é o único chamador dele."
+msgstr ""
+"**Ele não resolve papéis.** Não tem perfil do mycelium, nem gateway, nem "
+"cliente do mycelium. Se um chamador governa um escopo é decidido no proxy, a "
+"partir do perfil injetado, e enviado como um fato em que o mangue confia "
+"porque o proxy é o único chamador dele."
 
 #: src/54-crab-mangrove-network.md:235
 msgid ""
@@ -12832,7 +13283,11 @@ msgid ""
 "anything that was added for it. The proxy already holds a socket and runs as "
 "root; the reasoning that keeps a second one away from [harness-sphere](./53-"
 "harness-sphere.md) applies here unchanged."
-msgstr "**Ele nunca recebe um socket do Docker, e não publica portas.** Nem nada que foi acrescentado por causa dele. O proxy já tem um socket e roda como root; o raciocínio que mantém um segundo longe do [harness-sphere](./53-harness-sphere.md) vale aqui sem mudança."
+msgstr ""
+"**Ele nunca recebe um socket do Docker, e não publica portas.** Nem nada que "
+"foi acrescentado por causa dele. O proxy já tem um socket e roda como root; "
+"o raciocínio que mantém um segundo longe do [harness-sphere](./53-harness-"
+"sphere.md) vale aqui sem mudança."
 
 #: src/54-crab-mangrove-network.md:240
 msgid ""
@@ -12850,7 +13305,22 @@ msgid ""
 "because header token indirection is specified and explicitly unbuilt. The "
 "submodule still owns the actors, the log, the collections and the "
 "moderation; the proxy owns only the agent-facing façade."
-msgstr "**Ele não é um segundo servidor MCP, e não pode virar um.** Esta é a primeira metade da AD-029. O formato óbvio seria um serviço separado expondo o próprio endpoint MCP e ganhando uma entrada própria na configuração do harness. Três fatos matam isso. O ganglion registra as ferramentas de um servidor remoto sob os nomes delas e recusa o boot numa colisão de nome — _e_ recusa o boot num servidor inalcançável, então um segundo servidor configurado tornaria o container de todo membro incapaz de subir sempre que o mangue estivesse fora: uma falha que chega depois, para um membro, sem relação no tempo com a causa. O bearer token do MCP já é um HMAC exatamente sobre a tupla de que o mangue precisa para autorizar, então uma fachada ganha identidade verificada de graça. E uma segunda credencial ficaria em texto puro num arquivo de configuração, porque a indireção de token por header está especificada e explicitamente não construída. O submódulo continua dono dos atores, do log, das coleções e da moderação; o proxy é dono apenas da fachada voltada ao agente."
+msgstr ""
+"**Ele não é um segundo servidor MCP, e não pode virar um.** Esta é a "
+"primeira metade da AD-029. O formato óbvio seria um serviço separado expondo "
+"o próprio endpoint MCP e ganhando uma entrada própria na configuração do "
+"harness. Três fatos matam isso. O ganglion registra as ferramentas de um "
+"servidor remoto sob os nomes delas e recusa o boot numa colisão de nome — "
+"_e_ recusa o boot num servidor inalcançável, então um segundo servidor "
+"configurado tornaria o container de todo membro incapaz de subir sempre que "
+"o mangue estivesse fora: uma falha que chega depois, para um membro, sem "
+"relação no tempo com a causa. O bearer token do MCP já é um HMAC exatamente "
+"sobre a tupla de que o mangue precisa para autorizar, então uma fachada "
+"ganha identidade verificada de graça. E uma segunda credencial ficaria em "
+"texto puro num arquivo de configuração, porque a indireção de token por "
+"header está especificada e explicitamente não construída. O submódulo "
+"continua dono dos atores, do log, das coleções e da moderação; o proxy é "
+"dono apenas da fachada voltada ao agente."
 
 #: src/54-crab-mangrove-network.md:254
 msgid ""
@@ -12858,7 +13328,12 @@ msgid ""
 "it and the log is built to converge, but HTTP Signatures against foreign "
 "keys, WebFinger, `sharedInbox` delivery and instance blocking are not "
 "implemented. No actor documents are served. The boundary is one deployment."
-msgstr "**Ele não federa.** O vocabulário e o modelo de dados foram escolhidos para isso e o log foi construído para convergir, mas HTTP Signatures contra chaves estrangeiras, WebFinger, entrega por `sharedInbox` e bloqueio de instância não estão implementados. Nenhum documento de ator é servido. A fronteira é uma instalação."
+msgstr ""
+"**Ele não federa.** O vocabulário e o modelo de dados foram escolhidos para "
+"isso e o log foi construído para convergir, mas HTTP Signatures contra "
+"chaves estrangeiras, WebFinger, entrega por `sharedInbox` e bloqueio de "
+"instância não estão implementados. Nenhum documento de ator é servido. A "
+"fronteira é uma instalação."
 
 #: src/54-crab-mangrove-network.md:259
 msgid "What is not protected, stated rather than discovered"
@@ -12868,7 +13343,9 @@ msgstr "O que não é protegido, dito em vez de descoberto"
 msgid ""
 "The service's README carries the threat model in full. The parts a reader of "
 "this book most needs:"
-msgstr "O README do serviço traz o modelo de ameaças por inteiro. As partes de que um leitor deste livro mais precisa:"
+msgstr ""
+"O README do serviço traz o modelo de ameaças por inteiro. As partes de que "
+"um leitor deste livro mais precisa:"
 
 #: src/54-crab-mangrove-network.md:264
 msgid ""
@@ -12882,7 +13359,17 @@ msgid ""
 "every workspace. Encrypting against a party that is already omniscient is "
 "theatre. What the trade buys, concretely, is that a role change takes effect "
 "on the next call with no re-keying and no backfill."
-msgstr "**Não há criptografia ponta a ponta, e isso é uma decisão.** Esta é a segunda metade da AD-029. Sigilo ponta a ponta e governança por papéis são mutuamente exclusivos para o mesmo conteúdo: sob um roteador cego, acesso é posse de chave — então promover alguém a `subscriptions-manager` não concede nada até as chaves serem reembrulhadas, e reembrulhar exige um componente que tenha as chaves e o grafo de papéis. Nesta stack esse componente seria o proxy, que já roda como root com um socket do Docker e lê todo workspace. Criptografar contra uma parte que já é onisciente é teatro. O que a troca compra, concretamente, é que uma mudança de papel passa a valer na chamada seguinte, sem reemissão de chaves e sem backfill."
+msgstr ""
+"**Não há criptografia ponta a ponta, e isso é uma decisão.** Esta é a "
+"segunda metade da AD-029. Sigilo ponta a ponta e governança por papéis são "
+"mutuamente exclusivos para o mesmo conteúdo: sob um roteador cego, acesso é "
+"posse de chave — então promover alguém a `subscriptions-manager` não concede "
+"nada até as chaves serem reembrulhadas, e reembrulhar exige um componente "
+"que tenha as chaves e o grafo de papéis. Nesta stack esse componente seria o "
+"proxy, que já roda como root com um socket do Docker e lê todo workspace. "
+"Criptografar contra uma parte que já é onisciente é teatro. O que a troca "
+"compra, concretamente, é que uma mudança de papel passa a valer na chamada "
+"seguinte, sem reemissão de chaves e sem backfill."
 
 #: src/54-crab-mangrove-network.md:275
 msgid ""
@@ -12892,7 +13379,14 @@ msgid ""
 "detail that must survive if it is ever built: the signature has to cover "
 "`recipients[]`, or any member can re-wrap the group key for an intruder and "
 "forward a still-valid signature."
-msgstr "A interface de envelope está definida e não implementada, e ela recusa em vez de deixar o conteúdo passar — um chamador que acreditasse ter criptografado algo e não criptografou fica pior do que um que recebeu erro. Ela carrega o único detalhe que precisa sobreviver caso um dia seja construída: a assinatura tem de cobrir `recipients[]`, senão qualquer membro consegue reembrulhar a chave do grupo para um intruso e repassar uma assinatura ainda válida."
+msgstr ""
+"A interface de envelope está definida e não implementada, e ela recusa em "
+"vez de deixar o conteúdo passar — um chamador que acreditasse ter "
+"criptografado algo e não criptografou fica pior do que um que recebeu erro. "
+"Ela carrega o único detalhe que precisa sobreviver caso um dia seja "
+"construída: a assinatura tem de cobrir `recipients[]`, senão qualquer membro "
+"consegue reembrulhar a chave do grupo para um intruso e repassar uma "
+"assinatura ainda válida."
 
 #: src/54-crab-mangrove-network.md:282
 msgid ""
@@ -12904,7 +13398,16 @@ msgid ""
 "have. The service's own README does not claim otherwise — it is silent on "
 "the point — so the discrepancy is between the specification and the code, "
 "and this is the note that says so until one of the two moves."
-msgstr "**Criptografia em repouso é uma lacuna conhecida, não uma decisão.** A FR-H4 em `.specs/features/crab-mangrove-network/spec.md` diz que o conteúdo DEVE ser criptografado em repouso, e a linha de resumo da AD-029 afirma que é. **Não está implementado.** O log é JSONL em texto puro e os blobs são arquivos em texto puro, ambos sob diretórios `0700` no disco do próprio operador, e essa é a única proteção que têm. O README do serviço não afirma o contrário — ele é silencioso no ponto — então a divergência é entre a especificação e o código, e esta é a nota que diz isso até que um dos dois se mexa."
+msgstr ""
+"**Criptografia em repouso é uma lacuna conhecida, não uma decisão.** A FR-H4 "
+"em `.specs/features/crab-mangrove-network/spec.md` diz que o conteúdo DEVE "
+"ser criptografado em repouso, e a linha de resumo da AD-029 afirma que é. "
+"**Não está implementado.** O log é JSONL em texto puro e os blobs são "
+"arquivos em texto puro, ambos sob diretórios `0700` no disco do próprio "
+"operador, e essa é a única proteção que têm. O README do serviço não afirma "
+"o contrário — ele é silencioso no ponto — então a divergência é entre a "
+"especificação e o código, e esta é a nota que diz isso até que um dos dois "
+"se mexa."
 
 #: src/54-crab-mangrove-network.md:291
 msgid ""
@@ -12912,21 +13415,31 @@ msgid ""
 "list and activity frequency. Anyone who can read the store or observe the "
 "traffic learns who talks to whom, how often, and about what topics. There is "
 "no padding and no cover traffic."
-msgstr "**Os metadados estão em claro** — autor, timestamp, célula, escopo, lista de destinatários e frequência de atividade. Quem conseguir ler o armazenamento ou observar o tráfego descobre quem fala com quem, com que frequência e sobre quais assuntos. Não há preenchimento nem tráfego de cobertura."
+msgstr ""
+"**Os metadados estão em claro** — autor, timestamp, célula, escopo, lista de "
+"destinatários e frequência de atividade. Quem conseguir ler o armazenamento "
+"ou observar o tráfego descobre quem fala com quem, com que frequência e "
+"sobre quais assuntos. Não há preenchimento nem tráfego de cobertura."
 
 #: src/54-crab-mangrove-network.md:296
 msgid ""
 "**A member who leaves keeps what they already read.** Rotating keys would "
 "not give forward secrecy and none is claimed. What stops is new material. "
 "That limit is written in the code, not only in the documentation."
-msgstr "**Um membro que sai continua com o que já leu.** Rotacionar chaves não daria sigilo futuro e nenhum é prometido. O que para é o material novo. Esse limite está escrito no código, não só na documentação."
+msgstr ""
+"**Um membro que sai continua com o que já leu.** Rotacionar chaves não daria "
+"sigilo futuro e nenhum é prometido. O que para é o material novo. Esse "
+"limite está escrito no código, não só na documentação."
 
 #: src/54-crab-mangrove-network.md:300
 msgid ""
 "**A compromised proxy compromises the mangrove.** It trusts one caller. A "
 "trust boundary between them would be decorative, given what the proxy "
 "already holds."
-msgstr "**Um proxy comprometido compromete o mangue.** Ele confia em um chamador. Uma fronteira de confiança entre os dois seria decorativa, dado o que o proxy já tem."
+msgstr ""
+"**Um proxy comprometido compromete o mangue.** Ele confia em um chamador. "
+"Uma fronteira de confiança entre os dois seria decorativa, dado o que o "
+"proxy já tem."
 
 #: src/54-crab-mangrove-network.md:303
 msgid "Optional by construction"
@@ -12940,7 +13453,13 @@ msgid ""
 "`subscription-members` route does not exist, and no actor is provisioned. "
 "The advertised tool set is byte-identical to a deployment that never heard "
 "of this."
-msgstr "_Não configurado_ é um estado suportado, não um estado degradado. Com `CRAB_MANGROVE_BASE_URL` ou `CRAB_MANGROVE_TOKEN` vazios no proxy, nenhuma ferramenta `mangrove_*` é registrada, nenhuma rota de membro é montada, a rota `subscription-members` não existe, e nenhum ator é provisionado. O conjunto de ferramentas anunciado é idêntico byte a byte ao de uma instalação que nunca ouviu falar disso."
+msgstr ""
+"_Não configurado_ é um estado suportado, não um estado degradado. Com "
+"`CRAB_MANGROVE_BASE_URL` ou `CRAB_MANGROVE_TOKEN` vazios no proxy, nenhuma "
+"ferramenta `mangrove_*` é registrada, nenhuma rota de membro é montada, a "
+"rota `subscription-members` não existe, e nenhum ator é provisionado. O "
+"conjunto de ferramentas anunciado é idêntico byte a byte ao de uma "
+"instalação que nunca ouviu falar disso."
 
 #: src/54-crab-mangrove-network.md:311
 msgid ""
@@ -12949,7 +13468,12 @@ msgid ""
 "turn, so a tool that can only fail costs context forever in a deployment "
 "that never wanted it. Both halves are required together, so that _half-"
 "configured_ is not a state a member can reach."
-msgstr "Ausente em vez de recusando, e o motivo é o que governa toda ferramenta desta stack: uma ferramenta registrada é descrita ao modelo em todo turno, então uma ferramenta que só consegue falhar custa contexto para sempre numa instalação que nunca a quis. As duas metades são exigidas juntas, para que _meio configurado_ não seja um estado que um membro alcance."
+msgstr ""
+"Ausente em vez de recusando, e o motivo é o que governa toda ferramenta "
+"desta stack: uma ferramenta registrada é descrita ao modelo em todo turno, "
+"então uma ferramenta que só consegue falhar custa contexto para sempre numa "
+"instalação que nunca a quis. As duas metades são exigidas juntas, para que "
+"_meio configurado_ não seja um estado que um membro alcance."
 
 #: src/54-crab-mangrove-network.md:317
 msgid ""
@@ -12958,7 +13482,12 @@ msgid ""
 "outage. The unconfigured proxy does not register the member routes at all, "
 "so the web app receives a `404` rather than an error, and reads it as an "
 "operator's choice."
-msgstr "_Não configurado_ e _configurado mas inalcançável_ são estados diferentes e são reportados de formas diferentes. \"Nada compartilhado ainda\" nunca pode parecer uma queda. O proxy não configurado não registra as rotas de membro, então o webapp recebe um `404` em vez de um erro, e o lê como escolha do operador."
+msgstr ""
+"_Não configurado_ e _configurado mas inalcançável_ são estados diferentes e "
+"são reportados de formas diferentes. \"Nada compartilhado ainda\" nunca pode "
+"parecer uma queda. O proxy não configurado não registra as rotas de membro, "
+"então o webapp recebe um `404` em vez de um erro, e o lê como escolha do "
+"operador."
 
 #: src/54-crab-mangrove-network.md:322
 msgid ""
@@ -12966,7 +13495,11 @@ msgid ""
 "repeats for members: the _screen_ hides itself on that `404`, but the "
 "sidebar row that opens it is not gated, so on a deployment without a "
 "mangrove the row is present and opens an empty pane."
-msgstr "Uma aresta no cliente de chat, que [O mangue](./23-mangrove.md) repete para os membros: a _tela_ se esconde nesse `404`, mas a linha da barra lateral que a abre não é condicionada — então, numa instalação sem mangue, a linha aparece e abre um painel vazio."
+msgstr ""
+"Uma aresta no cliente de chat, que [O mangue](./23-mangrove.md) repete para "
+"os membros: a _tela_ se esconde nesse `404`, mas a linha da barra lateral "
+"que a abre não é condicionada — então, numa instalação sem mangue, a linha "
+"aparece e abre um painel vazio."
 
 #: src/54-crab-mangrove-network.md:327
 msgid ""
@@ -12974,7 +13507,11 @@ msgid ""
 "mangrove can read, and the canonical memory graph is never routed through it "
 "— the mangrove reads _from_ the graph; the graph never reads _through_ the "
 "mangrove. Disable it and every local memory stays intact and usable."
-msgstr "**Dá para desligar de novo.** Nenhuma memória é guardada numa forma que só o mangue consiga ler, e o grafo de memória canônico nunca é roteado por ele — o mangue lê _do_ grafo; o grafo nunca lê _pelo_ mangue. Desligue e toda memória local continua intacta e utilizável."
+msgstr ""
+"**Dá para desligar de novo.** Nenhuma memória é guardada numa forma que só o "
+"mangue consiga ler, e o grafo de memória canônico nunca é roteado por ele — "
+"o mangue lê _do_ grafo; o grafo nunca lê _pelo_ mangue. Desligue e toda "
+"memória local continua intacta e utilizável."
 
 #: src/54-crab-mangrove-network.md:334
 msgid ""
@@ -12982,7 +13519,11 @@ msgid ""
 "`docker compose up`. That is the optionality held by construction rather "
 "than by intent: not \"starts but does nothing\", not \"starts and errors\" — "
 "simply absent unless asked for."
-msgstr "O serviço fica atrás de um profile do compose, então não sobe com um `docker compose up` simples. Isso é a opcionalidade garantida por construção e não por intenção: não é \"sobe e não faz nada\", nem \"sobe e dá erro\" — é simplesmente ausente a menos que peçam."
+msgstr ""
+"O serviço fica atrás de um profile do compose, então não sobe com um `docker "
+"compose up` simples. Isso é a opcionalidade garantida por construção e não "
+"por intenção: não é \"sobe e não faz nada\", nem \"sobe e dá erro\" — é "
+"simplesmente ausente a menos que peçam."
 
 #: src/54-crab-mangrove-network.md:340
 msgid "<shared"
@@ -13008,7 +13549,13 @@ msgid ""
 "a credential that gates two capabilities cannot be revoked for one of them. "
 "There is deliberately no default for the base URL: a default would make the "
 "feature half-configured out of the box."
-msgstr "`CRAB_MANGROVE_TOKEN` **não** é um token de agente e **não** é o `CRAB_MCP_TOKEN_SECRET`. Ele prova que o proxy é o único chamador do mangue, e protege uma rota que revela a lista inteira de membros de uma subscription — uma credencial que protege duas capacidades não pode ser revogada para só uma delas. Deliberadamente não há default para a URL base: um default deixaria a funcionalidade meio configurada de saída."
+msgstr ""
+"`CRAB_MANGROVE_TOKEN` **não** é um token de agente e **não** é o "
+"`CRAB_MCP_TOKEN_SECRET`. Ele prova que o proxy é o único chamador do mangue, "
+"e protege uma rota que revela a lista inteira de membros de uma subscription "
+"— uma credencial que protege duas capacidades não pode ser revogada para só "
+"uma delas. Deliberadamente não há default para a URL base: um default "
+"deixaria a funcionalidade meio configurada de saída."
 
 #: src/54-crab-mangrove-network.md:358
 msgid "The service's own variables:"
@@ -13033,7 +13580,8 @@ msgstr ""
 #: src/54-crab-mangrove-network.md:362
 msgid ""
 "**Required.** The service refuses to boot without it, naming the variable."
-msgstr "**Obrigatória.** O serviço se recusa a subir sem ela, nomeando a variável."
+msgstr ""
+"**Obrigatória.** O serviço se recusa a subir sem ela, nomeando a variável."
 
 #: src/54-crab-mangrove-network.md:363
 msgid "`MANGROVE_STORE_DIR`"
@@ -13089,7 +13637,11 @@ msgid ""
 "this service fails at boot is a missing token, which it refuses loudly and "
 "by name, and an unbounded restart loop would bury the message it exists to "
 "show."
-msgstr "A política de restart é `on-failure:3` e não `unless-stopped`: a única forma de este serviço falhar no boot é um token ausente, que ele recusa em voz alta e pelo nome, e um loop infinito de restart enterraria a mensagem que ele existe para mostrar."
+msgstr ""
+"A política de restart é `on-failure:3` e não `unless-stopped`: a única forma "
+"de este serviço falhar no boot é um token ausente, que ele recusa em voz "
+"alta e pelo nome, e um loop infinito de restart enterraria a mensagem que "
+"ele existe para mostrar."
 
 #: src/54-crab-mangrove-network.md:372
 msgid ""
@@ -13099,7 +13651,14 @@ msgid ""
 "root-owned, because the proxy runs as root and writes it, so the host user "
 "cannot create a child there and the obvious two-step version of this fails "
 "on its first line. Create it once, from a container:"
-msgstr "**O bind em `data/mangrove` precisa de um `chown` uma única vez.** A imagem roda como uid 10001, e um bind mantém o dono que o host deu a ele — diferente de um volume nomeado, que herda o da imagem na primeira montagem. O pai `data/` pertence ao root, porque o proxy roda como root e escreve nele, então o usuário do host não consegue criar um filho ali e a versão óbvia em dois passos falha na primeira linha. Crie uma vez, a partir de um container:"
+msgstr ""
+"**O bind em `data/mangrove` precisa de um `chown` uma única vez.** A imagem "
+"roda como uid 10001, e um bind mantém o dono que o host deu a ele — "
+"diferente de um volume nomeado, que herda o da imagem na primeira montagem. "
+"O pai `data/` pertence ao root, porque o proxy roda como root e escreve "
+"nele, então o usuário do host não consegue criar um filho ali e a versão "
+"óbvia em dois passos falha na primeira linha. Crie uma vez, a partir de um "
+"container:"
 
 #: src/54-crab-mangrove-network.md:380
 msgid "\"$PWD/data:/data\""
@@ -13113,7 +13672,9 @@ msgstr ""
 msgid ""
 "Without it the service boots and fails its first write, which is a worse "
 "failure than not booting: the port answers and nothing persists."
-msgstr "Sem isso o serviço sobe e falha na primeira escrita, o que é uma falha pior do que não subir: a porta responde e nada persiste."
+msgstr ""
+"Sem isso o serviço sobe e falha na primeira escrita, o que é uma falha pior "
+"do que não subir: a porta responde e nada persiste."
 
 #: src/54-crab-mangrove-network.md:387
 msgid ""
@@ -13130,7 +13691,21 @@ msgid ""
 "mangrove alone, on the container network, with its own credential. With the "
 "mangrove unconfigured the proxy registers none of these, so the gateway "
 "entries are inert rather than wrong."
-msgstr "**O gateway precisa de um bloco de path por rota de membro**, do mesmo jeito que `/v1/cron/*` precisa. Sem um, o gateway responde `400 \"Request path does not match any service\"` antes de o proxy ser alcançado — o que não é _não configurado_ nem _inalcançável_, então o webapp reporta uma falha genérica que não aponta para lugar nenhum. Os dois modos publicados em [`deploy/`](https://github.com/LepistaBioinformatics/zombie-crab-project/tree/main/deploy) já os trazem, um conjunto por agente. Eles são listados **uma rota por vez, e não como `/v1/mangrove/*`**, e esse é o ponto do bloco: um curinga também exporia o `GET /v1/mangrove/subscription-members`, que responde com a lista inteira de ids de conta e e-mails de uma subscription e é destinado só ao mangue, na rede de containers, com credencial própria. Com o mangue não configurado o proxy não registra nenhuma dessas rotas, então as entradas do gateway ficam inertes em vez de erradas."
+msgstr ""
+"**O gateway precisa de um bloco de path por rota de membro**, do mesmo jeito "
+"que `/v1/cron/*` precisa. Sem um, o gateway responde `400 \"Request path "
+"does not match any service\"` antes de o proxy ser alcançado — o que não é "
+"_não configurado_ nem _inalcançável_, então o webapp reporta uma falha "
+"genérica que não aponta para lugar nenhum. Os dois modos publicados em "
+"[`deploy/`](https://github.com/LepistaBioinformatics/zombie-crab-project/"
+"tree/main/deploy) já os trazem, um conjunto por agente. Eles são listados "
+"**uma rota por vez, e não como `/v1/mangrove/*`**, e esse é o ponto do "
+"bloco: um curinga também exporia o `GET /v1/mangrove/subscription-members`, "
+"que responde com a lista inteira de ids de conta e e-mails de uma "
+"subscription e é destinado só ao mangue, na rede de containers, com "
+"credencial própria. Com o mangue não configurado o proxy não registra "
+"nenhuma dessas rotas, então as entradas do gateway ficam inertes em vez de "
+"erradas."
 
 #: src/54-crab-mangrove-network.md:401
 msgid ""
@@ -13139,7 +13714,12 @@ msgid ""
 "backing this up, inspecting it or moving it between machines all go through "
 "`docker` rather than through the filesystem. The operator owning the path is "
 "the point."
-msgstr "Um bind sob `data/` em vez de um volume nomeado é, em si, a escolha. Os dois ficam em disco, mas um volume nomeado vive sob o diretório do próprio Docker, então fazer backup disso, inspecionar ou mover entre máquinas passa tudo pelo `docker` em vez de passar pelo sistema de arquivos. O operador ser dono do caminho é o ponto."
+msgstr ""
+"Um bind sob `data/` em vez de um volume nomeado é, em si, a escolha. Os dois "
+"ficam em disco, mas um volume nomeado vive sob o diretório do próprio "
+"Docker, então fazer backup disso, inspecionar ou mover entre máquinas passa "
+"tudo pelo `docker` em vez de passar pelo sistema de arquivos. O operador ser "
+"dono do caminho é o ponto."
 
 #: src/54-crab-mangrove-network.md:406
 msgid "Building and testing it"
@@ -13150,7 +13730,10 @@ msgid ""
 "`scripts/smoke.sh` exercises the paths that carry the design — identity from "
 "the tuple, the containment refusals, the per-author reduction, the admission "
 "hold. It uses only `sh` and `wget`, and ships in the image:"
-msgstr "`scripts/smoke.sh` exercita os caminhos que carregam o desenho — identidade a partir da tupla, as recusas de contenção, a redução por autor, a espera de admissão. Ele usa só `sh` e `wget`, e vai na imagem:"
+msgstr ""
+"`scripts/smoke.sh` exercita os caminhos que carregam o desenho — identidade "
+"a partir da tupla, as recusas de contenção, a redução por autor, a espera de "
+"admissão. Ele usa só `sh` e `wget`, e vai na imagem:"
 
 #: src/54-crab-mangrove-network.md:422
 msgid ""
@@ -13158,7 +13741,11 @@ msgid ""
 "needs the membership endpoint, and with the proxy absent the gate fails "
 "closed rather than assuming membership. The script says so instead of "
 "reporting a pass."
-msgstr "Uma seção é pulada sem o crab-shell-proxy: endereçar um colega nomeado precisa do endpoint de associação, e com o proxy ausente a trava falha fechada em vez de supor associação. O script diz isso em vez de reportar um passe."
+msgstr ""
+"Uma seção é pulada sem o crab-shell-proxy: endereçar um colega nomeado "
+"precisa do endpoint de associação, e com o proxy ausente a trava falha "
+"fechada em vez de supor associação. O script diz isso em vez de reportar um "
+"passe."
 
 #: src/54-crab-mangrove-network.md:438
 msgid ""
@@ -13167,7 +13754,12 @@ msgid ""
 "md` and `tasks.md`, plus `.specs/features/mangrove-carries-memory/` for "
 "files and graph fragments and `.specs/features/mangrove-human-publish/` for "
 "the member's own publishing path."
-msgstr "A especificação não é duplicada aqui: ela vive neste repositório, em `.specs/features/crab-mangrove-network/` com `spec.md`, `context.md`, `design.md` e `tasks.md`, mais `.specs/features/mangrove-carries-memory/` para arquivos e fragmentos de grafo e `.specs/features/mangrove-human-publish/` para o caminho de publicação do próprio membro."
+msgstr ""
+"A especificação não é duplicada aqui: ela vive neste repositório, em `.specs/"
+"features/crab-mangrove-network/` com `spec.md`, `context.md`, `design.md` e "
+"`tasks.md`, mais `.specs/features/mangrove-carries-memory/` para arquivos e "
+"fragmentos de grafo e `.specs/features/mangrove-human-publish/` para o "
+"caminho de publicação do próprio membro."
 
 #: src/54-crab-mangrove-network.md:444
 msgid "Licence: `MIT OR Apache-2.0`."
@@ -13180,7 +13772,12 @@ msgid ""
 "shell-proxy.md) is where the agent's five tools and the member's routes "
 "live. [Skills and memory](./13-skills-and-memory.md) covers the knowledge "
 "graph the fragments come out of and go into."
-msgstr "[O mangue](./23-mangrove.md) é a mesma funcionalidade pelo lado do membro — o que dá para fazer, e o que vai recusar. [crab-shell-proxy](./50-crab-shell-proxy.md) é onde vivem as cinco ferramentas do agente e as rotas do membro. [Skills e memória](./13-skills-and-memory.md) cobre o grafo de conhecimento de onde os fragmentos saem e para onde voltam."
+msgstr ""
+"[O mangue](./23-mangrove.md) é a mesma funcionalidade pelo lado do membro — "
+"o que dá para fazer, e o que vai recusar. [crab-shell-proxy](./50-crab-shell-"
+"proxy.md) é onde vivem as cinco ferramentas do agente e as rotas do membro. "
+"[Skills e memória](./13-skills-and-memory.md) cobre o grafo de conhecimento "
+"de onde os fragmentos saem e para onde voltam."
 
 #: src/60-development.md:3
 msgid ""
@@ -13930,6 +14527,48 @@ msgstr ""
 "exoskeleton-webapp](./52-crab-exoskeleton-webapp.md) e [harness-sphere](./53-"
 "harness-sphere.md) — descrevem o layout de código de cada repositório que "
 "você talvez esteja prestes a mudar."
+
+#~ msgid ""
+#~ "A post is a card. Long prose is cut off after eight lines and the card "
+#~ "opens a sheet — _Read all of \"…\"_ — while files and graph fragments "
+#~ "show their own summary instead. The three newest in a reading are lifted "
+#~ "with an accent border. Revoked items stay in the list, struck through and "
+#~ "with no actions left."
+#~ msgstr ""
+#~ "Um post é um card. Prosa longa é cortada depois de oito linhas e o card "
+#~ "abre uma folha — _Ler tudo de \"…\"_ — enquanto arquivos e fragmentos de "
+#~ "grafo mostram um resumo próprio. Os três mais novos de uma leitura ganham "
+#~ "uma borda de destaque. Itens revogados continuam na lista, riscados e sem "
+#~ "nenhuma ação restante."
+
+#~ msgid "Anything addressed at you lands under **Waiting for you**:"
+#~ msgstr "Tudo endereçado a você aparece em **Esperando por você**:"
+
+#~ msgid ""
+#~ "Sent to you directly. It is not in your agent's memory until you admit it."
+#~ msgstr ""
+#~ "Enviado diretamente a você. Não está na memória do seu agente até você "
+#~ "admitir."
+
+#~ msgid ""
+#~ "Press **Admit** and it becomes an ordinary item in Received. Your "
+#~ "admission is yours alone — one recipient accepting does not clear anybody "
+#~ "else's hold."
+#~ msgstr ""
+#~ "Aperte **Admitir** e aquilo vira um item comum em Recebidos. A sua "
+#~ "admissão é só sua — um destinatário aceitar não limpa a espera de mais "
+#~ "ninguém."
+
+#~ msgid ""
+#~ "**Admitting does not write to your agent's memory.** This is the part "
+#~ "that surprises people, so it is worth being blunt: `Admit` marks the item "
+#~ "as taken and writes nothing anywhere. It is an acknowledgement, not an "
+#~ "import."
+#~ msgstr ""
+#~ "**Admitir não escreve na memória do seu agente.** Essa é a parte que "
+#~ "surpreende as pessoas, então vale ser direto: `Admitir` marca o item como "
+#~ "recebido e não escreve nada em lugar nenhum. É um reconhecimento, não uma "
+#~ "importação."
 
 #~ msgid ""
 #~ "**Persisting the conversation.** The transcript is append-only JSONL "
