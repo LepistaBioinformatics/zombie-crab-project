@@ -257,6 +257,21 @@ acceptInsecureRouting = true
 methods = ["GET"]
 
 [[alpha.path]]
+# ONE TOOL CALL'S FULL COMMAND AND OUTPUT, which the transcript deliberately does
+# not carry: an event's arguments are capped at 200 runes and a tool result is
+# never written to history at all. Fetched only when the member opens a call, so
+# the weight stays behind a click.
+#
+# A BLOCK OF ITS OWN, because this gateway routes paths one by one -- being under
+# /v1/sessions/ routes nothing. A missing block here is how the read-receipt
+# feature shipped with three services correct and every call 404ing.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/sessions/tool-call"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
 # WHAT IS STILL RUNNING. /v1/turns/active answers it for one conversation,
 # /v1/turns/running for every conversation this member has -- the background-turn
 # dock is built on the second and the stop flow on the first, which is why they
@@ -701,6 +716,21 @@ acceptInsecureRouting = true
 methods = ["GET"]
 
 [[gamma.path]]
+# ONE TOOL CALL'S FULL COMMAND AND OUTPUT, which the transcript deliberately does
+# not carry: an event's arguments are capped at 200 runes and a tool result is
+# never written to history at all. Fetched only when the member opens a call, so
+# the weight stays behind a click.
+#
+# A BLOCK OF ITS OWN, because this gateway routes paths one by one -- being under
+# /v1/sessions/ routes nothing. A missing block here is how the read-receipt
+# feature shipped with three services correct and every call 404ing.
+group = { protectedByRoles = [{ name = "gamma" }] }
+path = "/v1/sessions/tool-call"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[gamma.path]]
 # WHAT IS STILL RUNNING. /v1/turns/active answers it for one conversation,
 # /v1/turns/running for every conversation this member has -- the background-turn
 # dock is built on the second and the stop flow on the first, which is why they
@@ -1108,6 +1138,21 @@ methods = ["GET", "POST", "PUT", "DELETE"]
 [[beta.path]]
 group = { protectedByRoles = [{ name = "beta" }] }
 path = "/v1/sessions/history"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+# ONE TOOL CALL'S FULL COMMAND AND OUTPUT, which the transcript deliberately does
+# not carry: an event's arguments are capped at 200 runes and a tool result is
+# never written to history at all. Fetched only when the member opens a call, so
+# the weight stays behind a click.
+#
+# A BLOCK OF ITS OWN, because this gateway routes paths one by one -- being under
+# /v1/sessions/ routes nothing. A missing block here is how the read-receipt
+# feature shipped with three services correct and every call 404ing.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/sessions/tool-call"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET"]
