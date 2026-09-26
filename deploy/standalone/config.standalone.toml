@@ -386,6 +386,42 @@ acceptInsecureRouting = true
 methods = ["GET", "PUT"]
 
 [[alpha.path]]
+# member-owned-skills: the member's OWN skills, plus a read-only view of the two
+# layers they cannot write (the administrator's cascade and the operator's
+# managed set). Distinct from /v1/admin/skills: those are scope-wide and
+# admin-authorized, these reach one member's own workspace and nobody else's.
+#
+# Enumerated here one path at a time, like every other route. A missing block
+# does not fail loudly -- the panel renders it as "you have no skills", which is
+# exactly what an empty workspace looks like.
+group = { protectedByRoles = [{ name = "alpha", permission = "write" }] }
+path = "/v1/skills"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "PUT", "DELETE"]
+
+[[alpha.path]]
+# One skill's SKILL.md text plus its metadata. Read-only, and it serves every
+# layer: a member may READ the administrator's and the operator's skills, which
+# is the point of listing them -- they explain why the agent behaves as it does.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/skills/doc"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
+# Everything inside one skill. A skill is a DIRECTORY -- SKILL.md plus whatever
+# template or script it carries -- and a member who cannot see those cannot tell
+# what the skill will make the agent do. Read-only for every layer; writes go
+# through /v1/skills above and only ever touch the member's own.
+group = { protectedByRoles = [{ name = "alpha" }] }
+path = "/v1/skills/files"
+secretName = "alpha-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[alpha.path]]
 # Knowledge-graph memory (memory-graph-mcp): READ-ONLY views of the graph the
 # agent builds through its own native MCP server inside crab-shell-proxy.
 #
@@ -845,6 +881,42 @@ acceptInsecureRouting = true
 methods = ["GET", "PUT"]
 
 [[gamma.path]]
+# member-owned-skills: the member's OWN skills, plus a read-only view of the two
+# layers they cannot write (the administrator's cascade and the operator's
+# managed set). Distinct from /v1/admin/skills: those are scope-wide and
+# admin-authorized, these reach one member's own workspace and nobody else's.
+#
+# Enumerated here one path at a time, like every other route. A missing block
+# does not fail loudly -- the panel renders it as "you have no skills", which is
+# exactly what an empty workspace looks like.
+group = { protectedByRoles = [{ name = "gamma", permission = "write" }] }
+path = "/v1/skills"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "PUT", "DELETE"]
+
+[[gamma.path]]
+# One skill's SKILL.md text plus its metadata. Read-only, and it serves every
+# layer: a member may READ the administrator's and the operator's skills, which
+# is the point of listing them -- they explain why the agent behaves as it does.
+group = { protectedByRoles = [{ name = "gamma" }] }
+path = "/v1/skills/doc"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[gamma.path]]
+# Everything inside one skill. A skill is a DIRECTORY -- SKILL.md plus whatever
+# template or script it carries -- and a member who cannot see those cannot tell
+# what the skill will make the agent do. Read-only for every layer; writes go
+# through /v1/skills above and only ever touch the member's own.
+group = { protectedByRoles = [{ name = "gamma" }] }
+path = "/v1/skills/files"
+secretName = "gamma-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[gamma.path]]
 # Knowledge-graph memory (memory-graph-mcp): READ-ONLY views of the graph the
 # agent builds through its own native MCP server inside crab-shell-proxy.
 #
@@ -1259,6 +1331,42 @@ path = "/v1/memory"
 secretName = "beta-authorization-header"
 acceptInsecureRouting = true
 methods = ["GET", "PUT"]
+
+[[beta.path]]
+# member-owned-skills: the member's OWN skills, plus a read-only view of the two
+# layers they cannot write (the administrator's cascade and the operator's
+# managed set). Distinct from /v1/admin/skills: those are scope-wide and
+# admin-authorized, these reach one member's own workspace and nobody else's.
+#
+# Enumerated here one path at a time, like every other route. A missing block
+# does not fail loudly -- the panel renders it as "you have no skills", which is
+# exactly what an empty workspace looks like.
+group = { protectedByRoles = [{ name = "beta", permission = "write" }] }
+path = "/v1/skills"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET", "PUT", "DELETE"]
+
+[[beta.path]]
+# One skill's SKILL.md text plus its metadata. Read-only, and it serves every
+# layer: a member may READ the administrator's and the operator's skills, which
+# is the point of listing them -- they explain why the agent behaves as it does.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/skills/doc"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
+
+[[beta.path]]
+# Everything inside one skill. A skill is a DIRECTORY -- SKILL.md plus whatever
+# template or script it carries -- and a member who cannot see those cannot tell
+# what the skill will make the agent do. Read-only for every layer; writes go
+# through /v1/skills above and only ever touch the member's own.
+group = { protectedByRoles = [{ name = "beta" }] }
+path = "/v1/skills/files"
+secretName = "beta-authorization-header"
+acceptInsecureRouting = true
+methods = ["GET"]
 
 [[beta.path]]
 # Knowledge-graph memory (memory-graph-mcp): READ-ONLY views of the graph the
