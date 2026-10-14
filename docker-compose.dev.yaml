@@ -1,0 +1,38 @@
+# =============================================================================
+# Development override: chat-webapp with hot reload
+# =============================================================================
+# Layer it on top of the usual files to run chat-webapp as `next dev` against
+# the working tree instead of a built image, so an edit under
+# crab/crab-exoskeleton-webapp shows up in the browser without a rebuild:
+#
+#   docker compose --profile mangrove --env-file deploy/standalone/.env \
+#     -f docker-compose.yaml -f docker-compose.observability.yaml \
+#     -f docker-compose.dev.yaml up -d --build
+#
+# Leave this file out to go back to the production build.
+#
+# `target: deps` stops the Dockerfile at the stage that has node_modules and
+# nothing else. The image's node_modules are then kept in an anonymous volume
+# rather than read from the host: the host's copy is built for glibc, this
+# image is musl (alpine), and Next's native compilers differ between the two.
+# A change to package.json or yarn.lock still needs `--build` plus
+# `--renew-anon-volumes chat-webapp`, or the old volume keeps the old deps.
+#
+# Its own image name, because the `deps` stage would otherwise be tagged as the
+# production image, and the next `up` without this file and without `--build`
+# would start a container that has no server in it.
+#
+# `.next` is an anonymous volume too, so the dev server's cache is not written
+# into the working tree as root.
+services:
+  chat-webapp:
+    image: zombie-crab-project-chat-webapp-dev
+    build:
+      target: deps
+    command: ["yarn", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./crab/crab-exoskeleton-webapp:/app
+      - /app/node_modules
+      - /app/.next
